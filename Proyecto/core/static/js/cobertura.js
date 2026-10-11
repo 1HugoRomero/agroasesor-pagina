@@ -2,60 +2,147 @@
   const params = new URLSearchParams(location.search);
   const state = AgroService.getState();
   const plotSelect = document.getElementById('plot');
+  const cropSelect = document.getElementById('crop');
   const insumoSelect = document.getElementById('insumo');
-  plotSelect.innerHTML = state.plots.map((plot) => {
+  const targetSelect = document.getElementById('target');
+  const targetField = document.getElementById('target-field');
+  const areaInput = document.getElementById('area');
+  const doseInput = document.getElementById('dose');
+  const stockInput = document.getElementById('stock');
+  const flow = document.querySelector('[data-decision-flow]');
+
+  function populate(select, values, label, placeholder) {
+    select.replaceChildren(new Option(placeholder, ''));
+    values.forEach((item) => select.add(new Option(label(item), item.id)));
+  }
+
+  populate(plotSelect, state.plots, (plot) => {
     const predio = state.predios.find((item) => item.id === plot.predio);
-    return '<option value="' + plot.id + '">' + predio.name + ' · ' + plot.name + ' (' + AgroService.fmt(plot.areaHa, 2) + ' ha)</option>';
-  }).join('');
-  insumoSelect.innerHTML = AgroService.getInsumos(true).map((item) =>
-    '<option value="' + item.id + '">' + item.name + ' · ' + item.crop + '</option>'
-  ).join('');
-  if (params.get('plot')) plotSelect.value = params.get('plot');
-  if (params.get('insumo')) insumoSelect.value = params.get('insumo');
-  else {
-    const fertilizer = AgroService.getInsumos(true).find((item) => Number(item.dose) === 250);
-    if (fertilizer) insumoSelect.value = String(fertilizer.id);
+    return (predio ? predio.name + ' · ' : '') + plot.name + ' · ' + AgroService.fmt(plot.areaHa, 2) + ' ha';
+  }, 'Selecciona un potrero');
+  populate(cropSelect, AgroService.getCultivos(), (name) => name, 'Selecciona un cultivo');
+  const pesticideTypes = new Set(['herbicida', 'fungicida', 'insecticida', 'acaricida', 'plaguicida']);
+  const isPesticide = (item) => pesticideTypes.has(String(item.type || '').toLocaleLowerCase('es-CL'));
+  let availableInsumos = [];
+  populate(insumoSelect, availableInsumos, (item) => item.name + ' · ' + item.type, 'Selecciona un insumo');
+
+  function refreshInsumos() {
+    const previous = insumoSelect.value;
+    availableInsumos = AgroService.getInsumos(true).filter((item) => {
+      return (!isPesticide(item) || (
+        item.verifiedUse === true &&
+        Array.isArray(item.authorizedCrops) &&
+        item.authorizedCrops.includes(cropSelect.value) &&
+        Array.isArray(item.controlTargets) &&
+        item.controlTargets.length > 0
+      )) && (!item.crop || item.crop === cropSelect.value);
+    });
+    populate(insumoSelect, availableInsumos, (item) => item.name + ' · ' + item.type, 'Selecciona un insumo');
+    if (availableInsumos.some((item) => String(item.id) === previous)) insumoSelect.value = previous;
+    syncInsumo();
   }
 
   function selectedPlot() {
     return state.plots.find((item) => item.id === plotSelect.value);
   }
+
   function selectedInsumo() {
-    return AgroService.getInsumos(true).find((item) => AgroService.sameId(item.id, insumoSelect.value));
+    return availableInsumos.find((item) => AgroService.sameId(item.id, insumoSelect.value));
   }
 
-  function sync() {
+  function syncPlot() {
     const plot = selectedPlot();
-    const insumo = selectedInsumo();
-    if (insumo) {
-      document.getElementById('dose').value = insumo.dose;
-      document.getElementById('insumo-help').textContent = insumo.type + ' · ' + insumo.dose + ' ' + insumo.unit + '/ha · ficha demostrativa';
-    }
-    if (plot) {
-      document.getElementById('plot-help').textContent = plot.name + ' tiene ' + AgroService.fmt(plot.areaHa, 3) + ' ha (' + AgroService.fmt(plot.areaHa * 10000) + ' m²).';
-    }
-    const stockInput = document.getElementById('stock');
-    if (plot && insumo && (stockInput.value === '' || stockInput.dataset.auto !== 'off')) {
-      stockInput.value = Math.max(0, Math.round(plot.areaHa * insumo.dose * 0.64));
-    }
-    compute();
-  }
-
-  function compute() {
-    const plot = selectedPlot();
-    const insumo = selectedInsumo();
-    const unit = insumo?.unit || 'kg';
-    const area = plot?.areaHa;
-    const dose = AgroService.positive(document.getElementById('dose').value);
-    const stock = AgroService.nonNegative(document.getElementById('stock').value);
-    const error = document.getElementById('cover-error');
-    error.textContent = '';
-    if (!plot || dose === null || stock === null) {
-      error.textContent = 'Revisa predio, dosis mayor a 0 y cantidad disponible (0 o más).';
+    if (!plot) {
+      areaInput.value = '';
+      document.getElementById('plot-help').textContent = 'Selecciona un potrero con superficie registrada.';
       return;
     }
-    const result = AgroService.calculateCoverage(area, dose, stock);
-    AgroService.saveResult('cobertura', { ...result, plot: plot.name, insumo: insumo?.name, area, dose, stock, unit, date: new Date().toISOString() });
+    areaInput.value = plot.areaHa || '';
+    areaInput.max = plot.areaHa || '';
+    areaInput.readOnly = true;
+    document.querySelector('[name="surface-scope"][value="total"]').checked = true;
+    document.querySelector('[name="surface-scope"][value="total"]').checked = true;
+    if (plot.crop && Array.from(cropSelect.options).some((option) => option.value === plot.crop)) {
+      cropSelect.value = plot.crop;
+    } else {
+      cropSelect.value = '';
+    }
+    document.getElementById('plot-help').textContent =
+      plot.name + ': ' + AgroService.fmt(plot.areaHa, 3) + ' ha registradas.';
+    refreshInsumos();
+  }
+
+  function syncInsumo() {
+    const insumo = selectedInsumo();
+    doseInput.value = insumo?.dose ?? '';
+    document.getElementById('stock-unit').textContent = String(insumo?.unit || '').replace(/\/ha$/i, '') || 'registrada';
+    const verifiedPesticide = Boolean(insumo && isPesticide(insumo) && insumo.verifiedUse === true);
+    doseInput.readOnly = verifiedPesticide;
+    document.getElementById('insumo-help').textContent = insumo?.dose && insumo.doseVerified
+      ? 'Dosis documentada del catálogo: ' + AgroService.fmt(insumo.dose) + ' ' + insumo.unit + '.'
+      : 'El catálogo no tiene una dosis registrada para este insumo.';
+    targetField.hidden = !isPesticide(insumo || {});
+    targetSelect.required = isPesticide(insumo || {});
+    const targets = insumo?.verifiedUse && Array.isArray(insumo.controlTargets) ? insumo.controlTargets : [];
+    const previousTarget = targetSelect.value;
+    targetSelect.replaceChildren(new Option('Selecciona un objetivo', ''));
+    targets.forEach((target) => targetSelect.add(new Option(target, target)));
+    if (targets.includes(previousTarget)) targetSelect.value = previousTarget;
+  }
+
+  async function renderResult(save) {
+    const plot = selectedPlot();
+    const insumo = selectedInsumo();
+    const area = AgroService.positive(areaInput.value);
+    const dose = AgroService.positive(doseInput.value);
+    const stock = AgroService.nonNegative(stockInput.value);
+    const error = document.getElementById('cover-config-error');
+    error.textContent = '';
+
+    if (!plot || !insumo || area === null || dose === null || stock === null) {
+      error.textContent = 'Revisa el potrero, insumo, superficie, dosis y cantidad disponible. La superficie y dosis deben ser mayores a 0.';
+      return false;
+    }
+    if (area > plot.areaHa) {
+      error.textContent = 'La superficie no puede superar las ' + AgroService.fmt(plot.areaHa, 3) + ' ha registradas en este potrero.';
+      return false;
+    }
+    if (!cropSelect.value || (insumo.crop && insumo.crop !== cropSelect.value)) {
+      error.textContent = 'El producto del catálogo no corresponde al cultivo seleccionado.';
+      return false;
+    }
+    if (isPesticide(insumo) && (
+      insumo.verifiedUse !== true ||
+      !insumo.authorizedCrops?.includes(cropSelect.value) ||
+      !insumo.controlTargets?.includes(targetSelect.value)
+    )) {
+      error.textContent = 'Selecciona un objetivo de control autorizado para el producto y cultivo.';
+      return false;
+    }
+
+    let result;
+    try {
+      result = await AgroService.calculateOnServer(flow.dataset.calculateUrl, {
+        operation: 'coverage',
+        plot_id: plot.id,
+        crop: cropSelect.value,
+        product_id: insumo.id,
+        target: targetSelect.value,
+        area,
+        dose,
+        unit: insumo.unit || '',
+        stock
+      });
+    } catch (requestError) {
+      error.textContent = requestError.message;
+      return false;
+    }
+    const serverDose = result.dose;
+    const unit = result.unit || '';
+    const displayUnit = unit ? ' ' + AgroService.escape(unit) : '';
+    const doseUnit = result.dose_unit?.endsWith('/ha')
+      ? result.dose_unit
+      : unit ? unit + '/ha' : 'unidad/ha';
     const percent = Math.max(0, Math.min(100, result.percent));
     const filled = Math.round(percent);
     document.getElementById('cover-plot-name').textContent = plot.name + ' · ' + AgroService.fmt(area, 2) + ' ha';
@@ -65,36 +152,99 @@
     document.getElementById('cover-grid').innerHTML = Array.from({ length: 100 }, (_, index) =>
       '<span class="' + (index < filled ? 'ok' : 'miss') + '"></span>'
     ).join('');
-    document.getElementById('cover-text').innerHTML = result.missingHa > 0
-      ? 'Con lo que tienes cubres <strong>' + AgroService.fmt(result.coveredHa, 2) + ' ha</strong> y quedan <strong>' + AgroService.fmt(result.missingHa, 2) + ' ha</strong> sin cubrir.'
-      : 'Te alcanza para todo el potrero (' + AgroService.fmt(area, 2) + ' ha).';
+    document.getElementById('cover-text').textContent = result.missingHa > 0
+      ? 'Con lo disponible cubres ' + AgroService.fmt(result.coveredHa, 2) + ' ha y quedan ' +
+        AgroService.fmt(result.missingHa, 2) + ' ha sin cubrir.'
+      : 'La cantidad disponible alcanza para cubrir la superficie seleccionada (' + AgroService.fmt(area, 2) + ' ha).';
     document.getElementById('cover-numbers').innerHTML =
       '<div class="metric"><span>Cubierto</span><strong>' + AgroService.fmt(result.coveredHa, 2) + ' ha</strong></div>' +
       '<div class="metric"><span>Sin cubrir</span><strong>' + AgroService.fmt(result.missingHa, 2) + ' ha</strong></div>' +
-      '<div class="metric"><span>Producto que necesitas en total</span><strong>' + AgroService.fmt(result.needed) + ' ' + unit + '</strong></div>' +
+      '<div class="metric"><span>Necesario en total</span><strong>' + AgroService.fmt(result.needed) + displayUnit + '</strong></div>' +
+      '<div class="metric"><span>Disponible</span><strong>' + AgroService.fmt(stock) + displayUnit + '</strong></div>' +
+      '<div class="metric"><span>Insumo</span><strong>' + AgroService.escape(insumo.name) + '</strong></div>' +
+      '<div class="metric"><span>Dosis utilizada</span><strong>' + AgroService.fmt(serverDose) + ' ' + AgroService.escape(doseUnit) + '</strong></div>' +
       (result.missingQty > 0
-        ? '<div class="metric"><span>Te faltan</span><strong>' + AgroService.fmt(result.missingQty) + ' ' + unit + '</strong></div>'
-        : '<div class="metric"><span>Te sobran</span><strong>' + AgroService.fmt(result.surplus) + ' ' + unit + '</strong></div>');
+        ? '<div class="metric"><span>Faltante</span><strong>' + AgroService.fmt(result.missingQty) + displayUnit + '</strong></div>'
+        : '<div class="metric"><span>Disponible después del cálculo</span><strong>' + AgroService.fmt(result.surplus) + displayUnit + '</strong></div>');
     document.getElementById('cover-advice').textContent = result.missingQty > 0
-      ? 'Necesitas ' + AgroService.fmt(result.missingQty) + ' ' + unit + ' adicionales para cubrir el potrero completo. Cálculo de apoyo, no una receta.'
-      : 'Tienes producto de sobra: ' + AgroService.fmt(result.surplus) + ' ' + unit + '. Puedes guardar el resto o usarlo en otro potrero.';
+      ? 'El cálculo indica un faltante de ' + AgroService.fmt(result.missingQty) + (unit ? ' ' + unit : '') + '. Verifica la dosis antes de aplicar.'
+      : 'El cálculo indica un excedente de ' + AgroService.fmt(result.surplus) + (unit ? ' ' + unit : '') + '.';
+    if (!unit) {
+      document.getElementById('cover-advice').textContent += ' El catálogo no especifica unidad; confirma la unidad del producto.';
+    }
+    document.getElementById('cover-advice').textContent += ' Simulación: no modifica inventario ni reserva existencias.';
+    if (insumo.verifiedUse) {
+      const warnings = [insumo.restrictions, insumo.pollinatorWarning, insumo.environmentalPrecautions,
+        insumo.preharvestInterval ? 'Período de carencia: ' + insumo.preharvestInterval : '',
+        insumo.reentryInterval ? 'Tiempo de reingreso: ' + insumo.reentryInterval : '']
+        .filter(Boolean);
+      if (warnings.length) document.getElementById('cover-advice').textContent += ' Advertencias: ' + warnings.join(' ');
+    }
+
+    if (save) {
+      AgroService.saveResult('cobertura', {
+        ...result, plot: plot.name, insumo: insumo.name, crop: cropSelect.value,
+        area, dose:serverDose, stock, unit,
+        date: new Date().toISOString()
+      });
+    }
+    return true;
   }
 
-  ['change', 'input'].forEach((type) => {
-    document.getElementById('cover-form').addEventListener(type, compute);
+  if (params.get('plot')) plotSelect.value = params.get('plot');
+  if (params.get('insumo')) insumoSelect.value = params.get('insumo');
+  plotSelect.addEventListener('change', () => {
+    syncPlot();
+    syncInsumo();
   });
-  plotSelect.addEventListener('change', sync);
-  insumoSelect.addEventListener('change', sync);
-  document.querySelectorAll('[data-stock]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      const stockInput = document.getElementById('stock');
-      stockInput.dataset.auto = 'off';
-      stockInput.value = chip.dataset.stock;
-      compute();
+  cropSelect.addEventListener('change', () => {
+    refreshInsumos();
+  });
+  insumoSelect.addEventListener('change', () => {
+    targetSelect.value = '';
+    syncInsumo();
+  });
+  document.querySelectorAll('[name="surface-scope"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const fullArea = radio.value === 'total' && radio.checked;
+      areaInput.readOnly = fullArea;
+      if (fullArea) areaInput.value = selectedPlot()?.areaHa || '';
+      else areaInput.focus();
     });
   });
-  document.getElementById('stock').addEventListener('input', () => {
-    document.getElementById('stock').dataset.auto = 'off';
+  document.getElementById('cover-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submitButton = event.submitter;
+    if (submitButton) submitButton.disabled = true;
+    try {
+      if (await renderResult(true)) {
+        flow.dispatchEvent(new CustomEvent('decision:show-step', { detail: { step: 3 } }));
+      }
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
   });
-  sync();
+  flow.addEventListener('decision:new', () => {
+    syncPlot();
+    syncInsumo();
+    document.getElementById('cover-config-error').textContent = '';
+    document.getElementById('cover-label').textContent = '—';
+    document.getElementById('field-fill').style.width = '0';
+    document.getElementById('field-caption').textContent = '';
+    document.getElementById('cover-grid').replaceChildren();
+    document.getElementById('cover-numbers').replaceChildren();
+    document.getElementById('cover-text').textContent = '';
+    document.getElementById('cover-advice').textContent = '';
+  });
+
+  if (params.get('plot')) plotSelect.value = params.get('plot');
+  if (params.get('insumo')) insumoSelect.value = params.get('insumo');
+  const requestedInsumo = availableInsumos.find((item) => AgroService.sameId(item.id, params.get('insumo')));
+  if (requestedInsumo?.crop && Array.from(cropSelect.options).some((option) => option.value === requestedInsumo.crop)) {
+    cropSelect.value = requestedInsumo.crop;
+  }
+  syncPlot();
+  refreshInsumos();
+  if (params.get('insumo')) insumoSelect.value = params.get('insumo');
+  syncInsumo();
 })();

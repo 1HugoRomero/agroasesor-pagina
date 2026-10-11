@@ -37,11 +37,6 @@ window.AGRO_MOCK = {
       coordinates: [[-71.216, -33.685], [-71.208, -33.685], [-71.208, -33.6814], [-71.216, -33.6814]]
     }
   ],
-  activities: [
-    { id: 'a1', title: 'Revisar cultivo de maíz', detail: 'Potrero Norte · Santa Rita', type: 'Revisión', done: false },
-    { id: 'a2', title: 'Planificar siembra de tomate', detail: 'Potrero La Esperanza', type: 'Planificación', done: false },
-    { id: 'a3', title: 'Calcular cobertura de fertilizante', detail: 'Sector B · La Esperanza', type: 'Recomendación', done: true }
-  ],
   cultivos: ['Maíz', 'Trigo', 'Papa', 'Alfalfa', 'Tomate', 'Cebolla'],
   zonas: ['Metropolitana', 'O’Higgins', 'Maule', 'Valparaíso'],
   problemas: [

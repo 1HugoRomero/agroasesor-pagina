@@ -1,0 +1,38 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}{{ heading }} · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block content %}
+<div class="page-hero">
+    <div>
+        <h1 class="page-title">{{ heading }}</h1>
+        <p class="page-sub">La actividad se guardará en tu cuenta y quedará vinculada al potrero seleccionado.</p>
+    </div>
+    <a class="button secondary" href="{% if activity %}{% url 'actividad_detail' activity.pk %}{% else %}{% url 'calendario' %}{% endif %}">Volver</a>
+</div>
+<section class="card activity-form-card">
+    {% if not form.fields.potrero.queryset.exists %}
+    <div class="empty-state">
+        <p>Para planificar una actividad necesitas tener al menos un potrero registrado.</p>
+        <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
+    </div>
+    {% else %}
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+        {% for field in form %}
+        <div class="field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<small class="error" role="alert">{{ error }}</small>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="toolbar">
+            <button class="button" type="submit">Guardar actividad</button>
+            <a class="button secondary" href="{% if activity %}{% url 'actividad_detail' activity.pk %}{% else %}{% url 'calendario' %}{% endif %}">Cancelar</a>
+        </div>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

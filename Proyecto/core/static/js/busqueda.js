@@ -1,6 +1,6 @@
 (function () {
   document.getElementById('crop').innerHTML += AgroService.getCultivos().map((name) => '<option>' + name + '</option>').join('');
-  document.getElementById('problem').innerHTML += AgroService.getProblemas().map((item) => '<option>' + item.name + '</option>').join('');
+  document.getElementById('problem').innerHTML += AgroService.getProblemas().map((item) => '<option>' + AgroService.escape(item.name) + '</option>').join('');
   document.getElementById('type').innerHTML += [...new Set(AgroService.getInsumos().map((item) => item.type))].map((name) => '<option>' + name + '</option>').join('');
 
   function normalize(value) {
@@ -35,7 +35,7 @@
     });
     const labels = { cultivo: 'Cultivo', semilla: 'Semilla', insumo: 'Insumo', problema: 'Problema', predio: 'Predio' };
     document.getElementById('results').innerHTML = results.length
-      ? results.map((item) => '<a class="card result kind-' + item.kind + '" href="' + item.href + '"><span class="badge">' + (labels[item.kind] || item.kind) + '</span><h3>' + item.title + '</h3><p class="muted">Abrir en la herramienta correspondiente</p></a>').join('')
+      ? results.map((item) => '<a class="card result kind-' + item.kind + '" href="' + item.href + '"><span class="badge">' + (labels[item.kind] || item.kind) + '</span><h3>' + AgroService.escape(item.title) + '</h3><p class="muted">Abrir en la herramienta correspondiente</p></a>').join('')
       : '<section class="card"><h2>Sin coincidencias</h2><p class="muted">Prueba “mai”, “gusano” o “santa”. También puedes dejar la búsqueda vacía para ver todo el catálogo demo.</p></section>';
   }
 

@@ -1,17 +1,54 @@
 (function () {
   const params = new URLSearchParams(location.search);
-  let mode = 'semillas';
   const state = AgroService.getState();
+  const flow = document.querySelector('[data-decision-flow]');
   const plotSelect = document.getElementById('plot');
-  plotSelect.innerHTML = state.plots.map((plot) => {
+  const cropSelect = document.getElementById('crop');
+  const insumoSelect = document.getElementById('insumo');
+  const targetSelect = document.getElementById('target');
+  const areaInput = document.getElementById('area');
+  const doseInput = document.getElementById('dose');
+  const unitInput = document.getElementById('unit');
+  const errorBox = document.getElementById('calc-error');
+  const phytosanitaryTypes = new Set(['herbicida', 'fungicida', 'insecticida', 'acaricida', 'plaguicida']);
+  let mode = 'semillas';
+
+  function typeOf(item) {
+    return String(item.type || '').trim().toLocaleLowerCase('es-CL');
+  }
+
+  function populate(select, values, label, value, placeholder) {
+    select.replaceChildren(new Option(placeholder, ''));
+    values.forEach((item) => select.add(new Option(label(item), String(value(item)))));
+  }
+
+  populate(plotSelect, state.plots, (plot) => {
     const predio = state.predios.find((item) => item.id === plot.predio);
-    return '<option value="' + plot.id + '">' + predio.name + ' · ' + plot.name + '</option>';
-  }).join('');
-  document.getElementById('crop').innerHTML = AgroService.getCultivos().map((name) => '<option>' + name + '</option>').join('');
-  if (params.get('plot')) plotSelect.value = params.get('plot');
+    return (predio ? predio.name + ' · ' : '') + plot.name;
+  }, (plot) => plot.id, 'Selecciona un potrero');
+  populate(cropSelect, AgroService.getCultivos(), (name) => name, (name) => name, 'Selecciona un cultivo');
 
   function selectedPlot() {
     return state.plots.find((item) => item.id === plotSelect.value);
+  }
+
+  function selectedInsumo() {
+    return AgroService.getInsumos(true).find((item) => AgroService.sameId(item.id, insumoSelect.value));
+  }
+
+  function isProtectionProduct(item) {
+    return phytosanitaryTypes.has(typeOf(item));
+  }
+
+  function validProtectionProduct(item, crop, target) {
+    return item.verifiedUse === true &&
+      isProtectionProduct(item) &&
+      item.crop === crop &&
+      Array.isArray(item.authorizedCrops) &&
+      item.authorizedCrops.includes(crop) &&
+      Array.isArray(item.controlTargets) &&
+      item.controlTargets.includes(target) &&
+      ['kg/ha', 'g/ha', 'L/ha', 'mL/ha'].includes(item.unit);
   }
 
   function maxArea() {
@@ -19,130 +56,284 @@
     return plot?.areaHa || state.predios.find((item) => item.id === plot?.predio)?.area || 0;
   }
 
-  function currentInsumo() {
-    const plot = selectedPlot();
-    const wanted = params.get('insumo');
-    const list = AgroService.getInsumos(true);
-    return list.find((item) => AgroService.sameId(item.id, wanted)) ||
-      list.find((item) => item.crop === plot?.crop && item.type !== 'Semilla');
+  function protectionTargets() {
+    const crop = cropSelect.value;
+    return [...new Set(AgroService.getInsumos(true)
+      .filter((item) => item.crop === crop && item.verifiedUse === true && isProtectionProduct(item))
+      .flatMap((item) => Array.isArray(item.controlTargets) ? item.controlTargets : []))];
+  }
+
+  function refreshTargetOptions() {
+    const current = targetSelect.value;
+    populate(targetSelect, protectionTargets(), (item) => item, (item) => item, 'Selecciona un objetivo');
+    if (protectionTargets().includes(current)) targetSelect.value = current;
+  }
+
+  function refreshInsumoOptions(preferredId) {
+    if (mode === 'semillas') return;
+    const items = AgroService.getInsumos(true);
+    let available;
+    if (mode === 'proteccion') {
+      const target = targetSelect.value;
+      available = items.filter((item) => validProtectionProduct(item, cropSelect.value, target));
+    } else {
+      available = items.filter((item) => typeOf(item) !== 'semilla' && !isProtectionProduct(item) &&
+        (!item.crop || item.crop === cropSelect.value));
+    }
+    populate(insumoSelect, available, (item) => {
+        const dose = item.dose === null || item.dose === undefined ? 'sin dosis registrada' :
+          AgroService.fmt(item.dose) + ' ' + (item.unit || 'unidad') +
+          (mode === 'proteccion' || String(item.unit || '').endsWith('/ha') ? '' : '/ha');
+      return item.name + ' · ' + dose;
+    }, (item) => item.id, 'Selecciona un producto');
+    if (mode === 'insumos') insumoSelect.add(new Option('Otro producto (ingresar manualmente)', 'manual'));
+    if (preferredId && Array.from(insumoSelect.options).some((option) => option.value === String(preferredId))) {
+      insumoSelect.value = String(preferredId);
+    }
+  }
+
+  function syncProduct() {
+    const product = selectedInsumo();
+    const manual = mode === 'insumos' && insumoSelect.value === 'manual';
+    document.getElementById('custom-product-field').hidden = !manual;
+    const help = document.getElementById('insumo-help');
+    if (manual) {
+      doseInput.value = '';
+      unitInput.value = '';
+      help.textContent = 'Ingresa los datos respaldados por tu fuente técnica. No se agregará al inventario.';
+    } else if (!product) {
+      doseInput.value = '';
+      unitInput.value = '';
+      help.textContent = mode === 'proteccion'
+        ? 'No hay productos verificados para el cultivo y objetivo seleccionados.'
+        : 'Elige un insumo registrado o ingreso manual.';
+    } else {
+      doseInput.value = product.dose ?? '';
+      unitInput.value = String(product.unit || '').replace(/\/ha$/i, '');
+      help.textContent = product.doseVerified
+        ? 'Dosis registrada y verificada: ' + AgroService.fmt(product.dose) + ' ' + product.unit + '. Fuente: ' + (product.doseSource || product.sourceName) + '.'
+        : 'Dosis sin verificar en el catálogo. Confirma una fuente técnica antes de usarla.';
+    }
+    const readonlyProtection = mode === 'proteccion';
+    doseInput.readOnly = readonlyProtection;
+    unitInput.readOnly = readonlyProtection;
+  }
+
+  function syncSeedInfo() {
+    const seed = AgroService.getSemilla(cropSelect.value);
+    const sourced = Boolean(seed?.densitySource && seed?.densityUrl && seed?.densityVerifiedAt);
+    doseInput.value = sourced ? seed.density : '';
+    unitInput.value = sourced ? seed.unit || '' : '';
+    document.getElementById('dose-help').textContent = sourced
+      ? 'Densidad documentada: ' + seed.densitySource + ' · verificada ' + seed.densityVerifiedAt + '.'
+      : 'Sin fuente técnica documentada en el catálogo. Confirma la dosis por hectárea antes de usarla.';
+    doseInput.readOnly = false;
+    unitInput.readOnly = false;
+  }
+
+  function syncCropDefaults(preferredId) {
+    if (mode === 'semillas') {
+      syncSeedInfo();
+      return;
+    }
+    if (mode === 'proteccion') refreshTargetOptions();
+    refreshInsumoOptions(preferredId);
+    syncProduct();
   }
 
   function syncPlot() {
     const plot = selectedPlot();
-    if (!plot) return;
-    document.getElementById('crop').value = plot.crop || document.getElementById('crop').value;
-    document.getElementById('area').value = plot.areaHa || '';
-    if (mode === 'semillas') {
-      const seed = AgroService.getSemilla(plot.crop) || window.AGRO_MOCK.semillas.find((item) => item.crop === plot.crop);
-      if (seed) {
-        document.getElementById('dose').value = seed.density;
-        document.getElementById('unit').value = seed.unit;
-      } else if (!document.getElementById('dose').value) {
-        document.getElementById('dose').value = 25;
-        document.getElementById('unit').value = 'kg';
-      }
-    } else {
-      const insumo = currentInsumo();
-      if (insumo) {
-        document.getElementById('dose').value = insumo.dose;
-        document.getElementById('unit').value = insumo.unit;
-      }
+    if (!plot) {
+      areaInput.value = '';
+      areaInput.max = '';
+      document.getElementById('plot-help').textContent = 'La superficie se recupera desde el potrero.';
+      return;
     }
-    const fromDb = AgroService.catalogFromDb();
-    const extra = fromDb ? ' · Dosis del catálogo (base de datos)' : '';
-    document.getElementById('plot-help').textContent = 'Superficie disponible: ' + AgroService.fmt(maxArea(), 3) + ' ha · Cultivo actual: ' + (plot.crop || 'sin cultivo') + extra;
-    renderResult(false);
+    if (plot.crop && Array.from(cropSelect.options).some((option) => option.value === plot.crop)) {
+      cropSelect.value = plot.crop;
+    } else {
+      cropSelect.value = '';
+    }
+    areaInput.value = plot.areaHa || '';
+    areaInput.max = plot.areaHa || '';
+    areaInput.readOnly = true;
+    document.querySelector('[name="surface-scope"][value="total"]').checked = true;
+    document.getElementById('plot-help').textContent =
+      'Superficie registrada: ' + AgroService.fmt(maxArea(), 3) + ' ha.';
+    syncCropDefaults(params.get('insumo'));
   }
 
   function setMode(next) {
-    mode = next;
+    mode = ['semillas', 'insumos', 'proteccion'].includes(next) ? next : 'semillas';
+    const isSeed = mode === 'semillas';
+    const isProtection = mode === 'proteccion';
     document.querySelectorAll('#modes button').forEach((button) => {
-      button.classList.toggle('is-active', button.dataset.mode === mode);
+      const active = button.dataset.mode === mode;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
     });
-    const seed = mode === 'semillas';
-    document.getElementById('form-title').textContent = seed ? 'Calcular semillas' : 'Calcular insumo';
-    document.getElementById('form-hint').textContent = seed
-      ? 'Elige el potrero. La superficie se completa sola; puedes ajustarla si no vas a sembrar todo.'
-      : 'Usa la dosis de la ficha o la etiqueta. El resultado es la cantidad total para el potrero.';
-    document.getElementById('dose-label').textContent = seed ? 'Dosis o densidad por hectárea' : 'Dosis recomendada por hectárea';
-    document.getElementById('dose-help').textContent = seed ? 'Kilos de semilla por cada hectárea.' : 'Cantidad de producto por cada hectárea.';
-    syncPlot();
+    document.getElementById('insumo-field').hidden = isSeed;
+    document.getElementById('target-field').hidden = !isProtection;
+    document.getElementById('protection-warning').hidden = !isProtection;
+    document.getElementById('dose-note').hidden = isProtection;
+    insumoSelect.required = !isSeed;
+    targetSelect.required = isProtection;
+    document.getElementById('dose-label').textContent = isSeed
+      ? 'Dosis o densidad por hectárea'
+      : isProtection ? 'Dosis verificada por hectárea' : 'Dosis por hectárea';
+    document.getElementById('dose-help').textContent = isProtection
+      ? 'La dosis de etiqueta verificada no se puede editar en este cálculo.'
+      : 'Usa datos documentados o ingresados por tu fuente técnica.';
+    if (!isSeed) refreshInsumoOptions(params.get('insumo'));
+    syncCropDefaults(params.get('insumo'));
+    errorBox.textContent = '';
   }
 
-  function bags(amount) {
-    const count = Math.min(12, Math.max(1, Math.round(amount / 25) || 1));
-    return '<div class="bags" aria-hidden="true">' + Array.from({ length: count }, () => '<b></b>').join('') + '</div>';
-  }
-
-  function renderResult(save) {
-    const errorBox = document.getElementById('calc-error');
-    const area = AgroService.positive(document.getElementById('area').value);
-    const dose = AgroService.positive(document.getElementById('dose').value);
-    const unit = document.getElementById('unit').value || 'kg';
+  async function renderResult(save) {
+    const area = AgroService.positive(areaInput.value);
+    let dose = AgroService.positive(doseInput.value);
+    const unit = unitInput.value.trim();
     const max = maxArea();
     const plot = selectedPlot();
-    const predio = plotSelect.selectedOptions[0]?.text || '';
+    const crop = cropSelect.value;
+    const product = selectedInsumo();
+    const manual = mode === 'insumos' && insumoSelect.value === 'manual';
+    const productName = manual
+      ? document.getElementById('custom-product').value.trim()
+      : product?.name || '';
     errorBox.textContent = '';
 
-    if (document.getElementById('area').value === '' || document.getElementById('dose').value === '') {
-      document.getElementById('result').innerHTML =
-        '<p class="result-kicker">Resultado</p><h2>Completa superficie y dosis</h2><p class="muted">En cuanto pongas los dos números, aquí verás cuánto necesitas.</p>';
-      return false;
-    }
-    if (area === null || dose === null) {
-      errorBox.textContent = 'Ingresa superficie y dosis mayores a 0. No se aceptan vacíos ni valores inválidos.';
+    if (!plot || !crop || area === null || dose === null || !unit) {
+      errorBox.textContent = 'Revisa el potrero, cultivo, superficie, dosis y unidad. La superficie y dosis deben ser mayores a 0.';
       return false;
     }
     if (max && area > max) {
       errorBox.textContent = 'La superficie no puede ser mayor a la disponible (' + AgroService.fmt(max, 3) + ' ha).';
       return false;
     }
-    const result = AgroService.calculateDose(area, dose);
+    if (mode !== 'semillas' && (!productName || (!manual && !product))) {
+      errorBox.textContent = 'Selecciona un producto registrado o indica el nombre del producto manual.';
+      return false;
+    }
+    if (mode === 'proteccion' && (!product || !validProtectionProduct(product, crop, targetSelect.value))) {
+      errorBox.textContent = 'No hay un producto con uso, cultivo, objetivo y dosis por hectárea verificados para esta selección.';
+      return false;
+    }
+    let serverResult;
+    try {
+      serverResult = await AgroService.calculateOnServer(flow.dataset.calculateUrl, {
+        operation: 'dose',
+        plot_id: plot.id,
+        area,
+        dose,
+        unit,
+        crop,
+        product_id: product?.id || null,
+        target: targetSelect.value
+      });
+    } catch (error) {
+      errorBox.textContent = error.message;
+      return false;
+    }
+    const amountValue = serverResult.amount;
+    const outputUnit = AgroService.escape(serverResult.unit || unit);
+    dose = serverResult.dose;
+    const actualDoseUnit = serverResult.dose_unit || (mode === 'proteccion' ? product.unit : unit + '/ha');
+    const safePlot = AgroService.escape(plot.name);
+    const safeCrop = AgroService.escape(crop);
+    const safeProduct = AgroService.escape(productName);
+    const doseUnit = actualDoseUnit;
+    const verified = mode === 'proteccion' || (mode !== 'semillas' && product?.doseVerified === true);
+    const doseNotice = verified
+      ? (product?.doseSource || product?.sourceName || '')
+      : 'Dato de entrada sin verificación técnica en el catálogo.';
     const payload = {
-      mode, area, dose, unit, amount: result.amount,
-      predio, crop: document.getElementById('crop').value,
+      mode: mode === 'proteccion' ? 'insumos' : mode, kind: mode, area, dose, unit: serverResult.unit, amount: amountValue,
+      predio: plotSelect.selectedOptions[0]?.text || plot.name,
+      plot: plot.name, crop, insumo: productName,
+      target: isProtectionMode() ? targetSelect.value : '',
+      doseSource: doseNotice, verified,
       date: new Date().toISOString()
     };
-    if (save) AgroService.saveResult('calculo-' + mode, payload);
+    if (save) AgroService.saveResult('calculo-' + (mode === 'proteccion' ? 'proteccion' : mode), payload);
+    const amount = AgroService.fmt(amountValue);
+
     document.getElementById('result').innerHTML =
-      '<p class="result-kicker">' + (mode === 'semillas' ? 'Semilla necesaria' : 'Insumo necesario') + '</p>' +
-      '<p class="result-value">' + AgroService.fmt(result.amount) + ' ' + unit + '</p>' +
-      '<p>Para <strong>' + predio + '</strong> · ' + document.getElementById('crop').value + '</p>' +
-      bags(result.amount) +
-      '<div class="formula-box"><p class="formula-line">Cantidad = superficie × dosis</p><p>' +
-      AgroService.fmt(area) + ' ha × ' + AgroService.fmt(dose) + ' ' + unit + '/ha = <strong>' + AgroService.fmt(result.amount) + ' ' + unit + '</strong></p></div>' +
-      '<div class="metric-grid"><div class="metric"><span>Superficie</span><strong>' + AgroService.fmt(area, 3) + ' ha</strong></div>' +
-      '<div class="metric"><span>Dosis</span><strong>' + AgroService.fmt(dose) + ' ' + unit + '/ha</strong></div></div>' +
-      '<div class="next-links"><a class="button secondary" href="/cobertura/">¿Me alcanza para cubrir el terreno?</a></div>';
+      '<p class="result-kicker">' + (mode === 'semillas' ? 'Cantidad de semillas' :
+        mode === 'proteccion' ? 'Cantidad de producto fitosanitario' : 'Cantidad de insumo') + '</p>' +
+      '<p class="decision-result-value">' + amount + ' ' + outputUnit + '</p>' +
+      '<p>Para <strong>' + safePlot + '</strong> · ' + safeCrop +
+      (productName ? ' · ' + safeProduct : '') + (isProtectionMode() ? ' · ' + AgroService.escape(targetSelect.value) : '') + '</p>' +
+      '<div class="formula-box"><p class="formula-line">Superficie × dosis por hectárea</p><p>' +
+      AgroService.fmt(area) + ' ha × ' + AgroService.fmt(dose) + ' ' + AgroService.escape(doseUnit) +
+      ' = <strong>' + amount + ' ' + outputUnit + '</strong></p></div>' +
+      '<div class="decision-result-summary"><div class="metric"><span>Superficie utilizada</span><strong>' +
+      AgroService.fmt(area, 3) + ' ha</strong></div><div class="metric"><span>Dosis utilizada</span><strong>' +
+      AgroService.fmt(dose) + ' ' + AgroService.escape(doseUnit) + '</strong></div>' +
+      (doseNotice ? '<div class="metric"><span>Procedencia de la dosis</span><strong>' + AgroService.escape(doseNotice) + '</strong></div>' : '') +
+      '</div>' +
+      (isProtectionMode()
+        ? '<p class="alert decision-safety">Confirma etiqueta, uso autorizado y precauciones antes de cualquier aplicación. No se recomiendan mezclas ni usos fuera de etiqueta.</p>'
+        : '<p class="muted decision-safety">Resultado matemático. Confirma la procedencia y aplicabilidad de los parámetros antes de utilizarlo.</p>');
     return true;
   }
 
-  plotSelect.addEventListener('change', syncPlot);
-  ['area', 'dose', 'unit', 'crop'].forEach((id) => {
-    document.getElementById(id).addEventListener('input', () => renderResult(false));
-    document.getElementById(id).addEventListener('change', () => renderResult(false));
+  function isProtectionMode() {
+    return mode === 'proteccion';
+  }
+
+  document.querySelectorAll('[name="surface-scope"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const fullArea = radio.value === 'total' && radio.checked;
+      areaInput.readOnly = fullArea;
+      if (fullArea) areaInput.value = maxArea() || '';
+      else areaInput.focus();
+    });
   });
+  plotSelect.addEventListener('change', syncPlot);
+  cropSelect.addEventListener('change', () => {
+    if (mode === 'proteccion') targetSelect.value = '';
+    syncCropDefaults();
+  });
+  targetSelect.addEventListener('change', () => {
+    refreshInsumoOptions();
+    syncProduct();
+  });
+  insumoSelect.addEventListener('change', syncProduct);
   document.getElementById('modes').addEventListener('click', (event) => {
     const button = event.target.closest('button[data-mode]');
     if (button) setMode(button.dataset.mode);
   });
-  document.querySelectorAll('[data-ex]').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      const [area, dose, unit] = chip.dataset.ex.split(',');
-      document.getElementById('area').value = area;
-      document.getElementById('dose').value = dose;
-      document.getElementById('unit').value = unit;
-      renderResult(false);
-    });
-  });
-  document.getElementById('calc-form').addEventListener('submit', (event) => {
+  document.getElementById('calc-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (renderResult(true)) {
-      const note = document.createElement('p');
-      note.className = 'callout';
-      note.textContent = 'Cálculo guardado. Ya puedes exportarlo en Reportes PDF.';
-      document.getElementById('result').appendChild(note);
+    const submitButton = event.submitter;
+    if (submitButton) submitButton.disabled = true;
+    try {
+      if (await renderResult(true)) {
+        flow.dispatchEvent(new CustomEvent('decision:show-step', { detail: { step: 3 } }));
+      }
+    } finally {
+      if (submitButton) submitButton.disabled = false;
     }
   });
-  setMode(params.get('insumo') ? 'insumos' : 'semillas');
+  flow.addEventListener('decision:new', () => {
+    document.getElementById('result').replaceChildren();
+    errorBox.textContent = '';
+    setMode(params.get('modo') || 'semillas');
+    if (params.get('plot')) plotSelect.value = params.get('plot');
+    syncPlot();
+  });
+
+  if (params.get('plot')) plotSelect.value = params.get('plot');
+  const requestedProduct = AgroService.getInsumos(true).find((item) => AgroService.sameId(item.id, params.get('insumo')));
+  const startMode = params.get('modo') || (requestedProduct && isProtectionProduct(requestedProduct) ? 'proteccion' :
+    params.get('insumo') ? 'insumos' : 'semillas');
+  setMode(startMode);
+  syncPlot();
+  if (requestedProduct) {
+    if (requestedProduct.crop && Array.from(cropSelect.options).some((option) => option.value === requestedProduct.crop)) {
+      cropSelect.value = requestedProduct.crop;
+    }
+    syncCropDefaults(requestedProduct.id);
+  }
 })();

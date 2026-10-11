@@ -1,5 +1,7 @@
 (function () {
-  const KEY = 'agroasesor-demo-v1';
+  const userId = JSON.parse(document.getElementById('agro-user-id').textContent);
+  const KEY = 'agroasesor-local-v2-' + userId;
+  const farmData = JSON.parse(document.getElementById('agro-farms').textContent);
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -25,7 +27,7 @@
     window.AGRO_MOCK.cultivos = (catalog.cultivos || []).filter((item) => item.active !== false).map((item) => item.name);
     if (catalog.zonas) window.AGRO_MOCK.zonas = catalog.zonas.map((item) => item.name);
     if (catalog.insumos) window.AGRO_MOCK.insumos = catalog.insumos;
-    if (catalog.semillas && catalog.semillas.length) window.AGRO_MOCK.semillas = catalog.semillas;
+    if (catalog.semillas) window.AGRO_MOCK.semillas = catalog.semillas;
     if (catalog.yields) window.AGRO_MOCK.yields = catalog.yields;
     window.AGRO_CATALOG = catalog;
     return state;
@@ -33,9 +35,8 @@
 
   function seed() {
     return {
-      predios: clone(window.AGRO_MOCK.predios),
-      plots: clone(window.AGRO_MOCK.plots),
-      activities: clone(window.AGRO_MOCK.activities),
+      predios: clone(farmData.predios),
+      plots: clone(farmData.plots),
       cultivos: clone(window.AGRO_MOCK.cultivos).map((name, i) => ({ id: 'c' + i, name, active: true })),
       variedades: [
         { id: 'v1', name: 'Híbrido demo', active: true },
@@ -55,9 +56,6 @@
     try {
       const stored = JSON.parse(localStorage.getItem(KEY));
       if (stored && stored.plots && stored.predios) {
-        fresh.predios = stored.predios;
-        fresh.plots = stored.plots;
-        fresh.activities = stored.activities || fresh.activities;
         fresh.results = stored.results || {};
       }
     } catch (error) {
@@ -72,7 +70,6 @@
       localStorage.setItem(KEY, JSON.stringify({
         predios: state.predios,
         plots: state.plots,
-        activities: state.activities,
         results: state.results || {}
       }));
     } catch (error) {
@@ -119,9 +116,11 @@
     return { ok: true, needed, coveredHa, percent, missingHa, missingQty, surplus };
   }
 
-  function predictYield(crop, areaHa) {
+  function predictYield(crop, areaHa, yieldPerHa) {
     const area = positive(areaHa);
-    const rate = window.AGRO_MOCK.yields[crop];
+    const rate = yieldPerHa === undefined
+      ? window.AGRO_MOCK.yields[crop]
+      : positive(yieldPerHa);
     if (area === null) return { ok: false, error: 'La superficie debe ser mayor a 0.' };
     if (!rate) return { ok: false, error: 'Selecciona un cultivo.' };
     return { ok: true, rate, production: rate * area, confidence: 'Media (datos de referencia, no un modelo real).' };
@@ -131,7 +130,31 @@
     return String(left) === String(right);
   }
 
+  async function calculateOnServer(url, payload) {
+    const token = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+    if (!token) throw new Error('No se encontró el token de seguridad. Recarga la página e inténtalo nuevamente.');
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': token,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if (!response.headers.get('Content-Type')?.includes('application/json')) {
+      throw new Error(response.redirected
+        ? 'Tu sesión expiró. Inicia sesión nuevamente para calcular.'
+        : 'El servidor devolvió una respuesta inesperada. Inténtalo nuevamente.');
+    }
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'El servidor no pudo validar el cálculo.');
+    return data;
+  }
+
   const api = {
+    escape: (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     getState: load,
     saveState: save,
     catalogFromDb: () => Boolean(readServerCatalog()),
@@ -146,6 +169,7 @@
     calculateCoverage,
     calculateDose,
     predictYield,
+    calculateOnServer,
     fmt,
     positive,
     nonNegative,
@@ -172,11 +196,6 @@
       state.predios.push(predio);
       save(state);
       return predio;
-    },
-    toggleActivity(id) {
-      const state = load();
-      state.activities = state.activities.map((item) => item.id === id ? { ...item, done: !item.done } : item);
-      save(state);
     },
     saveResult(key, value) {
       const state = load();

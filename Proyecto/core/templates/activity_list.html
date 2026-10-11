@@ -1,0 +1,43 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}Mis actividades · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block content %}
+<div class="page-hero">
+    <div>
+        <h1 class="page-title">Mis actividades agrícolas</h1>
+        <p class="page-sub">Consulta y administra las labores planificadas para tus potreros.</p>
+    </div>
+    <a class="button" href="{% url 'actividad_create' %}">Registrar actividad</a>
+</div>
+<section class="card">
+    {% if activities %}
+    <div class="activity-list">
+        {% for activity in activities %}
+        <article class="activity-row">
+            <div>
+                <strong><a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a></strong>
+                <p>{{ activity.get_tipo_display }} · {{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</p>
+                {% if activity.observaciones %}<p class="muted">{{ activity.observaciones|linebreaksbr }}</p>{% endif %}
+            </div>
+            <div class="activity-meta">
+                <time datetime="{{ activity.fecha_programada|date:'Y-m-d' }}">{{ activity.fecha_programada|date:"d/m/Y" }}</time>
+                <span class="status-pill status-{{ activity.estado }}">{{ activity.get_estado_display }}</span>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <h2>Aún no hay actividades</h2>
+        {% if not farm_data.plots %}
+        <p>Primero registra un predio y al menos un potrero para poder planificar una labor.</p>
+        <a class="button secondary" href="{% url 'predio_create' %}">Registrar predio</a>
+        {% else %}
+        <p>Registra la primera actividad para organizar el trabajo de tus potreros.</p>
+        <a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

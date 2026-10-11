@@ -6,6 +6,13 @@
   const notesBtn = document.querySelector('[data-notes]');
   const profileMenu = document.querySelector('[data-profile-menu]');
   const notesMenu = document.querySelector('[data-notes-menu]');
+  const mobileMenu = window.matchMedia('(max-width: 900px)');
+
+  function setMenuOpen(open) {
+    sidebar?.classList.toggle('open', open);
+    scrim?.classList.toggle('show', open);
+    menuBtn?.setAttribute('aria-expanded', String(open));
+  }
 
   function closePopovers() {
     profileMenu?.classList.remove('open');
@@ -13,12 +20,19 @@
   }
 
   menuBtn?.addEventListener('click', () => {
-    sidebar?.classList.toggle('open');
-    scrim?.classList.toggle('show');
+    setMenuOpen(!sidebar?.classList.contains('open'));
   });
-  scrim?.addEventListener('click', () => {
-    sidebar?.classList.remove('open');
-    scrim?.classList.remove('show');
+  scrim?.addEventListener('click', () => setMenuOpen(false));
+  sidebar?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => {
+      if (mobileMenu.matches) setMenuOpen(false);
+    });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sidebar?.classList.contains('open')) setMenuOpen(false);
+  });
+  mobileMenu.addEventListener('change', (event) => {
+    if (!event.matches) setMenuOpen(false);
   });
   profileBtn?.addEventListener('click', () => {
     notesMenu?.classList.remove('open');
@@ -34,11 +48,4 @@
 
   if (window.lucide) window.lucide.createIcons();
 
-  const list = document.querySelector('[data-notes-list]');
-  if (list && window.AgroService) {
-    const pending = AgroService.getState().activities.filter((item) => !item.done);
-    list.innerHTML = pending.length
-      ? pending.map((item) => '<p>' + item.title + '</p>').join('')
-      : '<p>Todo al día.</p>';
-  }
 })();

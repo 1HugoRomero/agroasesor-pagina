@@ -1,0 +1,121 @@
+{% extends 'body.html' %}{% load static %}
+{% block title %}{{ predio.nombre }} · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/predios.css' %}?v=8">{% endblock %}
+{% block content %}
+<div class="terrain-page-heading">
+    <div>
+        <span class="terrain-eyebrow"><i data-lucide="map"></i> Ficha del predio</span>
+        <h1 class="page-title">{{ predio.nombre }}</h1>
+        <p class="page-sub">{{ predio.ubicacion|default:'Ubicación de referencia no registrada' }}</p>
+    </div>
+    <div class="toolbar">
+        <a class="button secondary" href="{% url 'predios' %}"><i data-lucide="arrow-left"></i> Mis predios</a>
+        <a class="button secondary" href="{% url 'predio_edit' predio.pk %}"><i data-lucide="pencil"></i> Editar predio</a>
+        <a class="button" href="{% url 'potrero_create' predio.pk %}"><i data-lucide="plus"></i> Registrar potrero</a>
+    </div>
+</div>
+<div class="predio-detail-layout">
+    <section class="card detail-map-card">
+        <div class="map-card-heading">
+            <div><span class="terrain-card-kicker">PERÍMETRO REGISTRADO</span><h2>Vista geográfica</h2></div>
+            {% if predio.geojson %}
+            <div class="detail-map-tools">
+                <div class="map-view-switch" role="group" aria-label="Cambiar vista del mapa">
+                    <button type="button" class="is-active" data-map-layer="normal" aria-pressed="true">Normal</button>
+                    <button type="button" data-map-layer="satellite" aria-pressed="false">Satélite</button>
+                </div>
+                <span class="map-badge">GeoJSON guardado</span>
+            </div>
+            {% endif %}
+        </div>
+        {% if predio.geojson %}
+        <p id="predio-map-status" class="detail-map-status" role="status" aria-live="polite"></p>
+        <div id="predio-detail-map" class="farm-map" aria-label="Mapa del perímetro del predio"></div>
+        <details class="vertex-details">
+            <summary>Coordenadas de vértices</summary>
+            <ol id="predio-vertices" class="vertex-list"></ol>
+        </details>
+        <details class="vertex-details">
+            <summary>Geometría registrada</summary>
+            <pre class="geojson-preview">{{ predio.geojson|pprint }}</pre>
+        </details>
+        {% else %}
+        <div class="detail-empty-state"><i data-lucide="map-off"></i><p>Este predio se registró antes de habilitar los perímetros. Edita el predio para delimitarlo y guardar su geometría.</p><a class="button secondary" href="{% url 'predio_edit' predio.pk %}">Agregar perímetro</a></div>
+        {% endif %}
+    </section>
+    <section class="card detail-summary-card">
+        <div class="detail-tabs" role="tablist" aria-label="Secciones de la ficha">
+            <button type="button" class="detail-tab is-active" id="tab-information" role="tab" aria-selected="true" aria-controls="predio-information">Información</button>
+            <button type="button" class="detail-tab" id="tab-history" role="tab" aria-selected="false" aria-controls="predio-history">Historial <span>{{ historial|length }}</span></button>
+        </div>
+        <section id="predio-information" class="detail-tab-panel" role="tabpanel" aria-labelledby="tab-information">
+            <h2>Información general</h2>
+            <dl class="detail-facts">
+                <div><dt>Superficie</dt><dd>{{ predio.superficie_ha|floatformat:4 }} ha</dd></div>
+                <div><dt>Superficie equivalente</dt><dd>{% if predio.superficie_m2 is not None %}{{ predio.superficie_m2|floatformat:2 }} m²{% else %}—{% endif %}</dd></div>
+                <div><dt>Perímetro</dt><dd>{% if predio.perimetro_m is not None %}{{ predio.perimetro_m|floatformat:2 }} m{% else %}—{% endif %}</dd></div>
+                <div><dt>Registrado</dt><dd>{{ predio.creado|date:"d/m/Y H:i" }}</dd></div>
+                <div><dt>Última modificación</dt><dd>{{ predio.actualizado|date:"d/m/Y H:i" }}</dd></div>
+                <div><dt>Referencia de ubicación</dt><dd>{{ predio.ubicacion|default:'No registrada' }}</dd></div>
+            </dl>
+            {% if predio.descripcion %}<h3>Descripción</h3><p>{{ predio.descripcion }}</p>{% endif %}
+            {% if predio.observaciones %}<h3>Observaciones</h3><p>{{ predio.observaciones }}</p>{% endif %}
+            <h2>Gestión agrícola</h2>
+            <dl class="detail-facts">
+                <div><dt>Potreros</dt><dd>{{ potreros|length }}</dd></div>
+                <div><dt>Superficie utilizada</dt><dd>{{ superficie_utilizada|floatformat:4 }} ha</dd></div>
+                <div><dt>Superficie restante</dt><dd>{{ superficie_restante|floatformat:4 }} ha</dd></div>
+                <div><dt>Cultivos registrados</dt><dd>{{ cultivos|length }}</dd></div>
+            </dl>
+            <div class="detail-actions">
+                <a class="button" href="{% url 'potrero_create' predio.pk %}"><i data-lucide="plus"></i> Registrar potrero</a>
+                <a class="button secondary" href="{% url 'calendario' %}"><i data-lucide="calendar-days"></i> Planificación de siembra</a>
+                <a class="button secondary" href="{% url 'decisiones' %}"><i data-lucide="sprout"></i> Centro de decisiones</a>
+            </div>
+            <h3>Potreros asociados</h3>
+            {% for potrero in potreros %}
+            <article class="detail-plot" id="potrero-{{ potrero.pk }}">
+                <strong>{{ potrero.nombre }}</strong>
+                <p>{{ potrero.superficie_m2|floatformat:2 }} m² · {{ potrero.superficie_ha|floatformat:4 }} ha · {{ potrero.cultivo|default:'Sin cultivo asociado' }}</p>
+                <a href="{% url 'potrero_edit' predio.pk potrero.pk %}">Editar potrero</a>
+                <a href="{% url 'predio_detail' predio.pk %}?potrero={{ potrero.pk }}#predio-history">Ver historial de este potrero</a>
+            </article>
+            {% empty %}
+            <div class="detail-empty-state"><p>Aún no hay potreros asociados a este predio. Registra el primero para organizar su superficie y cultivos.</p><a class="button secondary" href="{% url 'potrero_create' predio.pk %}">Registrar primer potrero</a></div>
+            {% endfor %}
+            {% if not cultivos %}<p class="muted">Todavía no hay cultivos registrados en sus potreros.</p>{% endif %}
+        </section>
+        <section id="predio-history" class="detail-tab-panel history-panel" role="tabpanel" aria-labelledby="tab-history" hidden>
+            <h2>{% if selected_potrero %}Historial de {{ selected_potrero.nombre }}{% else %}Historial del terreno{% endif %}</h2>
+            <p class="muted">Movimientos persistidos en la base de datos, del más reciente al más antiguo.{% if selected_potrero %} Se muestran únicamente los cambios asociados a este potrero.{% endif %}</p>
+            <ol class="history-list">
+                {% for item in historial %}
+                <li class="history-item">
+                    <span class="history-marker" aria-hidden="true"></span>
+                    <div class="history-entry">
+                        <div class="history-heading"><strong>{{ item.get_accion_display }}</strong><time datetime="{{ item.creado|date:'c' }}">{{ item.creado|date:"d/m/Y H:i" }}</time></div>
+                        <p>{{ item.resumen }}</p>
+                        {% if item.potrero %}<small>Potrero relacionado: {{ item.potrero.nombre }}</small><br>{% endif %}
+                        <small>Responsable: {{ item.usuario.get_full_name|default:item.usuario.username|default:'Usuario eliminado' }}</small>
+                        {% if item.geometria_anterior or item.geometria_nueva %}
+                        <details class="history-geometry"><summary>Ver geometría versionada</summary>
+                            {% if item.geometria_anterior %}<h4>Geometría anterior</h4><pre>{{ item.geometria_anterior|pprint }}</pre>{% endif %}
+                            {% if item.geometria_nueva %}<h4>Geometría nueva</h4><pre>{{ item.geometria_nueva|pprint }}</pre>{% endif %}
+                        </details>
+                        {% endif %}
+                        {% if item.superficie_anterior_ha != None or item.superficie_nueva_ha != None %}<small>Superficie: {{ item.superficie_anterior_ha|default:'—' }} ha → {{ item.superficie_nueva_ha|default:'—' }} ha</small>{% endif %}
+                    </div>
+                </li>
+                {% empty %}
+                <li class="detail-empty-state">Aún no hay movimientos registrados.</li>
+                {% endfor %}
+            </ol>
+        </section>
+    </section>
+</div>
+{% if predio.geojson %}
+{{ maps_config|json_script:'maps-config' }}
+{{ predio.geojson|json_script:'predio-detail-geometry' }}
+{% endif %}
+{% endblock %}
+{% block extra_js %}{% if predio.geojson %}{{ maps_config|json_script:'maps-config' }}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="{% static 'js/predio-detail.js' %}?v=2"></script>{% endif %}{% endblock %}

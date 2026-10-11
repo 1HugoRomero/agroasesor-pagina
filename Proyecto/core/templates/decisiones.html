@@ -1,0 +1,62 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}Centro de decisiones · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/decisiones.css' %}">{% endblock %}
+{% block content %}
+<section class="decision-center">
+    <div class="decision-intro">
+        <span class="decision-eyebrow"><i data-lucide="sprout" aria-hidden="true"></i> La decisión</span>
+        <h1 class="page-title">Centro de decisiones</h1>
+        <p class="page-sub">Calcula, planifica y optimiza los recursos de tu terreno.</p>
+    </div>
+    <div class="decision-grid" aria-label="Herramientas agrícolas">
+        <article class="decision-card">
+            <a class="decision-card-main" href="{% url 'calculadora' %}">
+                <span class="decision-icon" aria-hidden="true"><i data-lucide="wheat"></i></span>
+                <span class="decision-card-copy">
+                    <strong>Semillas</strong>
+                    <span>Calcula cuánto necesitas para sembrar</span>
+                </span>
+                <i class="decision-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>
+        </article>
+        <article class="decision-card">
+            <a class="decision-card-main" href="{% url 'calculadora' %}?modo=insumos">
+                <span class="decision-icon" aria-hidden="true"><i data-lucide="flask-conical"></i></span>
+                <span class="decision-card-copy">
+                    <strong>Insumos</strong>
+                    <span>Calcula dosis y cantidades</span>
+                </span>
+                <i class="decision-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>
+            <div class="decision-card-links">
+                <a class="decision-card-secondary" href="{% url 'calculadora' %}?modo=proteccion">Protección de cultivos <i data-lucide="arrow-right" aria-hidden="true"></i></a>
+                <a class="decision-card-secondary" href="{% url 'asesor' %}">Consultar ficha de insumo <i data-lucide="arrow-right" aria-hidden="true"></i></a>
+            </div>
+        </article>
+        <article class="decision-card">
+            <a class="decision-card-main" href="{% url 'cobertura' %}">
+                <span class="decision-icon" aria-hidden="true"><i data-lucide="warehouse"></i></span>
+                <span class="decision-card-copy">
+                    <strong>Disponibilidad</strong>
+                    <span>Comprueba si tus recursos alcanzan</span>
+                </span>
+                <i class="decision-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>
+        </article>
+        <article class="decision-card">
+            <a class="decision-card-main" href="{% url 'predictor' %}">
+                <span class="decision-icon" aria-hidden="true"><i data-lucide="wheat"></i></span>
+                <span class="decision-card-copy">
+                    <strong>Cosecha</strong>
+                    <span>Estima la producción de tu terreno</span>
+                </span>
+                <i class="decision-arrow" data-lucide="arrow-up-right" aria-hidden="true"></i>
+            </a>
+        </article>
+    </div>
+    {% if not farm_data.plots %}
+    <p class="decision-empty"><i data-lucide="info" aria-hidden="true"></i> Para iniciar un cálculo, primero registra un potrero en <a href="{% url 'predios' %}">Mis predios y potreros</a>.</p>
+    {% endif %}
+</section>
+{% endblock %}

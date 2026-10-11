@@ -1,64 +1,102 @@
 {% extends "body.html" %}
 {% load static %}
-{% block title %}Calculadora agrícola · AgroAsesor{% endblock %}
+{% block title %}Semillas e insumos · AgroAsesor{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/calculadora.css' %}">{% endblock %}
 {% block content %}
-<div class="page-hero">
-    <div>
-        <h1 class="page-title">Cuánto llevar</h1>
-        <p class="page-sub">Cantidad = superficie del potrero × dosis por hectárea.</p>
+<div class="decision-page">
+    <div class="page-hero">
+        <div>
+            <a class="decision-back" href="{% url 'decisiones' %}"><i data-lucide="arrow-left" aria-hidden="true"></i> Centro de decisiones</a>
+            <h1 class="page-title">Calcular cantidades</h1>
+            <p class="page-sub">Selecciona un potrero y configura la cantidad que necesitas.</p>
+        </div>
     </div>
-    <a class="button secondary" href="{% url 'cobertura' %}">Ver si me alcanza para el terreno</a>
-</div>
+    <div data-decision-flow data-calculate-url="{% url 'calculate' %}">
+        <ol class="decision-progress" aria-label="Progreso del cálculo">
+            <li data-progress-step="1"><span>1</span> Selección</li>
+            <li data-progress-step="2"><span>2</span> Configuración</li>
+            <li data-progress-step="3"><span>3</span> Resultado</li>
+        </ol>
+        <form id="calc-form" class="decision-flow" novalidate>
+            <section class="card decision-step" data-step-panel="1" aria-labelledby="select-title">
+                <h2 id="select-title" tabindex="-1">¿Qué vas a calcular?</h2>
+                <p class="decision-step-intro">Elige la herramienta, el potrero y el cultivo.</p>
+                <div class="decision-choice" id="modes" role="group" aria-label="Tipo de cálculo">
+                    <button type="button" data-mode="semillas" aria-pressed="true" class="is-active">Semillas</button>
+                    <button type="button" data-mode="insumos" aria-pressed="false">Fertilizantes e insumos</button>
+                    <button type="button" data-mode="proteccion" aria-pressed="false">Protección de cultivos</button>
+                </div>
+                <div class="decision-fields">
+                    <label class="field"><span>Potrero registrado</span>
+                        <select id="plot" required></select>
+                        <small class="help" id="plot-help">La superficie se recupera desde el potrero.</small>
+                    </label>
+                    <label class="field"><span>Cultivo</span><select id="crop" required></select></label>
+                    <div class="field decision-field-wide" id="insumo-field" hidden>
+                        <label for="insumo"><span>Insumo</span></label>
+                        <select id="insumo"></select>
+                        <small class="help" id="insumo-help">La dosis y sus unidades se muestran según los datos registrados.</small>
+                        <div id="custom-product-field" hidden>
+                            <label class="field"><span>Nombre del producto</span><input id="custom-product" maxlength="150"></label>
+                        </div>
+                    </div>
+                    <label class="field decision-field-wide" id="target-field" hidden><span>Objetivo de control autorizado</span>
+                        <select id="target"></select>
+                        <small class="help" id="target-help">Solo aparecen objetivos registrados para el cultivo y producto autorizados.</small>
+                    </label>
+                </div>
+                <div class="decision-step-actions">
+                    <button class="button" type="button" data-step-target="2">Continuar</button>
+                </div>
+            </section>
 
-<div class="mode-cards" id="modes" role="tablist" aria-label="Qué quieres calcular">
-    <button type="button" data-mode="semillas" class="is-active">
-        <strong>Semillas</strong>
-        <span>Cuántos kilos de semilla necesitas para sembrar el potrero.</span>
-    </button>
-    <button type="button" data-mode="insumos">
-        <strong>Fertilizante u otro insumo</strong>
-        <span>Cuánto producto aplicar según la dosis por hectárea.</span>
-    </button>
-</div>
+            <section class="card decision-step" data-step-panel="2" aria-labelledby="config-title" hidden>
+                <h2 id="config-title" tabindex="-1">Configura el cálculo</h2>
+                <p class="decision-step-intro">Ajusta la superficie para esta operación y revisa la dosis.</p>
+                <div class="decision-fields">
+                    <fieldset class="decision-surface-choice decision-field-wide">
+                        <legend>Superficie a utilizar</legend>
+                        <label><input type="radio" name="surface-scope" value="total" checked> Potrero completo</label>
+                        <label><input type="radio" name="surface-scope" value="partial"> Superficie parcial</label>
+                    </fieldset>
+                    <label class="field"><span>Superficie a calcular (ha)</span>
+                        <input id="area" type="number" min="0.01" step="0.01" required>
+                        <small class="help">No cambia la superficie registrada del potrero.</small>
+                    </label>
+                    <label class="field"><span id="dose-label">Dosis o densidad por hectárea</span>
+                        <input id="dose" type="number" min="0.01" step="0.01" required>
+                        <small class="help" id="dose-help">Una dosis debe estar documentada y expresada por hectárea.</small>
+                    </label>
+                    <label class="field"><span>Unidad</span>
+                        <input id="unit" maxlength="20" required>
+                    </label>
+                </div>
+                <details class="decision-help" id="dose-note">
+                    <summary>Sobre las dosis</summary>
+                    <p>Usa el dato registrado en el catálogo o el indicado por tu fuente técnica. No se recomienda una dosis automáticamente.</p>
+                </details>
+                <p class="alert decision-safety" id="protection-warning" hidden>Solo se habilitan productos con datos de autorización, etiqueta, cultivo y dosis verificados en el catálogo. Revisa siempre la etiqueta vigente.</p>
+                <p class="error" id="calc-error" role="alert"></p>
+                <div class="decision-step-actions">
+                    <button class="button secondary" type="button" data-step-target="1">Atrás</button>
+                    <button class="button" type="submit">Calcular cantidad</button>
+                </div>
+            </section>
 
-<div class="split-layout">
-    <form class="card calc-form" id="calc-form">
-        <h2 id="form-title">Calcular semillas</h2>
-        <p class="hint" id="form-hint">Elige el potrero. La superficie se completa sola; puedes ajustarla si no vas a sembrar todo.</p>
-        <label class="field"><span>¿En qué potrero?</span>
-            <select id="plot"></select>
-            <small class="help" id="plot-help">Superficie disponible del potrero.</small>
-        </label>
-        <label class="field"><span>Cultivo</span><select id="crop"></select></label>
-        <div class="grid-2">
-            <label class="field"><span>Superficie a calcular (ha)</span>
-                <input id="area" type="number" min="0.01" step="0.01" required>
-                <small class="help">1 hectárea = 10.000 m²</small>
-            </label>
-            <label class="field"><span id="dose-label">Dosis o densidad por hectárea</span>
-                <input id="dose" type="number" min="0.01" step="0.01" required>
-                <small class="help" id="dose-help">Kilos de semilla por cada hectárea.</small>
-            </label>
-        </div>
-        <label class="field"><span>Unidad del resultado</span>
-            <input id="unit" value="kg">
-            <small class="help">Por ejemplo kg, L o sacos.</small>
-        </label>
-        <p class="muted">Ejemplos rápidos (se copian al formulario):</p>
-        <div class="example-row">
-            <button class="example-chip" type="button" data-ex="4,25,kg">4 ha × 25 kg/ha</button>
-            <button class="example-chip" type="button" data-ex="1.245,2,L">1,245 ha × 2 L/ha</button>
-            <button class="example-chip" type="button" data-ex="12.5,250,kg">12,5 ha × 250 kg/ha</button>
-        </div>
-        <p class="error" id="calc-error" role="alert"></p>
-        <div class="toolbar">
-            <button class="button" type="submit">Calcular ahora</button>
-            <a class="button secondary" href="{% url 'reportes' %}">Llevar a un PDF</a>
-        </div>
-    </form>
-
-    <section class="card result-panel" id="result" aria-live="polite"></section>
+            <section class="card decision-step decision-result-card" data-step-panel="3" aria-labelledby="result-title" aria-live="polite" hidden>
+                <h2 id="result-title" tabindex="-1">Resultado</h2>
+                <div id="result"></div>
+                <div class="decision-step-actions">
+                    <button class="button secondary" type="button" data-step-target="2">Modificar cálculo</button>
+                    <a class="button secondary" href="{% url 'reportes' %}">Exportar en Reporte PDF</a>
+                    <button class="button" type="button" data-new-calculation>Nuevo cálculo</button>
+                </div>
+            </section>
+        </form>
+    </div>
 </div>
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/calculadora.js' %}?v=2"></script>{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/decision-flow.js' %}"></script>
+<script src="{% static 'js/calculadora.js' %}?v=3"></script>
+{% endblock %}

@@ -1,0 +1,14 @@
+
+services:
+  agroasesor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agroasesor_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Proyecto:/app
+    env_file:
+      - ./Proyecto/.env
+    restart: unless-stopped

@@ -1,20 +1,5 @@
-{% extends "body.html" %}
-{% load static %}
-{% block title %}Panel admin · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
-{% block content %}
-<div class="page-hero">
-    <div>
-        <h1 class="page-title">Catálogos</h1>
-        <p class="page-sub">Un insumo no vigente deja de aparecer en la ficha.</p>
-    </div>
-</div>
-<div class="grid-4" id="admin-stats"></div>
-<div class="toolbar" id="tabs"></div>
-<section class="card">
-    <h2 id="admin-title">Catálogo</h2>
-    <form class="grid-2" id="create-form"></form>
-    <div id="table"></div>
-</section>
-{% endblock %}
-{% block extra_js %}<script src="{% static 'js/admin.js' %}"></script>{% endblock %}
+{% extends 'body.html' %}
+{% block title %}Administración · AgroAsesor{% endblock %}
+{% block content %}<div class="page-hero"><div><h1 class="page-title">Administración</h1><p>Métricas consultadas en la base de datos.</p></div><a class="button" href="{% url 'admin:index' %}">Abrir Django Admin</a></div>
+<div class="metric-grid">{% for label, value in metrics.items %}<article class="card"><span>{{ label }}</span><strong class="stat-value">{{ value }}</strong></article>{% endfor %}</div>
+<section class="card"><h2>Catálogos</h2><p>Los cambios se guardan mediante Django Admin y requieren permisos sobre cada modelo.</p><div class="toolbar"><a href="{% url 'admin:core_cultivo_changelist' %}">Cultivos</a><a href="{% url 'admin:core_insumo_changelist' %}">Insumos</a><a href="{% url 'admin:core_zona_changelist' %}">Zonas</a></div><p class="muted">El calendario administrativo y las métricas de consultas corresponden a la Fase D.</p></section>{% endblock %}

@@ -11,21 +11,45 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management.utils import get_random_secret_key
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env', override=False)
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-h9f%t#mkiwh&sb5yc8062z9!48s1^!bla@(=mjt$ob2+%*j((h'
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured('Configura DJANGO_SECRET_KEY cuando DEBUG=False.')
+    SECRET_KEY = get_random_secret_key()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+MAP_TILE_URL = os.getenv(
+    'MAP_TILE_URL',
+    'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+).strip()
+MAP_TILE_ATTRIBUTION = os.getenv(
+    'MAP_TILE_ATTRIBUTION',
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+).strip()
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+AUTHENTICATION_BACKENDS = ['core.auth.EmailBackend']
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition
@@ -38,7 +62,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
-    'django_extensions',
 ]
 
 MIDDLEWARE = [
@@ -117,16 +140,23 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',  # <-- Agrega esto aquí
-]
+STATICFILES_DIRS = []
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'),
+        'OPTIONS': {
+            'host': os.getenv('EMAIL_HOST', ''),
+            'port': int(os.getenv('EMAIL_PORT', '587')),
+            'use_tls': os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true',
+            'username': os.getenv('EMAIL_HOST_USER', ''),
+            'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
+            'timeout': 15,
+        },
     },
 }
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'AgroAsesor <noreply@localhost>')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

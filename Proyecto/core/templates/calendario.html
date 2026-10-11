@@ -1,14 +1,47 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}Calendario de siembra · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/calendario.css' %}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/calendario.css' %}"><link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
-        <h1 class="page-title">Cuándo sembrar</h1>
-        <p class="page-sub">Verde siembra, amarillo crecimiento, café cosecha. Zona Central, datos de demostración.</p>
+        <h1 class="page-title">Siembra y actividades</h1>
+        <p class="page-sub">Gestiona el trabajo de tus potreros y consulta el calendario agronómico referencial.</p>
     </div>
+    <a class="button" href="{% url 'actividad_create' %}">Registrar actividad</a>
 </div>
+<section class="card" aria-labelledby="activities-heading">
+    <div class="section-heading">
+        <div>
+            <h2 id="activities-heading">Mis actividades agrícolas</h2>
+            <p>Actividades guardadas en tu cuenta, asociadas a un potrero.</p>
+        </div>
+        <a class="button secondary" href="{% url 'actividad_list' %}">Ver todas</a>
+    </div>
+    {% if activities %}
+    <div class="activity-list">
+        {% for activity in activities|slice:":5" %}
+        <article class="activity-row">
+            <div>
+                <strong><a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a></strong>
+                <p>{{ activity.get_tipo_display }} · {{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</p>
+            </div>
+            <div class="activity-meta">
+                <time datetime="{{ activity.fecha_programada|date:'Y-m-d' }}">{{ activity.fecha_programada|date:"d/m/Y" }}</time>
+                <span class="status-pill status-{{ activity.estado }}">{{ activity.get_estado_display }}</span>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>Aún no tienes actividades agrícolas registradas.</p>
+        <a class="button secondary" href="{% url 'actividad_create' %}">Planificar primera actividad</a>
+    </div>
+    {% endif %}
+</section>
+<h2 class="section-title">Calendario agronómico referencial</h2>
+<p class="page-sub">Referencia general para la Zona Central; no representa actividades guardadas en tu cuenta.</p>
 <div class="card grid-3 cal-filters">
     <label class="field"><span>Cultivo</span><select id="crop-filter"><option value="">Todos</option></select></label>
     <label class="field"><span>Año</span><select id="year"><option>2026</option><option>2027</option></select></label>

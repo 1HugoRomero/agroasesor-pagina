@@ -10,14 +10,22 @@
     Object.entries(data).forEach(([key, value]) => {
       if (value && typeof value !== 'object') rows.push(key + ': ' + value);
     });
-    rows.push('Fuente: SAG (referencia demostrativa, no es una consulta en vivo)');
+    rows.push('Fuente: datos guardados en AgroAsesor; no se consultan fuentes externas.');
     rows.push(window.AGRO_MOCK.disclaimer);
     return rows;
   }
 
   function preview() {
     const data = payload();
-    document.getElementById('preview').innerHTML = '<h2>Vista previa</h2>' + lines(data).map((line) => '<p>' + line + '</p>').join('');
+    const previewBox = document.getElementById('preview');
+    const heading = document.createElement('h2');
+    heading.textContent = 'Vista previa';
+    previewBox.replaceChildren(heading);
+    lines(data).forEach((line) => {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = line;
+      previewBox.append(paragraph);
+    });
   }
 
   document.getElementById('kind').addEventListener('change', preview);

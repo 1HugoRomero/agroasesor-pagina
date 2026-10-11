@@ -52,23 +52,23 @@
             <p class="lead">Por favor, escribe una nueva contraseña que sea segura y difícil de adivinar para proteger tu cuenta de AgroAsesor.</p>
             {% endif %}
 
-            <form method="post" novalidate class="access-form">
+            <form method="post" class="access-form">
                 {% csrf_token %}
                 <input type="hidden" name="mode" value="{{ mode }}">
 
                 {% if mode == 'register' %}
                 <label class="field">
                     <span>Nombre completo</span>
-                    <input name="name" required autocomplete="name" placeholder="Juan Pérez González" value="{{ form.name }}">
+                    <input name="name" required maxlength="150" autocomplete="name" placeholder="Juan Pérez González" value="{{ form.name }}">
                 </label>
                 <div class="row-2">
                     <label class="field">
                         <span>RUT</span>
-                        <input name="rut" required placeholder="12.345.678-9" value="{{ form.rut }}">
+                        <input name="rut" required maxlength="12" pattern="[0-9.]{7,10}-[0-9kK]" title="RUT con dígito verificador, por ejemplo 12.345.678-5" placeholder="12.345.678-5" value="{{ form.rut }}">
                     </label>
                     <label class="field">
                         <span>Teléfono</span>
-                        <input name="phone" required autocomplete="tel" placeholder="+56 9 1234 5678" value="{{ form.phone }}">
+                        <input name="phone" required maxlength="20" type="tel" autocomplete="tel" placeholder="+56 9 1234 5678" value="{{ form.phone }}">
                     </label>
                 </div>
                 {% endif %}
@@ -76,7 +76,7 @@
                 {% if mode != 'reset' %}
                 <label class="field">
                     <span>Correo electrónico</span>
-                    <input name="email" type="email" required autocomplete="username" placeholder="ejemplo@agroasesor.cl" value="{{ form.email }}">
+                    <input name="email" type="email" maxlength="150" required autocomplete="username" placeholder="ejemplo@agroasesor.cl" value="{{ form.email }}">
                 </label>
                 {% endif %}
 
@@ -99,20 +99,20 @@
                         <button class="eye" type="button" data-eye="password" aria-label="Mostrar contraseña"></button>
                     </span>
                 </label>
-                <a class="forgot" href="?mode=recover">¿Olvidaste tu contraseña?</a>
+                <a class="forgot" href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
                 {% elif mode == 'register' %}
                 <div class="row-2">
                     <label class="field">
                         <span>Contraseña</span>
                         <span class="pass-box">
-                            <input id="password" name="password" type="password" required autocomplete="new-password">
+                            <input id="password" name="password" type="password" minlength="8" required autocomplete="new-password">
                             <button class="eye" type="button" data-eye="password" aria-label="Mostrar contraseña"></button>
                         </span>
                     </label>
                     <label class="field">
                         <span>Confirmar contraseña</span>
                         <span class="pass-box">
-                            <input id="password2" name="password2" type="password" required autocomplete="new-password">
+                            <input id="password2" name="password2" type="password" minlength="8" required autocomplete="new-password">
                             <button class="eye" type="button" data-eye="password2" aria-label="Mostrar contraseña"></button>
                         </span>
                     </label>
@@ -147,11 +147,7 @@
 
             {% if mode == 'login' %}
             <p class="switch">¿No tienes cuenta? <a href="?mode=register">Regístrate aquí</a></p>
-            <form method="post" action="{% url 'enter_as_admin' %}" class="admin-entry">
-                {% csrf_token %}
-                <button type="submit">Ingresar como administrador</button>
-            </form>
-            <p class="demo-hint">Demo: agricultor@agroasesor.cl · 123456</p>
+            <p class="demo-hint">Los administradores ingresan con su cuenta autorizada.</p>
             {% elif mode == 'register' %}
             <p class="switch">¿Ya tienes cuenta? <a href="?mode=login">Inicia sesión</a></p>
             {% else %}

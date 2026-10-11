@@ -1,0 +1,41 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}{{ activity.nombre }} · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block content %}
+<div class="page-hero">
+    <div>
+        <h1 class="page-title">{{ activity.nombre }}</h1>
+        <p class="page-sub">{{ activity.get_tipo_display }} · {{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</p>
+    </div>
+    <a class="button secondary" href="{% url 'calendario' %}">Volver a Siembra</a>
+</div>
+<section class="card activity-detail">
+    <dl class="activity-facts">
+        <div><dt>Fecha programada</dt><dd><time datetime="{{ activity.fecha_programada|date:'Y-m-d' }}">{{ activity.fecha_programada|date:"d/m/Y" }}</time></dd></div>
+        <div><dt>Estado</dt><dd><span class="status-pill status-{{ activity.estado }}">{{ activity.get_estado_display }}</span></dd></div>
+        <div><dt>Potrero</dt><dd>{{ activity.potrero.nombre }}</dd></div>
+        <div><dt>Predio</dt><dd>{{ activity.potrero.predio.nombre }}</dd></div>
+        {% if activity.potrero.cultivo %}<div><dt>Cultivo registrado</dt><dd>{{ activity.potrero.cultivo.nombre }}</dd></div>{% endif %}
+        {% if activity.observaciones %}<div class="activity-observations"><dt>Observaciones</dt><dd>{{ activity.observaciones|linebreaksbr }}</dd></div>{% endif %}
+    </dl>
+    <p class="muted">Creada {{ activity.creado|date:"d/m/Y H:i" }} · Actualizada {{ activity.actualizado|date:"d/m/Y H:i" }}</p>
+    <div class="toolbar">
+        <a class="button" href="{% url 'actividad_edit' activity.pk %}">Editar</a>
+        {% if activity.estado != 'completada' %}
+        <form method="post" action="{% url 'actividad_estado' activity.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="estado" value="completada">
+            <button class="button" type="submit">Marcar completada</button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'actividad_estado' activity.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="estado" value="pendiente">
+            <button class="button secondary" type="submit">Marcar pendiente</button>
+        </form>
+        {% endif %}
+        <a class="button danger" href="{% url 'actividad_delete' activity.pk %}">Eliminar</a>
+    </div>
+</section>
+{% endblock %}
