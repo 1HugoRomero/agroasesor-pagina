@@ -133,3 +133,47 @@ registran el perímetro. División geométrica y eliminación no se ofrecen como
 Después de cada fase: revisar migración, pruebas de permisos/validación y flujo
 de navegador, documentar límites y actualizar esta matriz. No cambiar el stack.
 2
+## Integración de calendario, predios, decisiones y ficha de insumo (11 de octubre de 2026)
+
+Se revisó el código real antes de editar. No se reconstruyó la aplicación, no se
+borraron predios ni potreros y todas las migraciones son aditivas.
+
+### Causas encontradas
+
+- `models.py` tenía el campo `ReferenciaAgronomica.anio_referencia` sin migración: las
+  85 pruebas fallaban. Se creó `0012_referencia_anio`.
+- La base `db.sqlite3` solo tenía aplicadas las migraciones hasta la `0007`; calendario y
+  centro de decisiones consultaban tablas inexistentes (0008–0011).
+- Selectores vacíos del centro de decisiones: **catálogo vacío** (0 cultivos, zonas, tipos e
+  insumos) y, además, un error de integración: las semillas registradas como `Insumo`
+  de tipo «Semilla» nunca llegaban a la calculadora (solo se leía la densidad del cultivo).
+  Los respaldos anteriores tampoco contienen catálogo, por lo que no hay datos que importar.
+- La asignación de cultivo desde el formulario del potrero sobrescribía el cultivo sin
+  historial; el panel del mapa no ofrecía asignar cultivo y dejaba de funcionar sin Leaflet.
+
+### Cambios por fase
+
+| Fase | Archivos | Resultado |
+|---|---|---|
+| Calendario | `views.calendario`, `agronomy.py`, `calendario.html/js/css` | Filtros reales sin recarga (zona, cultivo, variedad; el año consulta al servidor), 12 meses con leyenda completa, ciclos entre años, fila separada «Tu registro», ficha en 7 pestañas (General, Siembra, Desarrollo, Cosecha, Sanidad, Productos, Fuentes), evaluadores con 4 estados, días transcurridos (años bisiestos), factores no evaluados y guardado de fechas en una temporada real. |
+| Predios | `seasons.py`, `views.potrero_assign_crop/potrero_api`, `predios.html`, `predios-map.js`, `predios.css` | Botón «Asignar/Cambiar cultivo» con modal, catálogo Django, temporada agrícola, estado y observaciones; cada cambio crea una `TemporadaCultivo` y conserva las anteriores; panel derecho con acciones e historial; etiquetas de potreros según zoom; selección sincronizada por URL; funciona sin mapa. |
+| Decisiones | `views.calculate`, `catalog.py`, `decisiones.html`, `decisiones.js`, `decisiones.css` | Cuatro herramientas (Cuánto llevar —semillas / fertilizantes y otros—, Si alcanza, Cosecha, Ficha de insumo), indicadores reales, distinción catálogo/inventario, resultados a la derecha, cálculo avanzado conectado a `seed_population`, cálculo por nutriente, sacos solo con presentación registrada, procedencia «documentada» o «simulación», PDF. |
+| Ficha de insumo | `decisiones.js` | Cultivo → problema (plaga, enfermedad, maleza, nutricional) → tipo → ficha, panel contextual, PDF, envío a «Cuánto llevar» sin asumir dosis no verificadas. |
+| Catálogo | `importar_catalogo.py`, migración `0013` | Importación JSON validada, atómica y en modo simulación por defecto; plantilla vacía. Nuevos campos: tipo/síntomas/fuente del problema, modo de aplicación del insumo y rótulo de temporada. |
+
+### Pendiente
+
+- El catálogo sigue vacío: hay que cargar zonas, cultivos, referencias e insumos con
+  fuentes oficiales (INIA, SAG, ODEPA, fichas técnicas). Sin eso las pantallas muestran
+  estados vacíos honestos.
+- La autorización de plaguicidas no se consulta en línea al SAG; depende de lo registrado.
+- No se ofrece eliminar predios o potreros: su historial está protegido (`PROTECT`).
+
+## Módulos de la barra lateral a nivel profesional (11 de octubre de 2026)
+
+- **Planificar actividad** (`/actividades/`, `/actividades/nueva/`): formulario en 4 secciones con tipo de labor, temporada, prioridad, responsable, fecha realizada, condiciones y registro de aplicación (producto, objetivo, dosis, superficie y cantidad total). Pautas de Buenas Prácticas Agrícolas por labor, alerta de carencia frente a la cosecha registrada, listado con indicadores, filtros, vista de calendario mensual y plan de temporada a partir de las fechas del potrero. Migración aditiva `0014`.
+- **Calcular insumos**: lleva directo a «Cuánto llevar › Fertilizantes y otros insumos»; los resultados se pueden planificar como actividad.
+- **Consultar productos** (`/productos/`): catálogo con categorías, búsqueda y filtros; ficha técnica imprimible por producto con datos faltantes explícitos.
+- **Generar reporte** (`/reportes/`): resumen del predio, cuaderno de campo, historial de cultivos y cálculos; impresión/PDF y CSV.
+- Las rutas `/calculadora/`, `/cobertura/`, `/predictor/` y `/asesor/` redirigen a las herramientas integradas conservando sus parámetros.
+- Todas las páginas usan un contenedor centrado común (máx. 1520 px) y paneles que ocupan el ancho disponible.

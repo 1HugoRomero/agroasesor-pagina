@@ -23,8 +23,13 @@
     return activeInsumos().filter((item) => cropKey(item) === crop);
   }
 
+  function problemNames(item) {
+    if (Array.isArray(item.problems) && item.problems.length) return item.problems;
+    return item.problem ? [item.problem] : [];
+  }
+
   function usesProblems() {
-    return cropInsumos().some((item) => Boolean(item.problem));
+    return cropInsumos().some((item) => problemNames(item).length > 0);
   }
 
   function uniqueValues(items, key) {
@@ -37,12 +42,17 @@
         .map((value) => ({ value, label: cropLabel(value) }));
     }
     if (step === 1) {
-      const items = cropInsumos();
-      const key = usesProblems() ? 'problem' : 'type';
-      return uniqueValues(items, key).map((value) => ({ value, label: value }));
+      if (usesProblems()) {
+        return [...new Set(cropInsumos().flatMap(problemNames))]
+          .map((value) => ({ value, label: value }));
+      }
+      return uniqueValues(cropInsumos(), 'type').map((value) => ({ value, label: value }));
     }
     if (step === 2 && usesProblems()) {
-      return uniqueValues(cropInsumos().filter((item) => item.problem === problem), 'type')
+      return uniqueValues(
+        cropInsumos().filter((item) => problemNames(item).includes(problem)),
+        'type',
+      )
         .map((value) => ({ value, label: value }));
     }
     if (step === 2) {
@@ -54,7 +64,8 @@
 
   function match() {
     if (usesProblems()) {
-      return cropInsumos().find((item) => item.problem === problem && item.type === type);
+      return cropInsumos().find((item) =>
+        problemNames(item).includes(problem) && item.type === type);
     }
     return cropInsumos().find((item) => item.type === type && String(item.id) === insumoId);
   }
@@ -119,10 +130,16 @@
     ]);
     const useAndDose = rows([
       ['Cultivo asociado', cropLabel(crop)],
+      ['Problemas agrícolas relacionados', listValue(item.problems || (item.problem ? [item.problem] : []))],
       ['Cultivos autorizados', listValue(item.authorizedCrops)],
       ['Objetivos de control registrados', listValue(item.controlTargets || (item.problem ? [item.problem] : []))],
       ['Dosis registrada', item.dose === null || item.dose === undefined ? '' :
         item.dose + (item.unit ? ' ' + item.unit : ' (unidad no registrada)')],
+      ['Dosis máxima verificada', item.maxDose === null || item.maxDose === undefined ? '' :
+        item.maxDose + (item.maxDoseUnit ? ' ' + item.maxDoseUnit : '')],
+      ['Vigencia', item.validFrom || item.validUntil
+        ? (item.validFrom || 'Sin inicio') + ' – ' + (item.validUntil || 'Sin término')
+        : 'Sin rango temporal registrado'],
       ['Zona', item.zone],
       ['Período de carencia', item.preharvestInterval],
       ['Tiempo de reingreso', item.reentryInterval]

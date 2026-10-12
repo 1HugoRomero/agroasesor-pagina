@@ -4,13 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        {% if mode == 'register' %}Crear cuenta
-        {% elif mode == 'recover' %}Recuperar contraseña
-        {% elif mode == 'reset' %}Restablecer contraseña
-        {% else %}Iniciar sesión{% endif %}
-        · AgroAsesor
-    </title>
+    <title>{% if mode == 'register' %}Crear cuenta{% else %}Iniciar sesión{% endif %} · AgroAsesor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -32,24 +26,18 @@
                 <h2>{{ headline }}</h2>
                 <div class="access-meta">
                     <span>Melipilla, Chile</span>
-                    <span>Módulo de Acceso v2.1</span>
+                    <span>Gestión agrícola</span>
                 </div>
             </div>
         </section>
 
         <section class="access-panel">
-            {% if mode == 'login' %}
-            <h1>Iniciar Sesión</h1>
-            <p class="lead">Ingresa tus credenciales profesionales para acceder a la plataforma agrícola.</p>
-            {% elif mode == 'register' %}
-            <h1>Crear Cuenta</h1>
-            <p class="lead">Formulario exclusivo para registro de agricultores y productores locales.</p>
-            {% elif mode == 'recover' %}
-            <h1>Recuperar Contraseña</h1>
-            <p class="lead">Ingresa tu correo electrónico y te enviaremos las instrucciones para restablecer tu contraseña.</p>
+            {% if mode == 'register' %}
+            <h1>Crear cuenta</h1>
+            <p class="lead">Regístrate con tus propios datos para comenzar a organizar tus terrenos.</p>
             {% else %}
-            <h1>Restablecer Contraseña</h1>
-            <p class="lead">Por favor, escribe una nueva contraseña que sea segura y difícil de adivinar para proteger tu cuenta de AgroAsesor.</p>
+            <h1>Iniciar sesión</h1>
+            <p class="lead">Ingresa con el nombre de usuario o correo electrónico de tu cuenta.</p>
             {% endif %}
 
             <form method="post" class="access-form">
@@ -57,42 +45,61 @@
                 <input type="hidden" name="mode" value="{{ mode }}">
 
                 {% if mode == 'register' %}
-                <label class="field">
-                    <span>Nombre completo</span>
-                    <input name="name" required maxlength="150" autocomplete="name" placeholder="Juan Pérez González" value="{{ form.name }}">
-                </label>
+                {{ registration_form.non_field_errors }}
                 <div class="row-2">
-                    <label class="field">
-                        <span>RUT</span>
-                        <input name="rut" required maxlength="12" pattern="[0-9.]{7,10}-[0-9kK]" title="RUT con dígito verificador, por ejemplo 12.345.678-5" placeholder="12.345.678-5" value="{{ form.rut }}">
+                    <label class="field" for="{{ registration_form.first_name.id_for_label }}">
+                        <span>{{ registration_form.first_name.label }}</span>
+                        {{ registration_form.first_name }}
+                        {{ registration_form.first_name.errors }}
                     </label>
-                    <label class="field">
-                        <span>Teléfono</span>
-                        <input name="phone" required maxlength="20" type="tel" autocomplete="tel" placeholder="+56 9 1234 5678" value="{{ form.phone }}">
+                    <label class="field" for="{{ registration_form.last_name.id_for_label }}">
+                        <span>{{ registration_form.last_name.label }}</span>
+                        {{ registration_form.last_name }}
+                        {{ registration_form.last_name.errors }}
                     </label>
                 </div>
-                {% endif %}
-
-                {% if mode != 'reset' %}
-                <label class="field">
-                    <span>Correo electrónico</span>
-                    <input name="email" type="email" maxlength="150" required autocomplete="username" placeholder="ejemplo@agroasesor.cl" value="{{ form.email }}">
+                <label class="field" for="{{ registration_form.username.id_for_label }}">
+                    <span>{{ registration_form.username.label }}</span>
+                    {{ registration_form.username }}
+                    {{ registration_form.username.errors }}
                 </label>
-                {% endif %}
-
-                {% if mode == 'register' %}
-                <label class="field">
-                    <span>Comuna</span>
-                    <select name="comuna">
-                        {% for comuna in comunas %}
-                        <option value="{{ comuna }}"{% if form.comuna == comuna %} selected{% endif %}>{{ comuna }}</option>
-                        {% endfor %}
-                    </select>
+                <label class="field" for="{{ registration_form.email.id_for_label }}">
+                    <span>{{ registration_form.email.label }}</span>
+                    {{ registration_form.email }}
+                    {{ registration_form.email.errors }}
                 </label>
-                {% endif %}
-
-                {% if mode == 'login' %}
-                <label class="field">
+                <div class="row-2">
+                    <label class="field" for="{{ registration_form.password1.id_for_label }}">
+                        <span>{{ registration_form.password1.label }}</span>
+                        <span class="pass-box">
+                            {{ registration_form.password1 }}
+                            <button class="eye" type="button" data-eye="id_password1" aria-label="Mostrar contraseña"></button>
+                        </span>
+                        <small>{{ registration_form.password1.help_text }}</small>
+                        {{ registration_form.password1.errors }}
+                    </label>
+                    <label class="field" for="{{ registration_form.password2.id_for_label }}">
+                        <span>{{ registration_form.password2.label }}</span>
+                        <span class="pass-box">
+                            {{ registration_form.password2 }}
+                            <button class="eye" type="button" data-eye="id_password2" aria-label="Mostrar contraseña"></button>
+                        </span>
+                        {{ registration_form.password2.errors }}
+                    </label>
+                </div>
+                <div class="policy-consent">
+                    <label for="{{ registration_form.acepta_politicas.id_for_label }}">
+                        {{ registration_form.acepta_politicas }}
+                        <span>He leído y acepto la <a href="{% url 'politica_privacidad' %}" target="_blank" rel="noopener">Política de privacidad, seguridad y cookies</a>.</span>
+                    </label>
+                    {{ registration_form.acepta_politicas.errors }}
+                </div>
+                {% else %}
+                <label class="field" for="username">
+                    <span>Nombre de usuario o correo electrónico</span>
+                    <input id="username" name="username" type="text" required autocomplete="username" placeholder="Tu usuario o correo" value="{{ identifier }}">
+                </label>
+                <label class="field" for="password">
                     <span>Contraseña</span>
                     <span class="pass-box">
                         <input id="password" name="password" type="password" required autocomplete="current-password">
@@ -100,58 +107,16 @@
                     </span>
                 </label>
                 <a class="forgot" href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
-                {% elif mode == 'register' %}
-                <div class="row-2">
-                    <label class="field">
-                        <span>Contraseña</span>
-                        <span class="pass-box">
-                            <input id="password" name="password" type="password" minlength="8" required autocomplete="new-password">
-                            <button class="eye" type="button" data-eye="password" aria-label="Mostrar contraseña"></button>
-                        </span>
-                    </label>
-                    <label class="field">
-                        <span>Confirmar contraseña</span>
-                        <span class="pass-box">
-                            <input id="password2" name="password2" type="password" minlength="8" required autocomplete="new-password">
-                            <button class="eye" type="button" data-eye="password2" aria-label="Mostrar contraseña"></button>
-                        </span>
-                    </label>
-                </div>
-                {% elif mode == 'reset' %}
-                <label class="field">
-                    <span>Nueva contraseña</span>
-                    <span class="pass-box">
-                        <input id="password" name="password" type="password" required autocomplete="new-password">
-                        <button class="eye" type="button" data-eye="password" aria-label="Mostrar contraseña"></button>
-                    </span>
-                </label>
-                <label class="field">
-                    <span>Confirmar nueva contraseña</span>
-                    <span class="pass-box">
-                        <input id="password2" name="password2" type="password" required autocomplete="new-password">
-                        <button class="eye" type="button" data-eye="password2" aria-label="Mostrar contraseña"></button>
-                    </span>
-                </label>
                 {% endif %}
 
                 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-                {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
-
-                <button class="submit" type="submit">
-                    {% if mode == 'register' %}Registrarse
-                    {% elif mode == 'recover' %}Enviar instrucciones
-                    {% elif mode == 'reset' %}Guardar nueva contraseña
-                    {% else %}Ingresar{% endif %}
-                </button>
+                <button class="submit" type="submit">{% if mode == 'register' %}Crear cuenta{% else %}Ingresar{% endif %}</button>
             </form>
 
-            {% if mode == 'login' %}
-            <p class="switch">¿No tienes cuenta? <a href="?mode=register">Regístrate aquí</a></p>
-            <p class="demo-hint">Los administradores ingresan con su cuenta autorizada.</p>
-            {% elif mode == 'register' %}
+            {% if mode == 'register' %}
             <p class="switch">¿Ya tienes cuenta? <a href="?mode=login">Inicia sesión</a></p>
             {% else %}
-            <p class="switch back"><a href="?mode=login">← Volver al inicio de sesión</a></p>
+            <p class="switch">¿No tienes cuenta? <a href="?mode=register">Regístrate aquí</a></p>
             {% endif %}
         </section>
     </main>

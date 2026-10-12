@@ -1,43 +1,138 @@
 {% extends "body.html" %}
 {% load static %}
-{% block title %}Mis actividades · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block title %}Actividades agrícolas · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=2">{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
-        <h1 class="page-title">Mis actividades agrícolas</h1>
-        <p class="page-sub">Consulta y administra las labores planificadas para tus potreros.</p>
+        <span class="eyebrow">Planificación y cuaderno de campo</span>
+        <h1 class="page-title">Actividades agrícolas</h1>
+        <p class="page-sub">Organiza las labores de tus potreros, controla lo pendiente y registra lo realizado.</p>
     </div>
-    <a class="button" href="{% url 'actividad_create' %}">Registrar actividad</a>
-</div>
-<section class="card">
-    {% if activities %}
-    <div class="activity-list">
-        {% for activity in activities %}
-        <article class="activity-row">
-            <div>
-                <strong><a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a></strong>
-                <p>{{ activity.get_tipo_display }} · {{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</p>
-                {% if activity.observaciones %}<p class="muted">{{ activity.observaciones|linebreaksbr }}</p>{% endif %}
-            </div>
-            <div class="activity-meta">
-                <time datetime="{{ activity.fecha_programada|date:'Y-m-d' }}">{{ activity.fecha_programada|date:"d/m/Y" }}</time>
-                <span class="status-pill status-{{ activity.estado }}">{{ activity.get_estado_display }}</span>
-            </div>
-        </article>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state">
-        <h2>Aún no hay actividades</h2>
-        {% if not farm_data.plots %}
-        <p>Primero registra un predio y al menos un potrero para poder planificar una labor.</p>
-        <a class="button secondary" href="{% url 'predio_create' %}">Registrar predio</a>
-        {% else %}
-        <p>Registra la primera actividad para organizar el trabajo de tus potreros.</p>
+    <div class="toolbar">
+        <a class="button secondary" href="{% url 'reportes' %}?tipo=cuaderno">Cuaderno de campo</a>
         <a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>
-        {% endif %}
     </div>
-    {% endif %}
-</section>
+</div>
+
+<div class="kpi-row">
+    <a class="kpi" href="?estado=pendiente"><span>Pendientes</span><strong>{{ activity_stats.pendientes }}</strong><small>por realizar</small></a>
+    <a class="kpi kpi-alert" href="?estado=vencida"><span>Vencidas</span><strong>{{ activity_stats.vencidas }}</strong><small>fecha ya pasada</small></a>
+    <a class="kpi" href="?estado=pendiente&amp;desde={{ today|date:'Y-m-d' }}"><span>Próximos 7 días</span><strong>{{ activity_stats.proximas }}</strong><small>desde hoy</small></a>
+    <a class="kpi kpi-ok" href="?estado=completada"><span>Completadas este mes</span><strong>{{ activity_stats.completadas_mes }}</strong><small>con fecha de realización</small></a>
+</div>
+
+<div class="activity-layout">
+    <div class="activity-main">
+        <form class="card filter-bar" method="get">
+            <label class="field"><span>Buscar</span><input type="search" name="buscar" value="{{ activity_filters.q }}" placeholder="Nombre, producto u observación"></label>
+            <label class="field"><span>Estado</span><select name="estado">
+                <option value="">Todos</option>
+                {% for value, label in activity_states %}<option value="{{ value }}"{% if activity_filters.estado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                <option value="vencida"{% if activity_filters.estado == 'vencida' %} selected{% endif %}>Vencidas</option>
+            </select></label>
+            <label class="field"><span>Tipo de labor</span><select name="tipo">
+                <option value="">Todas</option>
+                {% for value, label in activity_types %}<option value="{{ value }}"{% if activity_filters.tipo == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Potrero</span><select name="potrero">
+                <option value="">Todos</option>
+                {% for plot in activity_plots %}<option value="{{ plot.pk }}"{% if activity_filters.potrero == plot.pk|stringformat:'s' %} selected{% endif %}>{{ plot.predio.nombre }} · {{ plot.nombre }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Desde</span><input type="date" name="desde" value="{{ activity_filters.desde }}"></label>
+            <label class="field"><span>Hasta</span><input type="date" name="hasta" value="{{ activity_filters.hasta }}"></label>
+            <input type="hidden" name="vista" value="{{ activity_filters.vista }}">
+            <div class="filter-actions"><button class="button" type="submit">Filtrar</button><a class="button secondary" href="{% url 'actividad_list' %}">Limpiar</a></div>
+        </form>
+
+        <section class="card">
+            <div class="section-bar">
+                <h2>{% if activity_filters.vista == 'calendario' %}Calendario de {{ calendar_month|date:"F Y" }}{% else %}{{ activities|length }} actividad{{ activities|length|pluralize:"es" }}{% endif %}</h2>
+                <div class="segmented-links" role="group" aria-label="Vista">
+                    <a href="?{% for k, v in request.GET.items %}{% if k != 'vista' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}vista=lista" class="{% if activity_filters.vista == 'lista' %}is-active{% endif %}">Lista</a>
+                    <a href="?{% for k, v in request.GET.items %}{% if k != 'vista' %}{{ k }}={{ v|urlencode }}&amp;{% endif %}{% endfor %}vista=calendario" class="{% if activity_filters.vista == 'calendario' %}is-active{% endif %}">Calendario</a>
+                </div>
+            </div>
+
+            {% if activity_filters.vista == 'calendario' %}
+            <div class="month-nav">
+                <a class="button secondary" href="?vista=calendario&amp;mes={{ previous_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">← Anterior</a>
+                <a class="button secondary" href="?vista=calendario{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Hoy</a>
+                <a class="button secondary" href="?vista=calendario&amp;mes={{ next_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Siguiente →</a>
+            </div>
+            <div class="month-grid" role="grid" aria-label="Calendario mensual de actividades">
+                <div class="month-head">Lun</div><div class="month-head">Mar</div><div class="month-head">Mié</div><div class="month-head">Jue</div><div class="month-head">Vie</div><div class="month-head">Sáb</div><div class="month-head">Dom</div>
+                {% for week in calendar_weeks %}{% for day in week %}
+                <div class="month-day{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}">
+                    <span class="day-number">{{ day.date|date:"j" }}</span>
+                    {% for item in day.items|slice:":3" %}
+                    <a class="day-item type-{{ item.tipo }} state-{{ item.estado }}{% if item.vencida %} is-overdue{% endif %}" href="{% url 'actividad_detail' item.pk %}" title="{{ item.nombre }} · {{ item.potrero.nombre }}">{{ item.nombre }}</a>
+                    {% endfor %}
+                    {% if day.items|length > 3 %}<a class="day-more" href="?desde={{ day.date|date:'Y-m-d' }}&amp;hasta={{ day.date|date:'Y-m-d' }}">+{{ day.items|length|add:"-3" }} más</a>{% endif %}
+                </div>
+                {% endfor %}{% endfor %}
+            </div>
+            {% else %}
+            {% if activities %}
+            <div class="activity-table" role="table" aria-label="Actividades">
+                <div class="activity-table-head" role="row"><span>Fecha</span><span>Actividad</span><span>Potrero</span><span>Insumo</span><span>Estado</span><span></span></div>
+                {% for activity in activities %}
+                <article class="activity-table-row{% if activity.vencida %} is-overdue{% endif %}" role="row">
+                    <time class="date-chip" datetime="{{ activity.fecha_programada|date:'Y-m-d' }}"><strong>{{ activity.fecha_programada|date:"d" }}</strong><span>{{ activity.fecha_programada|date:"M Y" }}</span></time>
+                    <div class="cell-main">
+                        <a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a>
+                        <small><span class="type-dot type-{{ activity.tipo }}"></span>{{ activity.get_tipo_display }} · prioridad {{ activity.get_prioridad_display|lower }}</small>
+                    </div>
+                    <div class="cell"><strong>{{ activity.potrero.nombre }}</strong><small>{{ activity.potrero.predio.nombre }}{% if activity.temporada %} · {{ activity.temporada.cultivo.nombre }}{% endif %}</small></div>
+                    <div class="cell">{% if activity.producto_nombre %}<strong>{{ activity.producto_nombre }}</strong><small>{% if activity.dosis %}{{ activity.dosis|floatformat:"-3" }} {{ activity.unidad_dosis }}{% endif %}</small>{% else %}<small class="muted">—</small>{% endif %}</div>
+                    <div class="cell"><span class="status-pill status-{{ activity.estado }}{% if activity.vencida %} status-vencida{% endif %}">{% if activity.vencida %}Vencida{% else %}{{ activity.get_estado_display }}{% endif %}</span></div>
+                    <div class="cell-actions">
+                        {% if activity.estado == 'pendiente' %}
+                        <form method="post" action="{% url 'actividad_estado' activity.pk %}">{% csrf_token %}<input type="hidden" name="estado" value="completada"><input type="hidden" name="next" value="actividades"><button class="icon-btn" type="submit" title="Marcar completada" aria-label="Marcar completada «{{ activity.nombre }}»"><i data-lucide="check" aria-hidden="true"></i></button></form>
+                        {% endif %}
+                        <a class="icon-btn" href="{% url 'actividad_edit' activity.pk %}" title="Editar" aria-label="Editar «{{ activity.nombre }}»"><i data-lucide="pencil" aria-hidden="true"></i></a>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-hero">
+                <h3>{% if request.GET %}No hay actividades con esos filtros{% else %}Aún no hay actividades{% endif %}</h3>
+                <p>{% if not activity_plots %}Primero registra un predio y un potrero.{% else %}Planifica una labor o genera el plan de la temporada a partir de las fechas de tus potreros.{% endif %}</p>
+                {% if activity_plots %}<a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>{% else %}<a class="button" href="{% url 'predio_create' %}">Registrar predio</a>{% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+        </section>
+    </div>
+
+    <aside class="activity-aside">
+        <section class="card aside-card">
+            <h2>Plan de temporada</h2>
+            <p class="muted">Crea las labores clave a partir de las fechas de siembra y cosecha que registraste. Tú decides qué incluir y cada cuántos días.</p>
+            {% if plan_plots %}
+            <form method="post" action="{% url 'actividad_plan' %}" class="plan-form">
+                {% csrf_token %}
+                <label class="field"><span>Potrero</span><select name="potrero" required>
+                    {% for item in plan_plots %}<option value="{{ item.plot.pk }}">{{ item.plot.predio.nombre }} · {{ item.plot.nombre }}{% if item.season %} · {{ item.season.cultivo.nombre }}{% endif %} — siembra {{ item.sowing|date:"d/m/Y"|default:"sin fecha" }}, cosecha {{ item.harvest|date:"d/m/Y"|default:"sin fecha" }}</option>{% endfor %}
+                </select></label>
+                <label class="check"><input type="checkbox" name="incluir_preparacion"> Preparación de suelo <input type="number" name="dias_preparacion" min="1" max="120" value="15" aria-label="Días antes de la siembra"> días antes de la siembra</label>
+                <label class="check"><input type="checkbox" name="incluir_siembra" checked> Siembra en la fecha registrada</label>
+                <label class="check"><input type="checkbox" name="incluir_monitoreo"> Monitoreo cada <input type="number" name="frecuencia_monitoreo" min="1" max="60" value="14" aria-label="Frecuencia en días"> días hasta la cosecha</label>
+                <label class="check"><input type="checkbox" name="incluir_cosecha" checked> Cosecha en la fecha prevista</label>
+                <button class="button" type="submit">Generar actividades</button>
+                <p class="muted small">No se duplican labores que ya existan el mismo día. Los intervalos son tuyos: ajústalos según tu asesor técnico.</p>
+            </form>
+            {% else %}
+            <p class="muted">Registra un potrero para usar el plan de temporada.</p>
+            {% endif %}
+        </section>
+        <section class="card aside-card">
+            <h2>Tipos de labor</h2>
+            <ul class="legend-list">
+                {% for value, label in activity_types %}<li><span class="type-dot type-{{ value }}"></span>{{ label }}</li>{% endfor %}
+            </ul>
+        </section>
+    </aside>
+</div>
 {% endblock %}

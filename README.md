@@ -19,7 +19,18 @@ Copy-Item Proyecto/.env.example Proyecto/.env
 
 En este workspace ya se preparó un entorno virtual en la carpeta padre
 `APLICACION/.venv`; se puede usar `..\.venv\Scripts\python.exe` desde `AgroAsesor`.
-No hay credenciales demo habilitadas. Registra un agricultor en `/login/?mode=register`.
+No hay credenciales demo habilitadas. Cualquier persona puede crear una cuenta en
+`/login/?mode=register` con nombre, apellido opcional, nombre de usuario, correo y
+contraseña propia. El usuario y el correo se validan para evitar duplicados y
+Django aplica sus validadores y hash seguros de contraseña. Tras registrarse, la
+sesión se inicia automáticamente; se puede entrar después con el usuario o el
+correo. Cada cuenta empieza sin predios propios y solo accede a terrenos y
+actividades asociados a su usuario.
+El registro requiere aceptar la política de privacidad, seguridad y cookies.
+La versión aceptada y su fecha se guardan en `AceptacionPoliticas`; la política
+describe el uso de cookies técnicas de sesión/CSRF y del almacenamiento local del
+navegador. Revisa y adapta el texto a los responsables y requisitos legales de
+tu despliegue antes de publicar el servicio.
 Para el administrador, crea una cuenta mediante `createsuperuser` y usa `/admin/`.
 Configura un correo en esa cuenta para ingresar también por `/login/`.
 
@@ -91,6 +102,25 @@ correo se imprime en la consola; para enviar mensajes reales configura
 `EMAIL_HOST_PASSWORD` y `DEFAULT_FROM_EMAIL` en `.env`. Esas variables se traducen
 al ajuste `MAILERS` de Django 6.1. No guardes credenciales SMTP en Git.
 
+## Calendario agronómico referencial
+
+El calendario ya no presenta como recomendaciones las ventanas JavaScript del
+catálogo de demostración. Registra referencias con fuente, variedad y zona en
+Django Admin, y márcalas como verificadas solo después de comprobar el documento
+original. La migración aditiva `0008` crea el catálogo de referencias y la
+configuración del margen; no cambia predios ni registros existentes. El
+calendario muestra ventanas únicamente para referencias verificadas y permite
+evaluar fechas de siembra y cosecha mediante el backend. La cosecha también se
+compara con la duración de ciclo documentada.
+
+El margen inicial es de 15 días y puede ajustarse en **Configuración
+agronómica** dentro del Admin. Si faltan referencias o campos necesarios, el
+sistema informa que los datos son insuficientes en vez de inventar una ventana.
+El resultado es orientativo: no sustituye una evaluación profesional, no
+considera todas las condiciones locales ni garantiza la viabilidad o madurez del
+cultivo. El selector opcional de potrero solo precompleta los datos heredados de
+su cultivo, variedad y fechas.
+
 ## Centro de decisiones
 
 En **La decisión**, el acceso **Centro de decisiones** reúne semillas, insumos,
@@ -125,3 +155,18 @@ las tablas y perímetros anteriores. El respaldo
 previo está en `Proyecto/backups/db-antes-fase-a-2026-10-02.sqlite3` (ignorado por Git).
 Los archivos SQLite y pyc que ya estaban versionados no fueron borrados: `.gitignore`
 evita nuevas inclusiones, pero no deja de rastrear archivos existentes automáticamente.
+
+## Cargar el catálogo agronómico
+
+El catálogo (zonas, cultivos, referencias, problemas e insumos) parte vacío y no se
+rellena con datos de demostración. Para cargarlo con datos respaldados por fuentes:
+
+```powershell
+.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo --plantilla catalogo.json
+# completar catalogo.json con datos oficiales y luego:
+.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo catalogo.json            # solo valida
+.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo catalogo.json --aplicar  # guarda
+```
+
+También puede hacerse desde `/admin/`. El comando `seed_catalog` solo contiene datos
+de demostración y no debe usarse como información agronómica real.

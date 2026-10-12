@@ -24,6 +24,7 @@
     if (catalog.cultivos) state.cultivos = catalog.cultivos;
     if (catalog.zonas) state.zonas = catalog.zonas;
     if (catalog.insumos) state.insumos = catalog.insumos;
+    if (catalog.problemas) state.problemas = catalog.problemas;
     window.AGRO_MOCK.cultivos = (catalog.cultivos || []).filter((item) => item.active !== false).map((item) => item.name);
     if (catalog.zonas) window.AGRO_MOCK.zonas = catalog.zonas.map((item) => item.name);
     if (catalog.insumos) window.AGRO_MOCK.insumos = catalog.insumos;

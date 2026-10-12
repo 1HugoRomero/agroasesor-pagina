@@ -19,8 +19,11 @@
     return (predio ? predio.name + ' · ' : '') + plot.name;
   }, 'Selecciona un potrero');
   populate(cropSelect, AgroService.getCultivos(), (name) => name, 'Selecciona un cultivo');
-  const zones = (state.zonas || []).map((zone) => typeof zone === 'string' ? zone : zone.name).filter(Boolean);
-  populate(document.getElementById('zone'), zones, (name) => name, 'Sin zona seleccionada');
+  const zones = (state.zonas || []).map((zone) => typeof zone === 'string'
+    ? {id:zone, name:zone}
+    : zone).filter((zone) => zone && zone.name);
+  const zoneSelect = document.getElementById('zone');
+  populate(zoneSelect, zones, (zone) => zone.name, 'Sin zona seleccionada');
 
   function selectedPlot() {
     return state.plots.find((item) => item.id === plotSelect.value);
@@ -44,17 +47,27 @@
     areaInput.readOnly = true;
     document.querySelector('[name="surface-scope"][value="total"]').checked = true;
     document.getElementById('variety').value = plot.variety || '';
+    if (plot.zoneId && Array.from(zoneSelect.options).some((option) => option.value === String(plot.zoneId))) {
+      zoneSelect.value = String(plot.zoneId);
+    }
     syncYieldReference();
   }
 
   function syncYieldReference() {
-    const reference = window.AGRO_CATALOG?.yieldReferences?.[cropSelect.value];
-    const documented = reference && reference.rate && reference.source && reference.url && reference.verifiedAt;
+    const plot = selectedPlot();
+    const candidates = (window.AGRO_CATALOG?.regionalYieldReferences || []).filter((item) =>
+      item.crop === cropSelect.value && plot && String(item.zoneId) === String(plot.zoneId));
+    const variety = document.getElementById('variety').value.trim();
+    const reference = candidates.find((item) =>
+      item.variety && item.variety.toLocaleLowerCase('es-CL') === variety.toLocaleLowerCase('es-CL'))
+      || candidates.find((item) => !item.variety);
+    const documented = Boolean(reference);
     yieldInput.value = documented ? reference.rate : '';
     yieldSourceInput.value = documented ? reference.source : '';
     document.getElementById('yield-source-help').textContent = documented
-      ? 'Referencia del catálogo: ' + reference.source + ' · verificada ' + reference.verifiedAt + '.'
-      : 'No se ha registrado un rendimiento documentado para este cultivo. Ingresa un valor respaldado por tu fuente.';
+      ? 'Referencia verificada para ' + reference.zone + (reference.variety ? ' · ' + reference.variety : '') +
+        ': ' + reference.source + ' · ' + reference.verifiedAt + '. El servidor utilizará esta tasa.'
+      : 'No hay rendimiento verificado para la zona y variedad del potrero. Ingresa un valor con su fuente técnica.';
   }
 
   async function estimate(save) {
@@ -77,22 +90,23 @@
     try {
       result = await AgroService.calculateOnServer(flow.dataset.calculateUrl, {
         operation: 'yield',
+        calculation_type: 'rendimiento',
         plot_id: plot.id,
         crop,
         area,
         rate,
-        source: yieldSource
+        source: yieldSource,
+        variety: document.getElementById('variety').value.trim()
       });
     } catch (requestError) {
       errorBox.textContent = requestError.message;
       return false;
     }
     const variety = document.getElementById('variety').value.trim();
-    const zone = document.getElementById('zone').value;
+    const zone = zones.find((item) => String(item.id) === zoneSelect.value)?.name || '';
     const season = document.getElementById('season').value;
-    const reference = window.AGRO_CATALOG?.yieldReferences?.[cropSelect.value];
-    const isDocumented = Boolean(reference && reference.rate === rate && reference.source && reference.url && reference.verifiedAt);
-    const sourceSummary = yieldSource || (isDocumented ? reference.source + ' · ' + reference.verifiedAt : 'Ingresado por usuario; sin fuente documentada');
+    const isDocumented = result.source_verified === true;
+    const sourceSummary = result.source + (result.source_date ? ' · ' + result.source_date : '');
     if (save) AgroService.saveResult('predictor', {
       crop, area, plot: plot.name, variety, zone, season, yieldSource: sourceSummary,
       yieldVerified: isDocumented, ...result, date: new Date().toISOString()
@@ -116,6 +130,8 @@
   if (params.get('plot')) plotSelect.value = params.get('plot');
   plotSelect.addEventListener('change', syncPlot);
   cropSelect.addEventListener('change', syncYieldReference);
+  zoneSelect.addEventListener('change', syncYieldReference);
+  document.getElementById('variety').addEventListener('input', syncYieldReference);
   document.querySelectorAll('[name="surface-scope"]').forEach((radio) => {
     radio.addEventListener('change', () => {
       const fullArea = radio.value === 'total' && radio.checked;

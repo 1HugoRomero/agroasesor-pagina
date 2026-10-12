@@ -434,3 +434,8 @@ body:has(.sidebar-quick-links) .sidebar-guide { margin-top: auto; }
 @media (prefers-reduced-motion: reduce) {
     .distribution-bar span { transition: none; }
 }
+
+/* Alineado al contenedor centrado común */
+.dash { margin: 0 !important; }
+.dash-hero { border-radius: 18px; }
+.dash-stats, .dash-desk { margin-left: 0 !important; margin-right: 0 !important; }

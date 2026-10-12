@@ -33,6 +33,12 @@
     margin: auto;
 }
 
+.recovery-shell {
+    width: min(100%, 560px);
+    min-height: 0;
+    grid-template-columns: 1fr;
+}
+
 /* Breakpoint: ocultar panel izquierdo en pantallas pequeñas */
 @media (max-width: 640px) {
     .access-shell {
@@ -139,6 +145,21 @@
     outline: none;
 }
 .field input::placeholder { color: #b0b0b0; }
+.field small {
+    color: #6b7280;
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.4;
+}
+.field .errorlist,
+.access-form > .errorlist {
+    margin: 0;
+    padding-left: 18px;
+    color: #b54a3c;
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+.access-form > .errorlist { margin-bottom: 8px; }
 .field input:focus, .field select:focus {
     background: #fff;
     border-color: #e67a22;
@@ -146,6 +167,28 @@
 }
 
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.policy-consent { margin: 2px 0 12px; }
+.policy-consent label {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #4b5563;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+.policy-consent input { flex: 0 0 auto; margin: 3px 0 0; accent-color: #1f6b3a; }
+.policy-consent a { color: #1f6b3a; font-weight: 700; }
+.policy-consent .errorlist {
+    margin: 6px 0 0 28px;
+    padding-left: 16px;
+    color: #b54a3c;
+    font-size: 0.82rem;
+}
+.policy-content { max-width: 75ch; line-height: 1.65; color: #4b5563; }
+.policy-content h2 { margin: 24px 0 8px; color: #171717; font-size: 1.1rem; }
+.policy-content p, .policy-content ul { margin: 8px 0; }
+.policy-content ul { padding-left: 22px; }
+.policy-content a { color: #1f6b3a; }
 .pass-box { position: relative; display: block; }
 .pass-box input { padding-right: 44px; }
 .eye {

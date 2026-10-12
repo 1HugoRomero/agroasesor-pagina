@@ -1,71 +1,83 @@
 import json
-import re
 from decimal import Decimal
 from django import forms
-from django.contrib.auth import get_user_model, password_validation
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.utils import timezone
-from .models import ActividadAgricola, Agricultor, Predio, Potrero, Cultivo, Zona
+from .models import ActividadAgricola, Predio, Potrero, Cultivo, Zona, TemporadaCultivo, Insumo
+from django.db import models
 from .geometry import polygon_area, coordinates_from_geojson
 
-COMUNAS = ['Melipilla', 'San Pedro', 'Alhué', 'María Pinto', 'Curacaví', 'Talagante', 'Isla de Maipo', 'Paine']
 
+class RegistroForm(UserCreationForm):
+    error_messages = {
+        **UserCreationForm.error_messages,
+        'password_mismatch': 'Las contraseñas no coinciden.',
+    }
 
-class RegistroForm(forms.Form):
-    name = forms.CharField(max_length=150, label='Nombre')
-    email = forms.EmailField(max_length=150, label='Correo electrónico')
-    rut = forms.CharField(max_length=12, label='RUT')
-    phone = forms.CharField(max_length=20, label='Teléfono')
-    comuna = forms.ChoiceField(choices=[(c,c) for c in COMUNAS])
-    password = forms.CharField(widget=forms.PasswordInput, label='Contraseña')
-    password2 = forms.CharField(widget=forms.PasswordInput, label='Confirmación')
+    first_name = forms.CharField(
+        max_length=150,
+        label='Nombre',
+        widget=forms.TextInput(attrs={'autocomplete': 'given-name', 'placeholder': 'Tu nombre'}),
+    )
+    last_name = forms.CharField(
+        max_length=150,
+        label='Apellido (opcional)',
+        required=False,
+        widget=forms.TextInput(attrs={'autocomplete': 'family-name', 'placeholder': 'Tu apellido'}),
+    )
+    email = forms.EmailField(
+        max_length=254,
+        label='Correo electrónico',
+        widget=forms.EmailInput(attrs={'autocomplete': 'email', 'placeholder': 'tu@correo.com'}),
+    )
+    acepta_politicas = forms.BooleanField(
+        required=True,
+        error_messages={
+            'required': 'Debes leer y aceptar la Política de privacidad, seguridad y cookies para crear tu cuenta.',
+        },
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ('first_name', 'last_name', 'username', 'email')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'].label = 'Nombre de usuario'
+        self.fields['username'].widget.attrs.update({
+            'autocomplete': 'username',
+            'placeholder': 'Elige un nombre de usuario',
+        })
+        self.fields['password1'].label = 'Contraseña'
+        self.fields['password1'].widget.attrs.update({'autocomplete': 'new-password'})
+        self.fields['password2'].label = 'Confirmar contraseña'
+        self.fields['password2'].widget.attrs.update({'autocomplete': 'new-password'})
+        self.fields['password1'].help_text = (
+            'Usa al menos 8 caracteres; evita las contraseñas comunes, solo numéricas '
+            'o que contengan tus datos personales.'
+        )
+
+    def clean_username(self):
+        username = self.cleaned_data['username'].strip()
+        users = get_user_model().objects
+        if (
+            users.filter(username__iexact=username).exists()
+            or users.filter(email__iexact=username).exists()
+        ):
+            raise ValidationError('Este nombre de usuario ya está registrado.')
+        return username
 
     def clean_email(self):
-        email = self.cleaned_data['email'].lower()
+        email = self.cleaned_data['email'].strip().lower()
         users = get_user_model().objects
-        if users.filter(email__iexact=email).exists() or users.filter(username__iexact=email).exists():
-            raise ValidationError('Este correo ya tiene una cuenta.')
+        if (
+            users.filter(email__iexact=email).exists()
+            or users.filter(username__iexact=email).exists()
+        ):
+            raise ValidationError('Este correo electrónico ya está registrado.')
         return email
-
-    def clean_rut(self):
-        rut = self.cleaned_data['rut'].replace('.', '').replace(' ', '').upper()
-        if not re.fullmatch(r'\d{7,8}-[0-9K]', rut):
-            raise ValidationError('Usa un RUT válido con dígito verificador.')
-        body, digit = rut.split('-')
-        result = 11 - sum(int(n)*(2+i%6) for i,n in enumerate(reversed(body))) % 11
-        expected = '0' if result == 11 else 'K' if result == 10 else str(result)
-        if digit != expected:
-            raise ValidationError('El dígito verificador del RUT no es válido.')
-        rut = f'{int(body)}-{digit}'
-        if Agricultor.objects.filter(rut=rut).exists():
-            raise ValidationError('Este RUT ya está registrado.')
-        return rut
-
-    def clean_phone(self):
-        phone = re.sub(r'[\s()-]', '', self.cleaned_data['phone'])
-        if not re.fullmatch(r'\+?\d{8,15}', phone):
-            raise ValidationError('Ingresa un teléfono de 8 a 15 dígitos.')
-        return phone
-
-    def clean(self):
-        data = super().clean()
-        if data.get('password') != data.get('password2'):
-            self.add_error('password2', 'Las contraseñas no coinciden.')
-        if data.get('password'):
-            user = get_user_model()(username=data.get('email',''), email=data.get('email',''), first_name=data.get('name','')[:150])
-            try:
-                password_validation.validate_password(data['password'], user)
-            except ValidationError as exc:
-                self.add_error('password', exc)
-        return data
-
-    @transaction.atomic
-    def save(self):
-        d = self.cleaned_data
-        user = get_user_model().objects.create_user(username=d['email'], email=d['email'], password=d['password'], first_name=d['name'])
-        Agricultor.objects.create(user=user, nombre=d['name'], rut=d['rut'], telefono=d['phone'], comuna=d['comuna'])
-        return user
 
 
 class PredioForm(forms.ModelForm):
@@ -162,33 +174,110 @@ class PotreroForm(forms.ModelForm):
         return data
 
 
+class TemporadaCultivoForm(forms.ModelForm):
+    class Meta:
+        model = TemporadaCultivo
+        fields = [
+            'cultivo', 'variedad', 'temporada_agricola', 'fecha_siembra', 'fecha_cosecha',
+            'estado', 'observaciones',
+        ]
+        labels = {
+            'cultivo':'Cultivo',
+            'variedad':'Variedad',
+            'temporada_agricola':'Temporada agrícola',
+            'fecha_siembra':'Fecha de siembra',
+            'fecha_cosecha':'Fecha de cosecha',
+            'estado':'Estado de la temporada',
+            'observaciones':'Observaciones',
+        }
+        widgets = {
+            'fecha_siembra':forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
+            'fecha_cosecha':forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
+            'observaciones':forms.Textarea(attrs={'rows':4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['cultivo'].queryset = Cultivo.objects.filter(activo=True).order_by('nombre')
+        self.fields['cultivo'].empty_label = 'Selecciona un cultivo'
+        self.fields['temporada_agricola'].widget.attrs.update({'placeholder':'2026-2027', 'pattern':'[0-9]{4}-[0-9]{4}'})
+        self.fields['fecha_siembra'].required = False
+        self.fields['fecha_cosecha'].required = False
+
+
+UNIDADES_DOSIS = [
+    ('', 'Unidad'), ('kg/ha', 'kg/ha'), ('g/ha', 'g/ha'), ('L/ha', 'L/ha'),
+    ('mL/ha', 'mL/ha'), ('unidades/ha', 'unidades/ha'),
+]
+
+
 class ActividadAgricolaForm(forms.ModelForm):
+    unidad_dosis = forms.ChoiceField(choices=UNIDADES_DOSIS, required=False, label='Unidad')
+
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
         self.fields['potrero'].queryset = Potrero.objects.filter(
             predio__propietario=user
-        ).select_related('predio', 'cultivo')
+        ).select_related('predio', 'cultivo').order_by('predio__nombre', 'nombre')
         self.fields['potrero'].empty_label = 'Selecciona un potrero'
+        self.fields['potrero'].label_from_instance = lambda plot: f'{plot.predio.nombre} · {plot.nombre}'
+        self.fields['temporada'].queryset = TemporadaCultivo.objects.filter(
+            potrero__predio__propietario=user
+        ).select_related('cultivo', 'potrero')
+        self.fields['temporada'].empty_label = 'Sin temporada asociada'
+        self.fields['temporada'].label_from_instance = lambda season: (
+            f'{season.temporada_agricola + " · " if season.temporada_agricola else ""}'
+            f'{season.cultivo.nombre}{" · " + season.variedad if season.variedad else ""} · {season.get_estado_display()}'
+        )
+        today = timezone.localdate()
+        self.fields['insumo'].queryset = Insumo.objects.filter(vigente=True).exclude(
+            estado_verificacion__in=['restricted', 'cancelled'],
+        ).filter(
+            models.Q(vigencia_desde__isnull=True) | models.Q(vigencia_desde__lte=today),
+            models.Q(vigencia_hasta__isnull=True) | models.Q(vigencia_hasta__gte=today),
+        ).select_related('tipo', 'cultivo').order_by('tipo__nombre', 'nombre')
+        self.fields['insumo'].empty_label = 'Sin producto del catálogo'
+        self.fields['insumo'].label_from_instance = lambda item: f'{item.tipo.nombre} · {item.nombre}'
+        self.fields['prioridad'].required = False
         self.fields['tipo'].choices = [
             ('', 'Selecciona un tipo de actividad'),
-            *self.fields['tipo'].choices,
+            *[choice for choice in self.fields['tipo'].choices if choice[0]],
         ]
 
     class Meta:
         model = ActividadAgricola
-        fields = ['nombre', 'tipo', 'potrero', 'fecha_programada', 'estado', 'observaciones']
+        fields = [
+            'tipo', 'nombre', 'potrero', 'temporada', 'prioridad', 'fecha_programada', 'estado',
+            'fecha_realizada', 'responsable', 'insumo', 'insumo_otro', 'objetivo', 'dosis',
+            'unidad_dosis', 'superficie_ha', 'condiciones_clima', 'observaciones',
+        ]
         labels = {
-            'nombre': 'Actividad',
-            'tipo': 'Tipo de actividad',
+            'nombre': 'Nombre de la actividad',
+            'tipo': 'Tipo de labor',
             'potrero': 'Potrero',
+            'temporada': 'Temporada de cultivo',
+            'prioridad': 'Prioridad',
             'fecha_programada': 'Fecha programada',
             'estado': 'Estado',
+            'fecha_realizada': 'Fecha en que se realizó',
+            'responsable': 'Responsable / aplicador',
+            'insumo': 'Producto del catálogo',
+            'insumo_otro': 'Otro producto (no catalogado)',
+            'objetivo': 'Objetivo (plaga, maleza, nutriente…)',
+            'dosis': 'Dosis',
+            'superficie_ha': 'Superficie tratada (ha)',
+            'condiciones_clima': 'Condiciones al momento de la labor',
             'observaciones': 'Observaciones (opcional)',
         }
         widgets = {
             'fecha_programada': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'fecha_realizada': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
             'observaciones': forms.Textarea(attrs={'rows': 4}),
+            'dosis': forms.NumberInput(attrs={'min': '0.001', 'step': 'any'}),
+            'superficie_ha': forms.NumberInput(attrs={'min': '0.0001', 'step': 'any'}),
+            'condiciones_clima': forms.TextInput(attrs={'placeholder': 'Ej.: despejado, viento suave, suelo húmedo'}),
+            'responsable': forms.TextInput(attrs={'placeholder': 'Nombre de quien ejecuta la labor'}),
         }
 
     def clean_potrero(self):
@@ -201,4 +290,23 @@ class ActividadAgricolaForm(forms.ModelForm):
         data = super().clean()
         if self.instance.pk and self.instance.usuario_id != self.user.pk:
             raise ValidationError('No puedes modificar actividades de otra cuenta.')
+        plot = data.get('potrero')
+        season = data.get('temporada')
+        product = data.get('insumo')
+        crop = season.cultivo if season else (plot.cultivo if plot else None)
+        if product and product.cultivo_id and crop and product.cultivo_id != crop.pk:
+            self.add_error('insumo', f'El producto está asociado a {product.cultivo.nombre}, no a {crop.nombre}.')
+        if product and data.get('unidad_dosis') and product.unidad_dosis and data['unidad_dosis'] != product.unidad_dosis:
+            self.add_error('unidad_dosis', f'La unidad registrada del producto es {product.unidad_dosis}.')
+        if (
+            product and product.dosis_maxima_hectarea is not None and data.get('dosis')
+            and data['dosis'] > product.dosis_maxima_hectarea
+        ):
+            self.add_error('dosis', f'Supera la dosis máxima registrada ({product.dosis_maxima_hectarea} {product.unidad_dosis_maxima}).')
+        if not data.get('prioridad'):
+            data['prioridad'] = ActividadAgricola.Prioridad.MEDIA
+        if data.get('tipo') not in ActividadAgricola.TIPOS_CON_INSUMO:
+            for field in ('insumo', 'insumo_otro', 'dosis', 'unidad_dosis'):
+                if data.get(field):
+                    data[field] = None if field in ('insumo', 'dosis') else ''
         return data

@@ -124,6 +124,7 @@
     try {
       result = await AgroService.calculateOnServer(flow.dataset.calculateUrl, {
         operation: 'coverage',
+        calculation_type: 'coverage',
         plot_id: plot.id,
         crop: cropSelect.value,
         product_id: insumo.id,

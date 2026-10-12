@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActividadAgricola, Cultivo, Insumo, TipoInsumo, Zona, Agricultor, Predio, PredioHistorial, Potrero
+from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, TipoInsumo, Zona, Agricultor, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola
 
 
 @admin.register(Zona)
@@ -23,27 +23,89 @@ class CultivoAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(ReferenciaAgronomica)
+class ReferenciaAgronomicaAdmin(admin.ModelAdmin):
+    list_display = (
+        'cultivo', 'zona', 'variedad', 'estado',
+        'institucion_fuente', 'fecha_consulta_fuente',
+    )
+    list_filter = ('estado', 'zona', 'cultivo')
+    search_fields = (
+        'cultivo__nombre', 'zona__nombre', 'variedad',
+        'institucion_fuente', 'documento_fuente',
+    )
+    fieldsets = (
+        ('Cultivo y contexto', {'fields': (
+            'cultivo', 'zona', 'anio_referencia', 'variedad', 'nombre_cientifico',
+            'familia_botanica', 'tipo_cultivo',
+        )}),
+        ('Calendario documentado', {'fields': (
+            ('siembra_inicio_mes', 'siembra_inicio_dia'),
+            ('siembra_fin_mes', 'siembra_fin_dia'),
+            ('cosecha_inicio_mes', 'cosecha_inicio_dia'),
+            ('cosecha_fin_mes', 'cosecha_fin_dia'),
+            'duracion_ciclo_dias', 'rendimiento_ton_ha',
+        )}),
+        ('Siembra y desarrollo', {'fields': (
+            'condicion_siembra', 'requerimientos', 'profundidad_siembra',
+            'etapas_fenologicas', 'condiciones_crecimiento', 'manejo_general',
+        )}),
+        ('Cosecha y sanidad', {'fields': (
+            'indicadores_madurez', 'consideraciones_cosecha', 'plagas',
+            'enfermedades', 'malezas', 'manejo_integrado',
+        )}),
+        ('Fuente y verificación', {'fields': (
+            'estado', 'institucion_fuente', 'documento_fuente',
+            'url_fuente', 'fecha_consulta_fuente',
+        )}),
+        ('Trazabilidad', {'fields': ('creado', 'actualizado')}),
+    )
+    readonly_fields = ('creado', 'actualizado')
+
+
+@admin.register(ConfiguracionAgronomica)
+class ConfiguracionAgronomicaAdmin(admin.ModelAdmin):
+    list_display = ('margen_ventana_dias',)
+
+    def has_add_permission(self, request):
+        return not ConfiguracionAgronomica.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(TipoInsumo)
 class TipoInsumoAdmin(admin.ModelAdmin):
     list_display = ('nombre',)
     search_fields = ('nombre',)
 
 
+@admin.register(ProblemaAgricola)
+class ProblemaAgricolaAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tipo', 'activo')
+    list_filter = ('tipo', 'activo', 'cultivos')
+    search_fields = ('nombre', 'descripcion', 'sintomas')
+    filter_horizontal = ('cultivos',)
+
+
 @admin.register(Insumo)
 class InsumoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'tipo', 'cultivo', 'estado_verificacion', 'fecha_verificacion', 'vigente')
-    list_filter = ('tipo', 'estado_verificacion', 'vigente', 'dosis_verificada')
+    list_display = ('nombre', 'tipo', 'cultivo', 'estado_verificacion', 'fecha_verificacion', 'vigencia_actual')
+    list_filter = ('tipo', 'estado_verificacion', 'vigente', 'dosis_verificada', 'problemas')
     search_fields = ('nombre', 'fabricante', 'numero_autorizacion_sag', 'ingrediente_activo')
+    filter_horizontal = ('problemas',)
     fieldsets = (
-        (None, {'fields': ('nombre', 'tipo', 'cultivo', 'zona', 'descripcion', 'fabricante', 'vigente')}),
+        (None, {'fields': ('nombre', 'tipo', 'cultivo', 'zona', 'problemas', 'descripcion', 'fabricante', 'vigente')}),
+        ('Vigencia', {'fields': ('vigencia_desde', 'vigencia_hasta')}),
         ('Verificación y trazabilidad', {'fields': (
             'estado_verificacion', 'fuente_nombre', 'fuente_url', 'fecha_verificacion',
-            'dosis_hectarea', 'unidad_dosis', 'dosis_verificada', 'dosis_fuente',
+            'dosis_hectarea', 'unidad_dosis', 'dosis_maxima_hectarea',
+            'unidad_dosis_maxima', 'dosis_verificada', 'dosis_fuente',
         )}),
         ('Documentación y plaguicidas', {'fields': (
             'numero_autorizacion_sag', 'ingrediente_activo', 'concentracion', 'formulacion',
             'cultivos_autorizados', 'objetivos_control', 'etiqueta_url', 'hoja_seguridad_url',
-            'restricciones', 'periodo_carencia', 'tiempo_reingreso',
+            'modo_aplicacion', 'restricciones', 'periodo_carencia', 'tiempo_reingreso',
             'precauciones_ambientales', 'advertencia_polinizadores',
         )}),
         ('Composición y presentación de fertilizantes', {'fields': (
@@ -56,11 +118,28 @@ class InsumoAdmin(admin.ModelAdmin):
         )}),
     )
 
+    @admin.display(boolean=True, description='Vigente hoy')
+    def vigencia_actual(self, obj):
+        return obj.vigente_en
+
 
 @admin.register(Agricultor)
 class AgricultorAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'comuna', 'user')
     search_fields = ('nombre', 'rut', 'user__email')
+
+
+@admin.register(AceptacionPoliticas)
+class AceptacionPoliticasAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'version', 'aceptada_en')
+    search_fields = ('usuario__username', 'usuario__email')
+    readonly_fields = ('usuario', 'version', 'aceptada_en')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Predio)
@@ -92,6 +171,43 @@ class PotreroAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'predio', 'cultivo', 'superficie_ha')
     list_filter = ('cultivo',)
     search_fields = ('nombre', 'predio__nombre')
+
+
+@admin.register(TemporadaCultivo)
+class TemporadaCultivoAdmin(admin.ModelAdmin):
+    list_display = (
+        'cultivo', 'variedad', 'temporada_agricola', 'potrero', 'fecha_siembra',
+        'fecha_cosecha', 'estado',
+    )
+    list_filter = ('estado', 'cultivo', 'temporada_agricola')
+    search_fields = (
+        'cultivo__nombre', 'variedad', 'potrero__nombre',
+        'potrero__predio__nombre',
+    )
+    readonly_fields = ('creado', 'actualizado')
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CalculoAgricola)
+class CalculoAgricolaAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'potrero', 'operacion', 'creado')
+    list_filter = ('operacion', 'creado')
+    search_fields = (
+        'usuario__username', 'usuario__email',
+        'potrero__nombre', 'potrero__predio__nombre',
+    )
+    readonly_fields = ('usuario', 'potrero', 'operacion', 'entrada', 'resultado', 'creado')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ActividadAgricola)

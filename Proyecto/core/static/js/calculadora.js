@@ -223,6 +223,7 @@
     try {
       serverResult = await AgroService.calculateOnServer(flow.dataset.calculateUrl, {
         operation: 'dose',
+        calculation_type: mode,
         plot_id: plot.id,
         area,
         dose,

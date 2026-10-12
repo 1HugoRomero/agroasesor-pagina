@@ -1,12 +1,15 @@
 {% extends "body.html" %}
 {% load static %}
-{% block title %}Calendario de siembra · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/calendario.css' %}"><link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block title %}Calendario agronómico · AgroAsesor{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/calendario.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'css/activities.css' %}">
+{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
         <h1 class="page-title">Siembra y actividades</h1>
-        <p class="page-sub">Gestiona el trabajo de tus potreros y consulta el calendario agronómico referencial.</p>
+        <p class="page-sub">Gestiona el trabajo de tus potreros y consulta referencias agronómicas documentadas.</p>
     </div>
     <a class="button" href="{% url 'actividad_create' %}">Registrar actividad</a>
 </div>
@@ -40,19 +43,149 @@
     </div>
     {% endif %}
 </section>
-<h2 class="section-title">Calendario agronómico referencial</h2>
-<p class="page-sub">Referencia general para la Zona Central; no representa actividades guardadas en tu cuenta.</p>
-<div class="card grid-3 cal-filters">
-    <label class="field"><span>Cultivo</span><select id="crop-filter"><option value="">Todos</option></select></label>
-    <label class="field"><span>Año</span><select id="year"><option>2026</option><option>2027</option></select></label>
-    <label class="field"><span>Zona</span><select id="zone"></select></label>
-</div>
-<div class="split-layout">
-    <div class="cal-scroll card">
-        <p class="legend cal-legend"><span class="cell sow"></span> Siembra <span class="cell grow"></span> Crecimiento <span class="cell harvest"></span> Cosecha</p>
-        <table class="cal-table" id="cal-table"></table>
+
+<section class="calendar-section" aria-labelledby="calendar-heading">
+    <div class="section-heading calendar-heading">
+        <div>
+            <h2 class="section-title" id="calendar-heading">Calendario agronómico referencial</h2>
+            <p class="page-sub">Ventanas publicadas por fuentes verificadas. Son orientativas: no reemplazan la observación en terreno ni garantizan resultados.</p>
+        </div>
     </div>
-    <aside class="card" id="cal-detail"></aside>
-</div>
+    <form class="card cal-filters" id="calendar-filters" method="get">
+        <label class="field" for="zone"><span>Región o zona agrícola</span>
+            <select id="zone" name="zone">
+                {% for zone in calendar_zones %}<option value="{{ zone.pk }}"{% if zone.pk == calendar_default_zone %} selected{% endif %}>{{ zone.nombre }}</option>{% empty %}<option value="">Sin zonas en el catálogo</option>{% endfor %}
+            </select>
+        </label>
+        <label class="field" for="crop-filter"><span>Cultivo</span>
+            <select id="crop-filter" name="crop">
+                <option value=""{% if not calendar_selected_crop %} selected{% endif %}>Todos los cultivos</option>
+                {% for crop in calendar_crops %}<option value="{{ crop.pk }}"{% if crop.pk|stringformat:"s" == calendar_selected_crop %} selected{% endif %}>{{ crop.nombre }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="field" for="variety-filter"><span>Variedad</span>
+            <select id="variety-filter" name="variety" data-selected="{{ calendar_selected_variety }}">
+                <option value="*">Todas las variedades</option>
+                <option value="">Solo referencia general</option>
+            </select>
+        </label>
+        <label class="field" for="year"><span>Año de referencia</span>
+            <select id="year" name="year">
+                {% for year in calendar_years %}<option value="{{ year }}"{% if year == calendar_current_year %} selected{% endif %}>{{ year }}</option>{% endfor %}
+            </select>
+        </label>
+        {% if calendar_plots %}
+        <label class="field" for="calendar-plot"><span>Mi potrero (opcional)</span>
+            <select id="calendar-plot" name="potrero">
+                <option value="">Sin potrero</option>
+                {% for plot in calendar_plots %}<option value="{{ plot.id }}"{% if plot.id|stringformat:"s" == calendar_selected_plot %} selected{% endif %}>{{ plot.farm }} · {{ plot.name }}{% if plot.crop %} · {{ plot.crop }}{% endif %}</option>{% endfor %}
+            </select>
+        </label>
+        {% endif %}
+        <noscript><button class="button secondary" type="submit">Aplicar filtros</button></noscript>
+    </form>
+    {% if not calendar_zones or not calendar_crops %}
+    <div class="card calendar-catalog-empty" role="status">
+        <h3>El catálogo agronómico todavía está vacío</h3>
+        <p>{% if not calendar_zones %}No hay zonas agrícolas registradas. {% endif %}{% if not calendar_crops %}No hay cultivos activos registrados. {% endif %}AgroAsesor no muestra ventanas de demostración como si fueran datos reales.</p>
+        <p class="muted">Para completarlo se necesitan referencias oficiales por cultivo y zona (por ejemplo, boletines y fichas técnicas de INIA, calendarios de ODEPA o publicaciones de universidades), con institución, documento, URL y fecha de consulta.</p>
+        {% if request.user.is_staff %}<a class="button secondary" href="{% url 'admin:core_referenciaagronomica_changelist' %}">Administrar referencias agronómicas</a>{% else %}<p class="muted">Solicita al administrador del catálogo que registre las referencias.</p>{% endif %}
+    </div>
+    {% endif %}
+    <div class="calendar-layout">
+        <div class="cal-scroll card">
+            <ul class="cal-legend" aria-label="Leyenda del calendario">
+                <li><span class="cell sow"></span> Ventana de siembra</li>
+                <li><span class="cell grow"></span> Crecimiento referencial</li>
+                <li><span class="cell harvest"></span> Ventana de cosecha</li>
+                <li><span class="cell none"></span> Fuera de ventanas documentadas</li>
+                <li><span class="cell real"></span> Tu registro real</li>
+            </ul>
+            <p class="calendar-year-note" id="calendar-year-note"></p>
+            <div id="calendar-empty" class="empty-state" hidden></div>
+            <table class="cal-table" id="cal-table" aria-label="Ventanas agronómicas por mes"></table>
+            <div id="calendar-real-note" class="calendar-real-note" hidden></div>
+        </div>
+        <aside class="card cal-detail" id="cal-detail" aria-live="polite"></aside>
+    </div>
+</section>
+
+<section class="calendar-evaluators" aria-labelledby="evaluator-heading">
+    <div>
+        <h2 class="section-title" id="evaluator-heading">Evaluar fechas propuestas</h2>
+        <p class="page-sub">Compara tu fecha con la ventana referencial verificada del cultivo, variedad y zona elegidos.</p>
+    </div>
+    {% if calendar_plots %}
+    <div class="calendar-plot-row">
+        <label class="field calendar-plot-picker" for="plot-picker"><span>Completar desde uno de mis potreros (opcional)</span>
+            <select id="plot-picker">
+                <option value="">Selecciona un potrero</option>
+                {% for plot in calendar_plots %}<option value="{{ plot.id }}">{{ plot.farm }} · {{ plot.name }}{% if plot.crop %} · {{ plot.crop }}{% endif %}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="field calendar-plot-picker" for="season-picker"><span>Temporada registrada (opcional)</span>
+            <select id="season-picker" disabled><option value="">Usar datos actuales del potrero</option></select>
+        </label>
+    </div>
+    {% endif %}
+    <div class="grid-2 evaluator-grid">
+        <form class="card calendar-evaluator" data-evaluation="sowing" data-endpoint="{% url 'evaluate_calendar_date' %}">
+            {% csrf_token %}
+            <h3>¿Es adecuada mi fecha de siembra?</h3>
+            <label class="field"><span>Región o zona</span><select name="zone_id" required>
+                <option value="">Selecciona una zona</option>
+                {% for zone in calendar_zones %}<option value="{{ zone.pk }}">{{ zone.nombre }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Cultivo</span><select name="crop_id" required>
+                <option value="">Selecciona un cultivo</option>
+                {% for crop in calendar_crops %}<option value="{{ crop.pk }}">{{ crop.nombre }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Variedad (opcional)</span><select name="variety"><option value="">Referencia general</option></select></label>
+            <label class="field"><span>Fecha propuesta de siembra</span><input name="proposed_date" type="date" required></label>
+            <button class="button" type="submit">Evaluar siembra</button>
+            <div class="evaluation-result" role="status" aria-live="polite" hidden></div>
+        </form>
+        <form class="card calendar-evaluator" data-evaluation="harvest" data-endpoint="{% url 'evaluate_calendar_date' %}">
+            {% csrf_token %}
+            <h3>¿Es adecuada mi fecha de cosecha?</h3>
+            <label class="field"><span>Región o zona</span><select name="zone_id" required>
+                <option value="">Selecciona una zona</option>
+                {% for zone in calendar_zones %}<option value="{{ zone.pk }}">{{ zone.nombre }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Cultivo</span><select name="crop_id" required>
+                <option value="">Selecciona un cultivo</option>
+                {% for crop in calendar_crops %}<option value="{{ crop.pk }}">{{ crop.nombre }}</option>{% endfor %}
+            </select></label>
+            <label class="field"><span>Variedad (opcional)</span><select name="variety"><option value="">Referencia general</option></select></label>
+            <div class="grid-2">
+                <label class="field"><span>Fecha real o propuesta de siembra</span><input name="sowing_date" type="date" required></label>
+                <label class="field"><span>Fecha prevista de cosecha</span><input name="proposed_date" type="date" required></label>
+            </div>
+            <button class="button" type="submit">Evaluar cosecha</button>
+            <div class="evaluation-result" role="status" aria-live="polite" hidden></div>
+        </form>
+    </div>
+    <section class="card calendar-save" id="calendar-save" hidden aria-labelledby="calendar-save-title">
+        <h3 id="calendar-save-title">Registrar estas fechas en mi potrero</h3>
+        <p class="muted">Se guardan como datos reales de tu temporada, separados del calendario referencial. Las temporadas anteriores no se borran.</p>
+        <div class="grid-3">
+            <label class="field"><span>Potrero</span><select id="save-plot"></select></label>
+            <label class="field"><span>Fecha de siembra</span><input id="save-sowing" type="date"></label>
+            <label class="field"><span>Fecha prevista de cosecha</span><input id="save-harvest" type="date"></label>
+        </div>
+        <fieldset class="calendar-save-mode">
+            <legend>¿Cómo registrarlas?</legend>
+            <label><input type="radio" name="save-mode" value="update_dates"> Actualizar las fechas de la temporada actual del potrero</label>
+            <label><input type="radio" name="save-mode" value="new" checked> Crear una temporada nueva con el cultivo evaluado</label>
+        </fieldset>
+        <p class="muted" id="save-context"></p>
+        <div class="toolbar"><button class="button" type="button" id="save-dates">Guardar en el potrero</button></div>
+        <p role="status" aria-live="polite" id="save-status"></p>
+    </section>
+    <p class="calendar-disclaimer">Margen de referencia configurable: {{ calendar_margin_days }} días. Estas evaluaciones son orientativas, no consideran suelo, clima ni estado del cultivo, y no aseguran la viabilidad agrícola ni la madurez real.</p>
+</section>
+{{ calendar_references|json_script:"calendar-references" }}
+{{ calendar_plots|json_script:"calendar-plots" }}
+{{ calendar_variety_index|json_script:"calendar-variety-index" }}
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/calendario.js' %}"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/calendario.js' %}?v=3"></script>{% endblock %}

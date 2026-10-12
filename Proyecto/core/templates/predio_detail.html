@@ -79,6 +79,21 @@
                 <p>{{ potrero.superficie_m2|floatformat:2 }} m² · {{ potrero.superficie_ha|floatformat:4 }} ha · {{ potrero.cultivo|default:'Sin cultivo asociado' }}</p>
                 <a href="{% url 'potrero_edit' predio.pk potrero.pk %}">Editar potrero</a>
                 <a href="{% url 'predio_detail' predio.pk %}?potrero={{ potrero.pk }}#predio-history">Ver historial de este potrero</a>
+                <a href="{% url 'temporada_create' predio.pk potrero.pk %}">Registrar nueva temporada</a>
+                <h4>Temporadas de cultivo</h4>
+                <ul class="plot-season-list">
+                    {% for season in potrero.temporadas.all %}
+                    <li>
+                        <strong>{{ season.cultivo.nombre }}{% if season.variedad %} · {{ season.variedad }}{% endif %}{% if season.temporada_agricola %} · {{ season.temporada_agricola }}{% endif %}</strong>
+                        <span>{{ season.get_estado_display }}</span>
+                        <span>Siembra: {{ season.fecha_siembra|date:"d/m/Y"|default:"Sin fecha" }}</span>
+                        <span>Cosecha: {{ season.fecha_cosecha|date:"d/m/Y"|default:"Sin fecha" }}</span>
+                        <a href="{% url 'temporada_edit' predio.pk potrero.pk season.pk %}">Editar temporada</a>
+                    </li>
+                    {% empty %}
+                    <li class="muted">No hay temporadas registradas. El cultivo legado del potrero se conserva por separado.</li>
+                    {% endfor %}
+                </ul>
             </article>
             {% empty %}
             <div class="detail-empty-state"><p>Aún no hay potreros asociados a este predio. Registra el primero para organizar su superficie y cultivos.</p><a class="button secondary" href="{% url 'potrero_create' predio.pk %}">Registrar primer potrero</a></div>

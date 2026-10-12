@@ -1,41 +1,78 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}{{ activity.nombre }} · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=2">{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
+        <span class="eyebrow">{{ activity.get_tipo_display }} · {{ activity.potrero.predio.nombre }}</span>
         <h1 class="page-title">{{ activity.nombre }}</h1>
-        <p class="page-sub">{{ activity.get_tipo_display }} · {{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</p>
+        <p class="page-sub">Potrero {{ activity.potrero.nombre }}{% if activity.temporada %} · {{ activity.temporada.cultivo.nombre }}{% if activity.temporada.temporada_agricola %} {{ activity.temporada.temporada_agricola }}{% endif %}{% endif %}</p>
     </div>
-    <a class="button secondary" href="{% url 'calendario' %}">Volver a Siembra</a>
-</div>
-<section class="card activity-detail">
-    <dl class="activity-facts">
-        <div><dt>Fecha programada</dt><dd><time datetime="{{ activity.fecha_programada|date:'Y-m-d' }}">{{ activity.fecha_programada|date:"d/m/Y" }}</time></dd></div>
-        <div><dt>Estado</dt><dd><span class="status-pill status-{{ activity.estado }}">{{ activity.get_estado_display }}</span></dd></div>
-        <div><dt>Potrero</dt><dd>{{ activity.potrero.nombre }}</dd></div>
-        <div><dt>Predio</dt><dd>{{ activity.potrero.predio.nombre }}</dd></div>
-        {% if activity.potrero.cultivo %}<div><dt>Cultivo registrado</dt><dd>{{ activity.potrero.cultivo.nombre }}</dd></div>{% endif %}
-        {% if activity.observaciones %}<div class="activity-observations"><dt>Observaciones</dt><dd>{{ activity.observaciones|linebreaksbr }}</dd></div>{% endif %}
-    </dl>
-    <p class="muted">Creada {{ activity.creado|date:"d/m/Y H:i" }} · Actualizada {{ activity.actualizado|date:"d/m/Y H:i" }}</p>
     <div class="toolbar">
+        <a class="button secondary" href="{% url 'actividad_list' %}">Todas las actividades</a>
         <a class="button" href="{% url 'actividad_edit' activity.pk %}">Editar</a>
-        {% if activity.estado != 'completada' %}
-        <form method="post" action="{% url 'actividad_estado' activity.pk %}">
-            {% csrf_token %}
-            <input type="hidden" name="estado" value="completada">
-            <button class="button" type="submit">Marcar completada</button>
-        </form>
-        {% else %}
-        <form method="post" action="{% url 'actividad_estado' activity.pk %}">
-            {% csrf_token %}
-            <input type="hidden" name="estado" value="pendiente">
-            <button class="button secondary" type="submit">Marcar pendiente</button>
-        </form>
-        {% endif %}
-        <a class="button danger" href="{% url 'actividad_delete' activity.pk %}">Eliminar</a>
     </div>
-</section>
+</div>
+
+<div class="activity-layout">
+    <div class="activity-main">
+        <section class="card detail-card">
+            <div class="detail-status">
+                <span class="status-pill status-{{ activity.estado }}{% if activity.vencida %} status-vencida{% endif %}">{% if activity.vencida %}Vencida{% else %}{{ activity.get_estado_display }}{% endif %}</span>
+                <span class="badge {% if activity.prioridad == 'alta' %}amber{% endif %}">Prioridad {{ activity.get_prioridad_display|lower }}</span>
+            </div>
+            <dl class="detail-grid">
+                <div><dt>Fecha programada</dt><dd>{{ activity.fecha_programada|date:"d/m/Y" }}</dd></div>
+                <div><dt>Fecha realizada</dt><dd>{{ activity.fecha_realizada|date:"d/m/Y"|default:"Pendiente" }}</dd></div>
+                <div><dt>Responsable</dt><dd>{{ activity.responsable|default:"No registrado" }}</dd></div>
+                <div><dt>Superficie</dt><dd>{% if activity.superficie_ha %}{{ activity.superficie_ha|floatformat:"-2" }} ha{% else %}No registrada{% endif %}</dd></div>
+                <div><dt>Cultivo</dt><dd>{% if activity.temporada %}{{ activity.temporada.cultivo.nombre }}{% elif activity.potrero.cultivo %}{{ activity.potrero.cultivo.nombre }}{% else %}Sin cultivo{% endif %}</dd></div>
+                <div><dt>Condiciones</dt><dd>{{ activity.condiciones_clima|default:"No registradas" }}</dd></div>
+            </dl>
+            {% if activity.producto_nombre or activity.dosis %}
+            <h2 class="sub-title">Registro de aplicación</h2>
+            <dl class="detail-grid">
+                <div><dt>Producto</dt><dd>{{ activity.producto_nombre|default:"No registrado" }}{% if activity.insumo %} <small class="muted">({{ activity.insumo.tipo.nombre }})</small>{% endif %}</dd></div>
+                <div><dt>Objetivo</dt><dd>{{ activity.objetivo|default:"No registrado" }}</dd></div>
+                <div><dt>Dosis</dt><dd>{% if activity.dosis %}{{ activity.dosis|floatformat:"-3" }} {{ activity.unidad_dosis }}{% else %}No registrada{% endif %}</dd></div>
+                <div><dt>Cantidad total</dt><dd>{% if activity.cantidad_total %}{{ activity.cantidad_total|floatformat:"-2" }} {{ activity.unidad_total }}{% else %}—{% endif %}</dd></div>
+                {% if activity.insumo.periodo_carencia %}<div><dt>Carencia (etiqueta)</dt><dd>{{ activity.insumo.periodo_carencia }}{% if activity.fecha_fin_carencia %} · hasta {{ activity.fecha_fin_carencia|date:"d/m/Y" }}{% endif %}</dd></div>{% endif %}
+                {% if activity.insumo.tiempo_reingreso %}<div><dt>Reingreso</dt><dd>{{ activity.insumo.tiempo_reingreso }}</dd></div>{% endif %}
+            </dl>
+            {% if activity.conflicto_carencia %}<p class="alert">La cosecha registrada para este potrero es anterior al fin del período de carencia ({{ activity.fecha_fin_carencia|date:"d/m/Y" }}). Revisa las fechas antes de cosechar.</p>{% endif %}
+            {% endif %}
+            {% if activity.observaciones %}<h2 class="sub-title">Observaciones</h2><p class="observations">{{ activity.observaciones|linebreaksbr }}</p>{% endif %}
+            <p class="muted small">Creada {{ activity.creado|date:"d/m/Y H:i" }} · Actualizada {{ activity.actualizado|date:"d/m/Y H:i" }}</p>
+            <div class="toolbar detail-actions">
+                {% if activity.estado != 'completada' %}
+                <form method="post" action="{% url 'actividad_estado' activity.pk %}">{% csrf_token %}<input type="hidden" name="estado" value="completada"><button class="button" type="submit">Marcar completada hoy</button></form>
+                {% else %}
+                <form method="post" action="{% url 'actividad_estado' activity.pk %}">{% csrf_token %}<input type="hidden" name="estado" value="pendiente"><button class="button secondary" type="submit">Marcar pendiente</button></form>
+                {% endif %}
+                {% if activity.estado == 'pendiente' %}<form method="post" action="{% url 'actividad_estado' activity.pk %}">{% csrf_token %}<input type="hidden" name="estado" value="cancelada"><button class="button secondary" type="submit">Cancelar labor</button></form>{% endif %}
+                <a class="button secondary" href="{% url 'actividad_create' %}?potrero={{ activity.potrero_id }}">Planificar otra en este potrero</a>
+                <a class="button danger" href="{% url 'actividad_delete' activity.pk %}">Eliminar</a>
+            </div>
+        </section>
+    </div>
+    <aside class="activity-aside">
+        {% if guidance %}
+        <section class="card aside-card guidance-card">
+            <h2>Buenas prácticas</h2>
+            <p class="guidance-title">{{ guidance.title }}</p>
+            <ul class="check-list">{% for tip in guidance.tips %}<li>{{ tip }}</li>{% endfor %}</ul>
+        </section>
+        {% endif %}
+        <section class="card aside-card">
+            <h2>Historial del potrero</h2>
+            <ul class="mini-agenda">
+                {% for item in related_activities %}
+                <li><time datetime="{{ item.fecha_programada|date:'Y-m-d' }}"><strong>{{ item.fecha_programada|date:"d" }}</strong>{{ item.fecha_programada|date:"M" }}</time><div><a href="{% url 'actividad_detail' item.pk %}">{{ item.nombre }}</a><small>{{ item.get_tipo_display }} · {{ item.get_estado_display }}</small></div></li>
+                {% empty %}<li class="muted">No hay otras actividades en este potrero.</li>{% endfor %}
+            </ul>
+            <a class="text-link" href="{% url 'predio_detail' activity.potrero.predio_id %}?potrero={{ activity.potrero_id }}#predio-history">Ver ficha del potrero</a>
+        </section>
+    </aside>
+</div>
 {% endblock %}

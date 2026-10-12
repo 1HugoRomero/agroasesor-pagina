@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
+from django.db.models import Q
 
 
 class EmailBackend(ModelBackend):
@@ -9,8 +10,10 @@ class EmailBackend(ModelBackend):
         if username is None or password is None:
             return None
         model = get_user_model()
-        candidates = model.objects.filter(email__iexact=username) if '@' in username else model.objects.filter(username=username)
-        user = candidates.first() if candidates.count() == 1 else None
+        candidates = list(model.objects.filter(
+            Q(username__iexact=username) | Q(email__iexact=username)
+        )[:2])
+        user = candidates[0] if len(candidates) == 1 else None
         if user is None:
             model().set_password(password)
             return None
