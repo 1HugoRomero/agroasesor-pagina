@@ -4,6 +4,12 @@ Uso:
     python manage.py importar_catalogo --plantilla catalogo.json   # crea una plantilla vacía
     python manage.py importar_catalogo catalogo.json               # simulación (no guarda)
     python manage.py importar_catalogo catalogo.json --aplicar     # guarda si todo es válido
+    python manage.py importar_catalogo data/ --aplicar             # carpeta con CSV (cultivos.csv, insumos.csv…)
+    python manage.py importar_catalogo data/insumos.csv --aplicar  # un CSV suelto
+    python manage.py importar_catalogo --categorias                # carga las categorías base de insumo
+
+CSV: separador «;» o «,», UTF-8, decimales con coma o punto, listas separadas por «|».
+Una celda vacía significa «sin dato» y nunca borra lo ya guardado.
 
 Reglas:
 - Cada registro se valida con ``full_clean()`` del modelo: un registro marcado como
@@ -12,15 +18,18 @@ Reglas:
 - Los registros existentes (mismo nombre) no se modifican salvo con ``--actualizar``.
 - Nunca se generan valores por defecto para dosis, densidades ni ventanas.
 """
+import csv
 import json
 from datetime import date
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Cultivo, Insumo, ProblemaAgricola, ReferenciaAgronomica, TipoInsumo, Zona
+from core.catalog import ensure_insumo_categories
+from core.models import Cultivo, Insumo, ProblemaAgricola, ReferenciaAgronomica, TipoInsumo, UsoInsumoCultivo, Zona
 
 TEMPLATE = {
     "_instrucciones": (
@@ -59,7 +68,8 @@ TEMPLATE = {
         "nombre": "", "tipo": "", "cultivo": "", "zona": "", "problemas": [],
         "descripcion": "", "fabricante": "", "estado_verificacion": "unverified",
         "fuente_nombre": "", "fuente_url": "", "fecha_verificacion": None,
-        "dosis_hectarea": None, "unidad_dosis": "", "dosis_verificada": False, "dosis_fuente": "",
+        "dosis_hectarea": None, "unidad_dosis": "", "dosis_maxima_hectarea": None, "unidad_dosis_maxima": "",
+        "dosis_verificada": False, "dosis_fuente": "", "vigente": True, "vigencia_desde": None, "vigencia_hasta": None,
         "numero_autorizacion_sag": "", "etiqueta_url": "", "hoja_seguridad_url": "",
         "ingrediente_activo": "", "concentracion": "", "formulacion": "",
         "cultivos_autorizados": [], "objetivos_control": [], "modo_aplicacion": "", "restricciones": "",
@@ -69,7 +79,85 @@ TEMPLATE = {
         "variedad_semilla": "", "tipo_semilla": "", "plantas_objetivo_m2": None,
         "peso_mil_semillas_g": None, "germinacion_pct": None, "pureza_pct": None,
     }],
+    "usos": [{
+        "cultivo": "", "problema": "", "insumo": "", "tipo": "",
+        "fuente_nombre": "", "fuente_url": "", "fecha_verificacion": None, "activo": True,
+    }],
 }
+
+CSV_SECTIONS = {
+    'zonas': 'zonas', 'cultivos': 'cultivos', 'problemas': 'problemas', 'insumos': 'insumos',
+    'usos': 'usos', 'calendario': 'referencias', 'rendimientos': 'referencias',
+}
+BOOL_FIELDS = {'activo', 'vigente', 'dosis_verificada'}
+LIST_FIELDS = {'problemas', 'cultivos', 'cultivos_autorizados', 'objetivos_control'}
+INT_FIELDS = {'anio_referencia', 'duracion_ciclo_dias'}
+
+
+def _csv_value(path, line, key, value):
+    try:
+        if key in BOOL_FIELDS:
+            text = value.casefold()
+            if text in {'1', 'true', 'si', 'sí', 'x', 'verdadero'}:
+                return True
+            if text in {'0', 'false', 'no', 'falso'}:
+                return False
+            raise ValueError
+        if key in LIST_FIELDS:
+            return [item.strip() for item in value.split('|') if item.strip()]
+        if key in INT_FIELDS or key.endswith('_mes') or key.endswith('_dia'):
+            return int(value)
+        if key in DECIMAL_FIELDS:
+            return value.replace(',', '.') if ',' in value and '.' not in value else value
+    except ValueError:
+        raise CommandError(f'{path.name}, fila {line}: valor no válido en «{key}»: {value!r}.')
+    return value
+
+
+def _read_csv(path):
+    """Lee un CSV y devuelve registros; las celdas vacías se omiten."""
+    try:
+        text = path.read_text(encoding='utf-8-sig')
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CommandError(f'No se pudo leer {path.name}: {exc}')
+    lines = text.splitlines()
+    if not lines:
+        return []
+    delimiter = ';' if lines[0].count(';') > lines[0].count(',') else ','
+    rows = []
+    for line, row in enumerate(csv.DictReader(lines, delimiter=delimiter), start=2):
+        if None in row:
+            raise CommandError(f'{path.name}, fila {line}: tiene más celdas que encabezados.')
+        record = {}
+        for key, value in row.items():
+            key = (key or '').strip()
+            value = (value or '').strip()
+            if not key or key.startswith('_') or not value:
+                continue
+            record[key] = _csv_value(path, line, key, value)
+        if record:
+            rows.append(record)
+    return rows
+
+
+def load_csv_sources(paths):
+    """Convierte uno o varios CSV al mismo formato del JSON. calendario y rendimientos se fusionan por referencia."""
+    data, references = {}, {}
+    for path in paths:
+        section = CSV_SECTIONS.get(path.stem.casefold())
+        if section is None:
+            raise CommandError(f'«{path.name}» no es un archivo reconocido ({", ".join(sorted(CSV_SECTIONS))}).')
+        rows = _read_csv(path)
+        if section == 'referencias':
+            for row in rows:
+                key = (row.get('cultivo', ''), row.get('zona', ''), row.get('variedad', ''), row.get('anio_referencia'))
+                references.setdefault(key, {}).update(row)
+        else:
+            data.setdefault(section, []).extend(rows)
+    if references:
+        data['referencias'] = list(references.values())
+    return data
+
 
 DATE_FIELDS = {
     'densidad_verificada', 'rendimiento_verificado', 'fecha_consulta_fuente', 'fecha_verificacion',
@@ -118,6 +206,7 @@ class Command(BaseCommand):
         parser.add_argument('archivo', nargs='?')
         parser.add_argument('--aplicar', action='store_true', help='Guarda los cambios. Sin esta opción solo valida.')
         parser.add_argument('--actualizar', action='store_true', help='Permite modificar registros existentes con el mismo nombre.')
+        parser.add_argument('--categorias', action='store_true', help='Carga las categorías base de insumo (fertilizante, herbicida, fungicida, insecticida, acaricida, otros, semilla).')
         parser.add_argument('--plantilla', metavar='RUTA', help='Escribe una plantilla JSON vacía y termina.')
 
     def handle(self, *args, **options):
@@ -126,15 +215,29 @@ class Command(BaseCommand):
                 json.dump(TEMPLATE, handle, ensure_ascii=False, indent=2)
             self.stdout.write(self.style.SUCCESS(f'Plantilla creada en {options["plantilla"]}. No contiene datos agronómicos.'))
             return
+        if options['categorias']:
+            created = ensure_insumo_categories()
+            self.stdout.write(self.style.SUCCESS(f'Categorías de insumo listas ({created} nuevas).'))
+            if not options['archivo']:
+                return
         if not options['archivo']:
-            raise CommandError('Indica el archivo JSON a importar o usa --plantilla.')
-        try:
-            with open(options['archivo'], encoding='utf-8') as handle:
-                data = json.load(handle)
-        except (OSError, json.JSONDecodeError) as exc:
-            raise CommandError(f'No se pudo leer el archivo: {exc}')
-        if not isinstance(data, dict):
-            raise CommandError('El archivo debe contener un objeto JSON.')
+            raise CommandError('Indica un archivo JSON, un CSV o una carpeta con CSV, o usa --plantilla / --categorias.')
+        source = Path(options['archivo'])
+        if source.is_dir():
+            files = sorted(path for path in source.glob('*.csv') if path.stem.casefold() in CSV_SECTIONS)
+            if not files:
+                raise CommandError(f'La carpeta {source} no contiene CSV reconocidos.')
+            data = load_csv_sources(files)
+        elif source.suffix.casefold() == '.csv':
+            data = load_csv_sources([source])
+        else:
+            try:
+                with open(source, encoding='utf-8') as handle:
+                    data = json.load(handle)
+            except (OSError, json.JSONDecodeError) as exc:
+                raise CommandError(f'No se pudo leer el archivo: {exc}')
+            if not isinstance(data, dict):
+                raise CommandError('El archivo debe contener un objeto JSON.')
 
         self.update = options['actualizar']
         self.summary = {}
@@ -221,3 +324,19 @@ class Command(BaseCommand):
                 raise CommandError(f'El insumo «{record["nombre"]}» requiere un tipo.')
             problems = [self._get(ProblemaAgricola, name, 'El problema') for name in record.get('problemas', []) if name]
             self._save('Insumos', Insumo, {'nombre': record['nombre'], 'tipo': tipo}, values, {'problemas': problems})
+        for record in data.get('usos', []):
+            if not (record.get('cultivo') and record.get('problema') and record.get('insumo')):
+                continue
+            crop = self._get(Cultivo, record['cultivo'], 'El cultivo')
+            problem = self._get(ProblemaAgricola, record['problema'], 'El problema')
+            products = Insumo.objects.filter(nombre=record['insumo'])
+            if record.get('tipo'):
+                products = products.filter(tipo__nombre=record['tipo'])
+            if products.count() != 1:
+                raise CommandError(
+                    f'El insumo «{record["insumo"]}» '
+                    + ('no existe en el catálogo ni en el archivo.' if not products.exists() else 'está repetido: indica también su tipo.')
+                )
+            values = _clean_values(UsoInsumoCultivo, record, {'cultivo', 'problema', 'insumo', 'tipo'})
+            self._save('Usos cultivo → problema → insumo', UsoInsumoCultivo,
+                       {'cultivo': crop, 'problema': problem, 'insumo': products.get()}, values)

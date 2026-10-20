@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, TipoInsumo, Zona, Agricultor, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola
+from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, TipoInsumo, Zona, Agricultor, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola, UsoInsumoCultivo
 
 
 @admin.register(Zona)
@@ -215,3 +215,16 @@ class ActividadAgricolaAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'tipo', 'potrero', 'usuario', 'fecha_programada', 'estado')
     list_filter = ('tipo', 'estado', 'fecha_programada')
     search_fields = ('nombre', 'potrero__nombre', 'potrero__predio__nombre', 'usuario__email')
+
+
+@admin.register(UsoInsumoCultivo)
+class UsoInsumoCultivoAdmin(admin.ModelAdmin):
+    list_display = ('cultivo', 'problema', 'insumo', 'activo', 'fuente_nombre', 'fecha_verificacion')
+    list_filter = ('activo', 'cultivo', 'problema')
+    search_fields = ('cultivo__nombre', 'problema__nombre', 'insumo__nombre', 'fuente_nombre')
+    list_select_related = ('cultivo', 'problema', 'insumo')
+    actions = ['marcar_no_vigente']
+
+    @admin.action(description='Marcar como no vigente (conserva el historial)')
+    def marcar_no_vigente(self, request, queryset):
+        queryset.update(activo=False)

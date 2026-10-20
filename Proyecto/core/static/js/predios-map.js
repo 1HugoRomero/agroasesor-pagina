@@ -9,6 +9,10 @@
   const form = document.getElementById('terrain-form');
   const isPlotForm = Boolean(document.getElementById('id_perimetro'));
   const isPredioForm = Boolean(document.getElementById('accept-perimeter'));
+  // «Registrar predio» (/predios/nuevo/) es siempre un registro nuevo: el mapa y los campos de dibujo parten vacíos.
+  const isCreatingPredio = isPredioForm && Boolean(form) && form.dataset.mode === 'create';
+  const NEW_PREDIO_ZOOM = 12;   // vista general (~20 km de ancho): se reconoce Melipilla y su entorno
+  const MY_LOCATION_ZOOM = 16;  // suficiente para distinguir caminos, parcelas y límites aproximados
   const dataNode = document.getElementById('agro-farms');
   const farmData = dataNode ? JSON.parse(dataNode.textContent) : { predios: [], plots: [] };
   const areaInput = document.getElementById('id_superficie_ha');
@@ -20,13 +24,22 @@
   const mapSummaryArea = document.getElementById('map-summary-area');
   const mapSummaryPerimeter = document.getElementById('map-summary-perimeter');
   const mapSummaryLocation = document.getElementById('map-summary-location');
+  const mapSummaryM2 = document.getElementById('map-summary-m2');
+  const mapSummaryVertices = document.getElementById('map-summary-vertices');
+  const mapSummaryLat = document.getElementById('map-summary-lat');
+  const mapSummaryLng = document.getElementById('map-summary-lng');
   const perimeterAcceptedInput = document.getElementById('id_perimetro_aceptado');
   const confirmationPanel = document.getElementById('perimeter-confirmation');
   const registrationPrompt = document.getElementById('registration-prompt');
   const confirmArea = document.getElementById('confirm-area');
   const confirmPerimeter = document.getElementById('confirm-perimeter');
   const confirmVertices = document.getElementById('confirm-vertices');
-  const confirmLocation = document.getElementById('confirm-location');
+  const promptTitle = document.getElementById('registration-prompt-title');
+  const promptText = document.getElementById('registration-prompt-text');
+  const promptDefaults = {
+    title: promptTitle ? promptTitle.textContent : '',
+    text: promptText ? promptText.textContent : ''
+  };
   const melipillaCenter = [-33.6866, -71.2167];
   let map;
   let currentLayer = null;
@@ -255,46 +268,43 @@
     const latitude = latitudeInput?.value;
     const longitude = longitudeInput?.value;
     const hasCoordinates = Boolean(latitude && longitude);
+    const setText = (element, text) => { if (element) element.textContent = text; };
+    const showCoordinates = (lat, lng) => {
+      setText(mapSummaryLat, Number(lat).toFixed(6));
+      setText(mapSummaryLng, Number(lng).toFixed(6));
+    };
     if (points && points.length >= 3) {
       const area = polygonAreaSquareMetres(points);
       if (areaInput) {
         areaInput.value = (area / 10000).toFixed(4);
         areaInput.readOnly = true;
       }
-      if (mapSummaryArea) {
-        mapSummaryArea.textContent =
-          (area / 10000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha · ' +
-          area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²';
-      }
-      if (mapSummaryPerimeter) {
-        mapSummaryPerimeter.textContent = formatLength(perimeterMetres(points, true));
-      }
-      if (mapSummaryLocation) {
-        mapSummaryLocation.textContent = hasCoordinates
-          ? 'Ubicación: ' + Number(latitude).toFixed(6) + ', ' + Number(longitude).toFixed(6) + '.'
-          : 'Ubicación: se usó el primer vértice del perímetro.';
-      }
+      setText(mapSummaryArea, (area / 10000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha');
+      setText(mapSummaryM2, area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²');
+      setText(mapSummaryPerimeter, formatLength(perimeterMetres(points, true)));
+      setText(mapSummaryVertices, String(points.length));
+      setText(mapSummaryLocation, '📍 Ubicación registrada desde el mapa');
+      showCoordinates(hasCoordinates ? latitude : points[0][1], hasCoordinates ? longitude : points[0][0]);
       mapSummary.hidden = false;
       return;
     }
     if (hasCoordinates) {
       mapSummary.hidden = false;
-      if (mapSummaryArea) {
-        mapSummaryArea.textContent = areaInput?.value
-          ? Number(areaInput.value).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha · ingreso manual'
-          : 'Pendiente de calcular';
-      }
-      if (mapSummaryPerimeter) mapSummaryPerimeter.textContent = 'Pendiente de delimitar';
-      if (mapSummaryLocation) {
-        mapSummaryLocation.textContent = 'Ubicación: ' +
-          Number(latitude).toFixed(6) + ', ' + Number(longitude).toFixed(6) + '.';
-      }
+      setText(mapSummaryArea, areaInput?.value
+        ? Number(areaInput.value).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha'
+        : 'Pendiente de calcular');
+      setText(mapSummaryM2, areaInput?.value
+        ? (Number(areaInput.value) * 10000).toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²'
+        : '—');
+      setText(mapSummaryPerimeter, 'Pendiente de delimitar');
+      setText(mapSummaryVertices, '—');
+      setText(mapSummaryLocation, '📍 Ubicación registrada desde el mapa');
+      showCoordinates(latitude, longitude);
       return;
     }
     mapSummary.hidden = true;
-    if (mapSummaryArea) mapSummaryArea.textContent = '';
-    if (mapSummaryPerimeter) mapSummaryPerimeter.textContent = '';
-    if (mapSummaryLocation) mapSummaryLocation.textContent = '';
+    [mapSummaryArea, mapSummaryM2, mapSummaryPerimeter, mapSummaryVertices, mapSummaryLocation, mapSummaryLat, mapSummaryLng]
+      .forEach((element) => setText(element, ''));
   }
 
   function fmtHa(value, digits) {
@@ -329,6 +339,35 @@
     return '/decisiones/?' + params.toString();
   }
 
+  function stateChip(text, tone) {
+    return el('span', 'state-chip ' + tone, text);
+  }
+
+  function nextAction(title, cta, target) {
+    const box = el('div', 'drawer-next');
+    box.append(el('span', 'next-hint-label', 'Próxima acción'), el('p', '', title));
+    let action;
+    if (target.assignId) {
+      action = el('button', 'btn-ghost-agro btn-compact', '→ ' + cta);
+      action.type = 'button';
+      action.dataset.assignCrop = target.assignId;
+    } else {
+      action = el('a', 'btn-ghost-agro btn-compact', '→ ' + cta);
+      action.href = target.href;
+    }
+    box.appendChild(action);
+    return box;
+  }
+
+  function plotNextAction(plot) {
+    if (!plot.crop) return nextAction('Asignar cultivo a ' + plot.name, 'Asignar cultivo', { assignId: plot.id });
+    if (Number(plot.planDone) < Number(plot.planTotal)) {
+      return nextAction('Definir la planificación de ' + plot.name, 'Definir planificación', { href: plot.editUrl });
+    }
+    if (!plot.nextTask) return nextAction('Programar una labor en ' + plot.name, 'Programar labor', { href: plot.taskUrl });
+    return nextAction('Revisar la planificación de ' + plot.name, 'Ver planificación', { href: plot.planUrl });
+  }
+
   function setSelectedTerrain(farm, plot) {
     const details = document.getElementById('selected-terrain-details');
     const emptyState = document.getElementById('selected-terrain-empty');
@@ -339,11 +378,13 @@
       parent.appendChild(dl);
       return (label, value) => dl.append(el('dt', '', label), el('dd', '', value));
     };
-    const actions = el('div', 'detail-actions');
-    const addLink = (label, href, primary) => {
-      const link = el('a', primary ? 'button' : 'button secondary', label);
+    // Panel contextual: informa y propone UNA próxima acción. Las acciones habituales están en el menú «⋯» de cada tarjeta.
+    const tools = el('div', 'terrain-tool-links');
+    tools.appendChild(el('span', 'terrain-tool-label', 'Usar este potrero en:'));
+    const addLink = (label, href) => {
+      const link = el('a', 'btn-ghost-agro btn-compact', label);
       link.href = href;
-      actions.appendChild(link);
+      tools.appendChild(link);
       return link;
     };
     const farmPlots = farmData.plots.filter((item) => String(item.predio) === String(farm.id));
@@ -353,6 +394,13 @@
       const head = el('div', 'terrain-panel-head');
       head.append(el('span', 'terrain-eyebrow', 'Potrero seleccionado'), el('h3', '', plot.name));
       details.appendChild(head);
+      const chips = el('div', 'chip-row drawer-chips');
+      chips.appendChild(stateChip(plot.crop ? 'Con cultivo' : 'Sin cultivo', plot.crop ? 'is-green' : 'is-neutral'));
+      if (plot.crop && Number(plot.planDone) === Number(plot.planTotal)) chips.appendChild(stateChip('Planificación completa', 'is-dark'));
+      else if (!plot.crop) chips.appendChild(stateChip('Sin planificar', 'is-neutral'));
+      if (plot.overdueTasks) chips.appendChild(stateChip('Labores vencidas · ' + plot.overdueTasks, 'is-red'));
+      else if (plot.pendingTasks) chips.appendChild(stateChip('Labores pendientes · ' + plot.pendingTasks, 'is-amber'));
+      details.appendChild(chips);
       const add = list(details);
       add('Predio', farm.name);
       add('Superficie', fmtHa(plot.areaHa, 2) + ' ha (' + fmtHa(plot.areaM2, 0) + ' m²)');
@@ -364,22 +412,19 @@
         add('Fecha de siembra', fmtDate(plot.sowing));
         add('Cosecha estimada', fmtDate(plot.harvest));
         add('Estado', plot.status || 'No disponible');
+        add('Planificación', plot.planDone + ' de ' + plot.planTotal + ' pasos');
       } else {
         const notice = el('div', 'terrain-no-crop');
         notice.append(el('p', '', 'Este potrero todavía no tiene un cultivo asignado'));
         details.appendChild(notice);
       }
-      const assign = el('button', 'button', plot.crop ? 'Cambiar cultivo' : 'Asignar cultivo');
-      assign.type = 'button';
-      assign.dataset.assignCrop = plot.id;
-      actions.appendChild(assign);
-      addLink('Planificar siembra', plotActionUrl('calendar', plot, farm), false);
-      addLink('Calcular semillas', plotActionUrl('seeds', plot, farm), false);
-      addLink('Calcular fertilizantes', plotActionUrl('inputs', plot, farm), false);
-      addLink('Consultar ficha', plotActionUrl('sheet', plot, farm), false);
-      addLink('Ver historial', plot.detailUrl, false);
-      addLink('Editar potrero', plot.editUrl, false);
-      details.appendChild(actions);
+      if (plot.nextTask) add('Próxima labor', plot.nextTask.label + ' · ' + plot.nextTask.date);
+      details.appendChild(plotNextAction(plot));
+      addLink('Planificar siembra', plotActionUrl('calendar', plot, farm));
+      addLink('Calcular semillas', plotActionUrl('seeds', plot, farm));
+      addLink('Calcular fertilizantes', plotActionUrl('inputs', plot, farm));
+      addLink('Consultar ficha', plotActionUrl('sheet', plot, farm));
+      details.appendChild(tools);
 
       const history = el('details', 'terrain-season-history');
       history.open = (plot.seasons || []).length > 0 && (plot.seasons || []).length <= 3;
@@ -399,29 +444,50 @@
         history.appendChild(el('p', 'muted', 'Aún no hay temporadas registradas para este potrero.'));
       }
       details.appendChild(history);
+      const plotActions = el('div', 'plot-actions');
+      const plotNext = el('a', 'btn-primary-agro btn-sm', !plot.crop ? 'Asignar cultivo' : (!plot.sowing ? 'Continuar planificación' : 'Calcular semillas'));
+      plotNext.href = !plot.crop || !plot.sowing ? plot.editUrl : plot.seedsUrl;
+      const plotOpen = el('a', 'btn-secondary-agro btn-sm', 'Ver ficha e historial');
+      plotOpen.href = plot.detailUrl;
+      plotActions.append(plotNext, plotOpen);
+      details.appendChild(plotActions);
       details.appendChild(el('hr'));
     }
 
     const farmHead = el('div', 'terrain-panel-head');
     farmHead.append(el('span', 'terrain-eyebrow', plot ? 'Predio del potrero' : 'Predio seleccionado'), el(plot ? 'h4' : 'h3', '', farm.name));
     details.appendChild(farmHead);
+    if (!plot) {
+      details.appendChild(el('p', 'drawer-area', fmtHa(farm.area, 2) + ' ha'));
+      details.appendChild(el('p', 'drawer-place', farm.location || 'Ubicación no registrada'));
+      const stats = el('div', 'drawer-stats');
+      const addStat = (label, value, tone) => {
+        const box = el('div', 'drawer-stat' + (tone ? ' ' + tone : ''));
+        box.append(el('strong', '', String(value)), el('span', '', label));
+        stats.appendChild(box);
+      };
+      addStat('Potreros', farmPlots.length);
+      addStat('Cultivos', farm.cropCount || 0);
+      addStat('Labores pendientes', farm.pendingTasks || 0, farm.overdueTasks ? 'is-alert' : '');
+      details.appendChild(stats);
+    }
     const addFarm = list(details);
-    addFarm('Ubicación', farm.location || 'No registrada');
+    if (plot) addFarm('Ubicación', farm.location || 'No registrada');
     addFarm('Superficie total', fmtHa(farm.area, 2) + ' ha');
-    if (farm.perimeterM !== null && farm.perimeterM !== undefined) addFarm('Perímetro', formatLength(farm.perimeterM));
-    addFarm('Potreros', String(farmPlots.length));
-    addFarm('Superficie en potreros', fmtHa(assignedArea, 2) + ' ha · sin asignar ' + fmtHa(Math.max(0, Number(farm.area) - assignedArea), 2) + ' ha');
-    const crops = [...new Set(farmPlots.map((item) => item.crop).filter(Boolean))];
-    addFarm('Cultivos actuales', crops.length ? crops.join(', ') : 'Sin cultivos asignados');
-    addFarm('Última modificación', farm.updated || 'No disponible');
-    const farmActions = el('div', 'detail-actions');
-    [['Registrar potrero', farm.potreroCreateUrl, !plot], ['Ficha e historial del predio', farm.detailUrl, false], ['Editar predio', farm.editUrl, false]]
-      .forEach(([label, href, primary]) => {
-        const link = el('a', primary ? 'button' : 'button secondary', label);
-        link.href = href;
-        farmActions.appendChild(link);
-      });
-    details.appendChild(farmActions);
+    if (!plot) {
+      if (farm.perimeterM !== null && farm.perimeterM !== undefined) addFarm('Perímetro', formatLength(farm.perimeterM));
+      addFarm('Superficie en potreros', fmtHa(assignedArea, 2) + ' ha · sin asignar ' + fmtHa(Math.max(0, Number(farm.area) - assignedArea), 2) + ' ha');
+      addFarm('Última modificación', farm.updated || 'No disponible');
+    } else {
+      const crops = [...new Set(farmPlots.map((item) => item.crop).filter(Boolean))];
+      addFarm('Cultivos actuales', crops.length ? crops.join(', ') : 'Sin cultivos asignados');
+    }
+    if (!plot && farm.nextStep) {
+      details.appendChild(nextAction(farm.nextStep.title, farm.nextStep.cta, { href: farm.nextStep.url }));
+    }
+    const farmOpen = el('a', plot ? 'btn-ghost-agro btn-compact' : 'btn-secondary-agro btn-sm', 'Abrir predio');
+    farmOpen.href = farm.detailUrl;
+    details.appendChild(farmOpen);
 
     emptyState.hidden = true;
     details.hidden = false;
@@ -429,6 +495,8 @@
       const selected = String(button.dataset.selectFarm) === String(farm.id);
       button.classList.toggle('is-selected', selected);
       button.setAttribute('aria-pressed', String(selected));
+      const card = button.classList.contains('entity-card-select') ? button.closest('.entity-card') : null;
+      if (card) card.classList.toggle('is-selected', selected);
     });
     document.querySelectorAll('[data-farm-plots]').forEach((group) => {
       group.hidden = String(group.dataset.farmPlots) !== String(farm.id);
@@ -446,7 +514,8 @@
     const createPlotLink = document.getElementById('register-selected-plot');
     if (createPlotLink) {
       createPlotLink.href = farm.potreroCreateUrl;
-      createPlotLink.textContent = farmPlots.length ? 'Registrar potrero' : 'Registrar primer potrero';
+      // «Agregar potrero» solo aparece cuando el predio ya tiene potreros; si no, el estado vacío ofrece «Configurar potrero».
+      createPlotLink.hidden = farmPlots.length === 0;
     }
     const showPlotsButton = document.getElementById('show-selected-farm-plots');
     if (showPlotsButton) showPlotsButton.disabled = farmPlots.length === 0;
@@ -536,6 +605,43 @@
     });
   }
 
+  // Estado visible del registro de predio: draw → confirm → data → save (y «editing» al reajustar el trazo).
+  // Una sola función decide qué se muestra en la columna derecha y qué paso está activo.
+  function setRegistrationState(state) {
+    if (!isPredioForm) return;
+    const order = ['draw', 'confirm', 'data', 'save'];
+    const active = order.indexOf(state === 'editing' ? 'draw' : state);
+    order.forEach((key, index) => {
+      const step = document.getElementById('step-' + key);
+      if (!step) return;
+      step.classList.toggle('is-current', index === active);
+      step.classList.toggle('is-done', index < active);
+    });
+    if (confirmationPanel) confirmationPanel.hidden = state !== 'confirm';
+    // Solo presentación: el estado se refleja en el contenedor del mapa (CSS decide qué botón destaca).
+    const mapCard = document.querySelector('.map-card');
+    if (mapCard) mapCard.dataset.regState = state;
+    const confirmedLine = document.getElementById('map-confirmed-line');
+    if (confirmedLine) confirmedLine.hidden = !(state === 'data' || state === 'save') || !(form && !form.hidden) || !currentLayer;
+    // El resumen principal vive en «Medición confirmada»: bajo el mapa no se repite superficie ni perímetro.
+    if (state === 'confirm' || state === 'data' || state === 'save') {
+      ['live-perimeter', 'live-area'].forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = ''; });
+    }
+    if (registrationPrompt) {
+      const formVisible = Boolean(form && !form.hidden);
+      registrationPrompt.hidden = state === 'confirm' || state === 'data' || state === 'save' || (state === 'editing' && formVisible);
+      if (promptTitle && promptText) {
+        promptTitle.textContent = state === 'editing' ? 'Ajusta el perímetro' : promptDefaults.title;
+        promptText.textContent = state === 'editing'
+          ? 'Mueve los vértices en el mapa y pulsa «Aceptar perímetro» para volver a medir.'
+          : promptDefaults.text;
+      }
+    }
+    if (state === 'confirm' && confirmationPanel && window.matchMedia('(max-width: 900px)').matches) {
+      confirmationPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
   function setPerimeterControls(available, accepted) {
     const accept = document.getElementById('accept-perimeter');
     const edit = document.getElementById(isPredioForm ? 'edit-perimeter' : 'toggle-edit');
@@ -563,18 +669,12 @@
     if (perimeterAcceptedInput) perimeterAcceptedInput.value = 'on';
     if (confirmArea) {
       confirmArea.textContent =
-        area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m² · ' +
+        area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²\n' +
         (area / 10000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha';
     }
     if (confirmPerimeter) confirmPerimeter.textContent = formatLength(perimeterMetres(points, true));
     if (confirmVertices) confirmVertices.textContent = String(points.length);
-    if (confirmLocation) {
-      const latitude = latitudeInput?.value || points[0][1];
-      const longitude = longitudeInput?.value || points[0][0];
-      confirmLocation.textContent =
-        'Ubicación aproximada: ' + Number(latitude).toFixed(6) + ', ' + Number(longitude).toFixed(6);
-    }
-    if (confirmationPanel) confirmationPanel.hidden = false;
+    setRegistrationState('confirm');
     setPerimeterControls(true, true);
     if (currentLayer.pm) currentLayer.pm.disable();
     renderBoundaryVertices();
@@ -583,7 +683,7 @@
 
   function editConfirmedPerimeter() {
     if (!currentLayer || !currentLayer.pm) return;
-    if (confirmationPanel) confirmationPanel.hidden = true;
+    setRegistrationState('editing');
     if (perimeterAcceptedInput) perimeterAcceptedInput.value = '';
     setPerimeterControls(true, false);
     boundaryMarkers.forEach((item) => map.removeLayer(item));
@@ -617,7 +717,7 @@
       if (areaOutput) areaOutput.textContent = '';
     }
     if (perimeterAcceptedInput) perimeterAcceptedInput.value = '';
-    if (confirmationPanel) confirmationPanel.hidden = true;
+    setRegistrationState(originalFeature ? 'data' : 'draw');
     setStatus(originalFeature
       ? 'Cambios descartados. Se mantiene el perímetro guardado.'
       : 'Dibujo descartado. Los predios existentes no se modificaron.');
@@ -625,12 +725,9 @@
 
   function continueAfterConfirmation() {
     if (form) form.hidden = false;
-    if (registrationPrompt) registrationPrompt.hidden = true;
     const editButton = document.getElementById('edit-perimeter');
     if (editButton) editButton.hidden = false;
-    const dataStep = document.getElementById('step-data');
-    if (dataStep) dataStep.classList.add('is-current');
-    if (confirmationPanel) confirmationPanel.hidden = true;
+    setRegistrationState('data');
     const nameInput = document.getElementById('id_nombre');
     if (nameInput) nameInput.focus({ preventScroll: true });
     setStatus('Perímetro confirmado. Completa los datos y guarda el predio.');
@@ -679,7 +776,7 @@
       setAreaAndGeometry();
       if (isPredioForm) {
         if (perimeterAcceptedInput) perimeterAcceptedInput.value = '';
-        if (confirmationPanel) confirmationPanel.hidden = true;
+        setRegistrationState('editing');
         setPerimeterControls(true, false);
       }
     });
@@ -687,7 +784,7 @@
       setAreaAndGeometry();
       if (isPredioForm) {
         if (perimeterAcceptedInput) perimeterAcceptedInput.value = '';
-        if (confirmationPanel) confirmationPanel.hidden = true;
+        setRegistrationState('editing');
         setPerimeterControls(true, false);
       }
     });
@@ -717,7 +814,7 @@
     document.getElementById('finish-perimeter').hidden = mode !== 'polygon';
     document.getElementById('finish-line').hidden = mode !== 'line';
     setStatus(mode === 'polygon'
-      ? 'Dibujar campo: marca al menos tres vértices alrededor del terreno.'
+      ? 'Dibujar campo: marca al menos tres vértices alrededor del área que quieres registrar.'
       : 'Medir línea: marca los puntos del lindero o tramo; necesitas al menos dos.');
   }
 
@@ -783,9 +880,11 @@
     stopDrawing();
     addCurrentLayer(feature, false);
     if (isPredioForm) {
+      // Encuadra el polígono completo con margen para ver el entorno, sin acercarse en exceso.
+      if (currentLayer) map.fitBounds(layerBounds(currentLayer), { padding: [56, 56], maxZoom: 17 });
       if (perimeterAcceptedInput) perimeterAcceptedInput.value = '';
       setPerimeterControls(true, false);
-      setStatus('Perímetro cerrado. Revisa el terreno y selecciona “Aceptar perímetro”.');
+      showPerimeterConfirmation();
     } else {
       setStatus('Perímetro dibujado. La superficie se volverá a validar en el servidor al guardar.');
     }
@@ -806,7 +905,7 @@
     const areaMessage = document.getElementById('live-area');
     if (areaMessage) areaMessage.textContent = 'Medición lineal terminada. Esta línea no cambia el perímetro guardado.';
     document.getElementById('live-perimeter').textContent = 'Longitud medida: ' + formatLength(length);
-    setStatus('Medición lista. La línea es temporal y no modifica el terreno guardado.');
+    setStatus('Medición lista. La línea es temporal y no modifica tu predio guardado.');
   }
 
   function clearLineMeasurement() {
@@ -854,7 +953,9 @@
   }
 
   function addContextLayers() {
-    if (!form) return;
+    // Formulario de predio (nuevo o edición): no se dibujan otros predios ni potreros.
+    // Al editar, la única geometría visible es la del propio predio, que llega por el campo geojson del formulario.
+    if (!form || isPredioForm) return;
     const predioId = document.getElementById('id_predio');
     const activeFarmMatch = window.location.pathname.match(/predios\/(\d+)\//);
     const activeFarmId = activeFarmMatch ? activeFarmMatch[1] : '';
@@ -990,6 +1091,7 @@
       button.classList.remove('is-selected');
       button.setAttribute('aria-pressed', 'false');
     });
+    document.querySelectorAll('.farm-card.is-selected').forEach((card) => card.classList.remove('is-selected'));
     document.querySelectorAll('[data-farm-plots]').forEach((group) => { group.hidden = true; });
     document.querySelectorAll('[data-plot-card]').forEach((card) => { card.classList.remove('is-selected'); });
     document.querySelectorAll('[data-select-plot]').forEach((button) => {
@@ -1024,6 +1126,21 @@
     window.history.replaceState(null, '', window.location.pathname + (params.toString() ? '?' + params.toString() : ''));
   }
 
+  // Deja en blanco todo dato temporal de dibujo antes de empezar un predio nuevo
+  // (también frente a valores que el navegador restaure al volver atrás o recargar).
+  function resetNewPredioState() {
+    form.reset();
+    [areaInput, latitudeInput, longitudeInput, geojsonInput, perimeterAcceptedInput].forEach((input) => {
+      if (input) input.value = '';
+    });
+    if (legacyPerimeterInput) legacyPerimeterInput.value = '[]';
+    if (areaInput) areaInput.readOnly = true;
+    originalFeature = null;
+    currentLayer = null;
+    marker = null;
+    if (mapSummary) mapSummary.hidden = true;
+  }
+
   function loadFormGeometry() {
     if (isPlotForm) {
       try {
@@ -1039,7 +1156,7 @@
         setStatus('No se pudo cargar el perímetro existente. Puedes corregirlo dibujando uno nuevo.');
         console.error('No se pudo interpretar el perímetro del potrero.', error);
       }
-    } else if (geojsonInput && geojsonInput.value) {
+    } else if (geojsonInput && geojsonInput.value && geojsonInput.value !== 'null') {
       try {
         const geometry = JSON.parse(geojsonInput.value);
         originalFeature = JSON.parse(JSON.stringify(geometry));
@@ -1063,7 +1180,8 @@
 
   function showMap() {
     viewBounds = L.latLngBounds([]);
-    map = L.map(mapElement, { zoomControl: true }).setView(melipillaCenter, form ? 14 : 11);
+    map = L.map(mapElement, { zoomControl: true })
+      .setView(melipillaCenter, isCreatingPredio ? NEW_PREDIO_ZOOM : (form ? 14 : 11));
     configureTiles();
     addContextLayers();
     if (!form) {
@@ -1117,6 +1235,7 @@
       syncLabels();
       bindListControls();
     } else {
+      if (isCreatingPredio && form.hidden) resetNewPredioState();
       loadFormGeometry();
       map.on('click', addDrawingPoint);
       document.getElementById('draw-perimeter').addEventListener('click', () => beginDrawing('polygon'));
@@ -1156,6 +1275,8 @@
       if (acceptButton) acceptButton.addEventListener('click', showPerimeterConfirmation);
       const cancelPerimeterButton = document.getElementById('cancel-perimeter');
       if (cancelPerimeterButton) cancelPerimeterButton.addEventListener('click', cancelPerimeterChanges);
+      setRegistrationState(form && !form.hidden ? 'data' : 'draw');
+      if (isPredioForm && form) form.addEventListener('submit', () => setRegistrationState('save'));
       const continueButton = document.getElementById('confirm-and-continue');
       if (continueButton) continueButton.addEventListener('click', continueAfterConfirmation);
       const returnButton = document.getElementById('return-to-edit');
@@ -1177,7 +1298,7 @@
             updateFormMapSummary([]);
           });
           updateFormMapSummary([]);
-          map.setView(point, 16);
+          map.setView(point, MY_LOCATION_ZOOM);
           setStatus('Ubicación detectada. Puedes ajustar el marcador y guardar.');
         }, () => {
           setStatus('No fue posible obtener tu ubicación. Marca el punto manualmente en el mapa.');
@@ -1279,6 +1400,11 @@
         if (plot) selectPlot(plot);
       });
     });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-focus-map]')) return;
+      const mapCard = document.querySelector('.map-card');
+      if (mapCard) mapCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     document.getElementById('show-all-farms')?.addEventListener('click', showAllFarms);
     document.getElementById('show-selected-farm-plots')?.addEventListener('click', () => {
       const farm = farmData.predios.find((item) => String(item.id) === selectedFarmId);
@@ -1318,12 +1444,37 @@
     const select = document.getElementById('crop-select');
     const datalist = document.getElementById('crop-variety-options');
     select.replaceChildren(new Option(crops.length ? 'Selecciona un cultivo' : 'Sin cultivos en el catálogo', ''));
-    crops.forEach((crop) => select.add(new Option(crop.name, String(crop.id))));
+    const groups = new Map();
+    crops.forEach((crop) => {
+      const label = crop.group || 'Otros cultivos';
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(crop);
+    });
+    groups.forEach((items, label) => {
+      const group = document.createElement('optgroup');
+      group.label = label;
+      items.forEach((crop) => group.append(new Option(crop.name, String(crop.id))));
+      select.append(group);
+    });
     const refreshVarieties = () => {
       datalist.replaceChildren();
       ((catalog.varieties || {})[select.value] || []).forEach((variety) => datalist.append(new Option(variety, variety)));
     };
     select.addEventListener('change', refreshVarieties);
+    // Selector visual (crop-picker.js): el <select> sigue siendo el campo real; si el script no está, se usa el select.
+    const pickerHost = document.getElementById('crop-picker');
+    const picker = window.AgroCropPicker && pickerHost && crops.length
+      ? window.AgroCropPicker.mount(pickerHost, {
+        select,
+        rail: true,
+        startChoosing: true,
+        onContinue: () => setCropStep(2),
+        onReopen: () => setCropStep(1),
+      })
+      : null;
+    cropDialog._picker = picker;
+    const fallback = cropDialog.querySelector('[data-crop-fallback]');
+    if (fallback) fallback.hidden = Boolean(picker);
     document.getElementById('crop-empty-catalog').hidden = crops.length > 0;
     document.getElementById('crop-fields').hidden = crops.length === 0;
     document.getElementById('crop-save').disabled = crops.length === 0;
@@ -1344,6 +1495,15 @@
     cropDialog._refreshVarieties = refreshVarieties;
   }
 
+  function setCropStep(step) {
+    // Paso 1: elegir el cultivo. Paso 2: ¿cuándo quieres sembrar? (fechas, variedad y más opciones).
+    const withPicker = Boolean(cropDialog && cropDialog._picker);
+    const when = document.getElementById('crop-when');
+    if (when) when.hidden = withPicker && step !== 2;
+    document.getElementById('crop-save').hidden = withPicker && step !== 2;
+    if (withPicker && step === 2) document.getElementById('crop-sowing').focus({ preventScroll: true });
+  }
+
   function openCropDialog(plot) {
     if (!cropDialog) return;
     setupCropDialog();
@@ -1351,13 +1511,16 @@
     const farm = farmData.predios.find((item) => String(item.id) === String(plot.predio));
     document.getElementById('crop-dialog-title').textContent = plot.crop ? 'Cambiar cultivo' : 'Asignar cultivo';
     document.getElementById('crop-farm').textContent = farm ? farm.name : '—';
-    document.getElementById('crop-plot').textContent = plot.name;
-    document.getElementById('crop-area').textContent = fmtHa(plot.areaHa, 2) + ' ha';
     document.getElementById('crop-current').textContent = plot.crop
       ? plot.crop + (plot.variety ? ' · ' + plot.variety : '') + (plot.season ? ' · ' + plot.season : '')
       : 'Sin cultivo asignado';
     const select = document.getElementById('crop-select');
     select.value = '';
+    const picker = cropDialog._picker;
+    if (picker) {
+      picker.reset();
+      picker.setContext({ plot: plot.name, area: fmtHa(plot.areaHa, 2) + ' ha' });
+    }
     document.getElementById('crop-variety').value = '';
     document.getElementById('crop-sowing').value = '';
     document.getElementById('crop-harvest').value = '';
@@ -1372,9 +1535,11 @@
     closePrevious.checked = true;
     closePrevious.parentElement.hidden = !(plot.seasons || []).length && !plot.crop;
     cropDialog._refreshVarieties();
+    setCropStep(1);
     if (typeof cropDialog.showModal === 'function') cropDialog.showModal();
     else cropDialog.setAttribute('open', '');
-    select.focus();
+    if (picker) picker.focus();
+    else select.focus();
   }
 
   async function saveCropAssignment(event) {
@@ -1424,6 +1589,27 @@
     }
   }
 
+  function refreshPlotState(plot) {
+    // Actualiza chips y barra de planificación de la tarjeta sin recargar la página.
+    const steps = [Boolean(plot.crop), Boolean(plot.sowing), Boolean(plot.harvest)];
+    plot.planDone = steps.filter(Boolean).length;
+    plot.planTotal = 3;
+    const complete = plot.planDone === 3;
+    document.querySelectorAll('[data-plot-state="' + plot.id + '"]').forEach((row) => {
+      row.replaceChildren(stateChip(plot.crop ? 'Con cultivo' : 'Sin cultivo', plot.crop ? 'is-green' : 'is-neutral'));
+      if (complete) row.appendChild(stateChip('Planificación completa', 'is-dark'));
+      else if (!plot.crop) row.appendChild(stateChip('Sin planificar', 'is-neutral'));
+      if (plot.overdueTasks) row.appendChild(stateChip('Labores vencidas · ' + plot.overdueTasks, 'is-red'));
+      else if (plot.pendingTasks) row.appendChild(stateChip('Labores pendientes · ' + plot.pendingTasks, 'is-amber'));
+    });
+    document.querySelectorAll('[data-plot-plan="' + plot.id + '"]').forEach((meter) => {
+      meter.hidden = !plot.crop;
+      meter.querySelectorAll('.plan-meter-bar i').forEach((bar, index) => bar.classList.toggle('on', steps[index]));
+      const strong = meter.querySelector('strong');
+      if (strong) strong.textContent = plot.planDone + ' de 3';
+    });
+  }
+
   function applyPlotUpdate(updated) {
     const index = farmData.plots.findIndex((item) => String(item.id) === String(updated.id));
     if (index === -1) return;
@@ -1438,8 +1624,19 @@
       node.textContent = plot.status;
     });
     document.querySelectorAll('[data-assign-crop="' + plot.id + '"]').forEach((node) => {
-      if (node.tagName === 'BUTTON') node.textContent = 'Cambiar cultivo';
+      if (node.tagName !== 'BUTTON') return;
+      // La acción rápida desaparece al tener cultivo; en el menú el rótulo pasa a «Cambiar cultivo».
+      if (node.hasAttribute('data-quick')) { node.hidden = true; return; }
+      const label = node.querySelector('[data-assign-label]');
+      if (label) label.textContent = 'Cambiar cultivo';
+      else node.textContent = 'Cambiar cultivo';
     });
+    const farmOfPlot = farmData.predios.find((item) => String(item.id) === String(plot.predio));
+    document.querySelectorAll('[data-plot-planning="' + plot.id + '"]').forEach((node) => {
+      if (farmOfPlot) node.href = plotActionUrl('calendar', plot, farmOfPlot);
+      node.hidden = !plot.crop;
+    });
+    refreshPlotState(plot);
     selectPlot(plot);
   }
 
@@ -1460,4 +1657,8 @@
     return;
   }
   showMap();
+  // Al volver con «atrás/adelante» el navegador puede restaurar la página desde memoria: se recarga para empezar limpio.
+  if (isCreatingPredio) {
+    window.addEventListener('pageshow', (event) => { if (event.persisted) window.location.reload(); });
+  }
 })();

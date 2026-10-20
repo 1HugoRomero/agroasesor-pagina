@@ -885,3 +885,52 @@ class ActividadAgricola(models.Model):
 
     def __str__(self):
         return f'{self.nombre} · {self.potrero}'
+
+
+class UsoInsumoCultivo(models.Model):
+    """Registro documentado: «este insumo se usa para este problema en este cultivo».
+
+    Es la única fuente de verdad para recomendar un insumo frente a un problema de un cultivo:
+    no se infiere desde relaciones sueltas entre insumo, problema y cultivo.
+    """
+
+    cultivo = models.ForeignKey(Cultivo, on_delete=models.CASCADE, related_name='usos_insumo')
+    problema = models.ForeignKey(ProblemaAgricola, on_delete=models.CASCADE, related_name='usos_insumo')
+    insumo = models.ForeignKey(Insumo, on_delete=models.CASCADE, related_name='usos_cultivo')
+    fuente_nombre = models.CharField('fuente', max_length=255, help_text='Documento o institución que respalda este uso (SAG, INIA, ODEPA, etiqueta del fabricante…).')
+    fuente_url = models.URLField('enlace de la fuente', blank=True)
+    fecha_verificacion = models.DateField('fecha de verificación')
+    activo = models.BooleanField('vigente', default=True, help_text='Desmárcalo para dejar de recomendar este uso sin borrar el historial.')
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['cultivo__nombre', 'problema__nombre', 'insumo__nombre']
+        verbose_name = 'uso de insumo por cultivo y problema'
+        verbose_name_plural = 'usos de insumos por cultivo y problema'
+        constraints = [
+            models.UniqueConstraint(fields=['cultivo', 'problema', 'insumo'], name='uso_insumo_cultivo_problema_unico'),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.fecha_verificacion and self.fecha_verificacion > timezone.localdate():
+            errors['fecha_verificacion'] = 'La fecha de verificación no puede ser futura.'
+        if self.fuente_nombre is not None and not self.fuente_nombre.strip():
+            errors['fuente_nombre'] = 'Indica la fuente que respalda este uso.'
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def recomendable(self):
+        """Solo se recomienda si el uso, el insumo, el cultivo y el problema están vigentes."""
+        return bool(
+            self.activo
+            and self.insumo.vigente_en
+            and self.insumo.estado_verificacion not in {'restricted', 'cancelled'}
+            and self.cultivo.activo
+            and self.problema.activo
+        )
+
+    def __str__(self):
+        return f'{self.insumo} → {self.problema} en {self.cultivo}'

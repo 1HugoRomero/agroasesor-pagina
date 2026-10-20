@@ -1,7 +1,7 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}Hoy · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=6"><link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=7"><link rel="stylesheet" href="{% static 'css/activities.css' %}">{% endblock %}
 {% block content %}
 <div class="dash">
     <section class="dash-hero">
@@ -104,7 +104,7 @@
 
             <section class="card dash-distribution">
                 <div class="section-heading">
-                    <div><span class="dash-section-kicker">USO DEL TERRENO</span><h2>Distribución de superficie</h2></div>
+                    <div><span class="dash-section-kicker">USO DE LA SUPERFICIE</span><h2>Distribución de superficie</h2></div>
                 </div>
                 <div class="distribution-labels">
                     <span>Superficie total de predios <strong>{{ farm_data.stats.superficie_predios|floatformat:2 }} ha</strong></span>
@@ -148,7 +148,7 @@
                 <div class="empty-state dash-empty">
                     <i data-lucide="calendar-check"></i>
                     <p>No hay actividades pendientes guardadas. Planifica una tarea para organizar el trabajo del campo.</p>
-                    <a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>
+                    <a class="button" href="{% url 'actividad_create' %}">Programar labor</a>
                 </div>
                 {% endfor %}
                 <a class="text-link activities-link" href="{% url 'calendario' %}">Abrir planificación <i data-lucide="arrow-right"></i></a>
@@ -158,11 +158,21 @@
                 <div class="section-heading">
                     <div><span class="dash-section-kicker">CENTRO DE DECISIONES</span><h2>Cálculos recientes</h2></div>
                 </div>
+                {% for item in dashboard_calculations %}
+                <article class="dash-calc-row">
+                    <strong>{{ item.value }}</strong>
+                    <span>{{ item.operation }}{% if item.product %} · {{ item.product }}{% elif item.crop %} · {{ item.crop }}{% endif %}</span>
+                    <small>{{ item.plot }} · {{ item.farm }} · {{ item.date|date:"d/m/Y" }}</small>
+                    <small class="dash-calc-origin">{{ item.origin }}</small>
+                </article>
+                {% empty %}
                 <div class="empty-state dash-empty">
                     <i data-lucide="calculator"></i>
-                    <p>Aún no hay historial persistente de cálculos.</p>
+                    <p>Aún no has guardado cálculos. Calcula cuánto llevar para un potrero y quedará aquí y en Reporte.</p>
                     <a class="button secondary" href="{% url 'decisiones' %}">Ir al Centro de decisiones</a>
                 </div>
+                {% endfor %}
+                {% if dashboard_calculations %}<a class="text-link activities-link" href="{% url 'reportes' %}?tipo=calculos">Ver todos en Reporte <i data-lucide="arrow-right"></i></a>{% endif %}
             </section>
 
         </aside>

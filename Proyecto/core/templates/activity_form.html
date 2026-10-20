@@ -1,7 +1,7 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}{{ heading }} · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=2">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=3">{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
@@ -59,16 +59,21 @@
             </div>
         </section>
 
-        <section class="card form-section" id="input-section">
-            <header class="form-section-head"><span class="step-badge">3</span><div><h2>Insumo y dosis</h2><p>Para siembra, fertilización y aplicaciones fitosanitarias.</p></div></header>
-            <div class="form-grid">
-                {% include "partials/field.html" with field=form.insumo wide=True %}
-                {% include "partials/field.html" with field=form.insumo_otro %}
-                {% include "partials/field.html" with field=form.objetivo %}
+        <section class="card form-section" id="input-section" data-state="pending">
+            <header class="form-section-head"><span class="step-badge">3</span><div><h2>Producto y dosis</h2><p>Solo para siembra, fertilización y control fitosanitario.</p></div><span class="input-state" id="input-state"></span></header>
+            <div class="input-callout" id="input-callout" role="status" aria-live="polite"></div>
+            <div id="product-fields">
+                <div class="form-grid">
+                    {% include "partials/field.html" with field=form.insumo wide=True %}
+                    {% include "partials/field.html" with field=form.insumo_otro %}
+                </div>
+                <div class="form-grid">
+                    {% include "partials/field.html" with field=form.dosis %}
+                    {% include "partials/field.html" with field=form.unidad_dosis %}
+                </div>
             </div>
-            <div class="form-grid three">
-                {% include "partials/field.html" with field=form.dosis %}
-                {% include "partials/field.html" with field=form.unidad_dosis %}
+            <div class="form-grid" id="treated-fields">
+                {% include "partials/field.html" with field=form.objetivo %}
                 {% include "partials/field.html" with field=form.superficie_ha %}
             </div>
             <div class="dose-summary" id="dose-summary" aria-live="polite"></div>
@@ -118,4 +123,4 @@
 {{ activity_plots|json_script:"activity-plots" }}
 {{ activity_guidance|json_script:"activity-guidance" }}
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/actividades.js' %}?v=2"></script>{% endblock %}
+{% block extra_js %}<script src="{% static 'js/actividades.js' %}?v=3"></script>{% endblock %}

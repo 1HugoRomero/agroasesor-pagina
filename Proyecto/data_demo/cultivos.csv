@@ -1,0 +1,4 @@
+nombre;descripcion;densidad_siembra;unidad_siembra;densidad_fuente;densidad_url;densidad_verificada;rendimiento_ton_ha;rendimiento_fuente;rendimiento_url;rendimiento_verificado;activo
+PAPA DEMO;Dato ficticio utilizado exclusivamente para pruebas funcionales.;2500;kg;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;20;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;si
+LECHUGA DEMO;Dato ficticio utilizado exclusivamente para pruebas funcionales.;5;kg;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;30;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;si
+MAIZ DEMO;Dato ficticio utilizado exclusivamente para pruebas funcionales.;25;kg;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;10;FUENTE DEMO AGROASESOR;https://example.invalid/agroasesor-demo;2026-10-18;si

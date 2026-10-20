@@ -100,7 +100,8 @@ WSGI_APPLICATION = 'AgroAsesor.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # En Docker la base vive en un volumen (DJANGO_DB_PATH=/data/db.sqlite3); en local sigue siendo db.sqlite3.
+        'NAME': os.getenv('DJANGO_DB_PATH') or BASE_DIR / 'db.sqlite3',
     }
 }
 

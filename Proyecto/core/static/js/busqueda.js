@@ -11,6 +11,26 @@
     return normalize(text).includes(term);
   }
 
+  // Ejemplos rápidos con datos reales del catálogo del usuario (nunca términos fijos que podrían no existir).
+  (function renderExamples() {
+    const host = document.getElementById('search-examples');
+    const first = (list) => (list && list.length ? list[0] : null);
+    const candidates = [
+      first(AgroService.getPredios()) && first(AgroService.getPredios()).name,
+      first(AgroService.getCultivos()),
+      first(AgroService.getInsumos(true)) && first(AgroService.getInsumos(true)).name,
+    ].filter(Boolean);
+    host.replaceChildren(...[...new Set(candidates)].map((text) => {
+      const chip = document.createElement('button');
+      chip.className = 'example-chip';
+      chip.type = 'button';
+      chip.dataset.q = text;
+      chip.textContent = text;
+      return chip;
+    }));
+    host.hidden = !host.children.length;
+  })();
+
   function search() {
     const term = normalize(document.getElementById('term').value.trim());
     const crop = document.getElementById('crop').value;
@@ -36,7 +56,7 @@
     const labels = { cultivo: 'Cultivo', semilla: 'Semilla', insumo: 'Insumo', problema: 'Problema', predio: 'Predio' };
     document.getElementById('results').innerHTML = results.length
       ? results.map((item) => '<a class="card result kind-' + item.kind + '" href="' + item.href + '"><span class="badge">' + (labels[item.kind] || item.kind) + '</span><h3>' + AgroService.escape(item.title) + '</h3><p class="muted">' + ({ insumo: 'Ver ficha técnica', problema: 'Ver productos relacionados', predio: 'Abrir en el mapa', cultivo: 'Ver calendario agronómico', semilla: 'Calcular semillas' }[item.kind] || 'Abrir') + '</p></a>').join('')
-      : '<section class="card"><h2>Sin coincidencias</h2><p class="muted">Prueba “mai”, “gusano” o “santa”. También puedes dejar la búsqueda vacía para ver todo el catálogo demo.</p></section>';
+      : '<section class="card"><h2>Sin coincidencias</h2><p class="muted">Prueba con parte del nombre o quita los filtros. Si buscas un producto que no está registrado, puedes <a href="/decisiones/?herramienta=llevar&tipo=insumos">calcular a mano en el Centro de decisiones</a> (queda marcado como simulación).</p></section>';
   }
 
   document.getElementById('search-form').addEventListener('submit', (event) => {

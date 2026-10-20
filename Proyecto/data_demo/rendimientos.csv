@@ -1,0 +1,4 @@
+cultivo;zona;variedad;anio_referencia;rendimiento_ton_ha;institucion_fuente;documento_fuente;url_fuente;fecha_consulta_fuente;estado
+PAPA DEMO;ZONA DEMO MELIPILLA;;;20;FUENTE DEMO AGROASESOR;CATÁLOGO DEMO - NO REAL;https://example.invalid/agroasesor-demo;2026-10-18;verified
+LECHUGA DEMO;ZONA DEMO MELIPILLA;;;30;FUENTE DEMO AGROASESOR;CATÁLOGO DEMO - NO REAL;https://example.invalid/agroasesor-demo;2026-10-18;verified
+MAIZ DEMO;ZONA DEMO MELIPILLA;;;10;FUENTE DEMO AGROASESOR;CATÁLOGO DEMO - NO REAL;https://example.invalid/agroasesor-demo;2026-10-18;verified

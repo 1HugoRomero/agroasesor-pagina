@@ -1,753 +1,337 @@
+/* Calendario de siembra: mismo funcionamiento que AgroAsesor.
+   Los datos salen de las referencias agronómicas de la base de datos (json "calendar-references")
+   y del catálogo común (json "agro-catalog"). */
 (function () {
   'use strict';
-  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-  const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  const phaseLabels = {
-    sow: 'Ventana de siembra',
-    grow: 'Crecimiento referencial',
-    harvest: 'Ventana de cosecha',
-    none: 'Fuera de las ventanas documentadas',
-  };
-  const PHYTO = new Set(['herbicide', 'fungicide', 'insecticide']);
+
+  const MONTHS_SHORT = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const PHASE_LABELS = { sow: 'Siembra', grow: 'Crecimiento', harvest: 'Cosecha', idle: 'Fuera de ventana' };
+
+  const layout = document.querySelector('.cal-layout');
+  const board = document.getElementById('cal-board');
+  const detail = document.getElementById('cal-detail');
+  const zoneSelect = document.getElementById('zone');
+  const cropFilter = document.getElementById('crop-filter');
+  const yearSelect = document.getElementById('year');
+  if (!layout || !board || !detail || !zoneSelect || !cropFilter || !yearSelect) return;
 
   function readJson(id, fallback) {
     const node = document.getElementById(id);
     if (!node) return fallback;
-    try { return JSON.parse(node.textContent); } catch (error) { return fallback; }
+    try {
+      return JSON.parse(node.textContent);
+    } catch (error) {
+      return fallback;
+    }
   }
 
   const references = readJson('calendar-references', []);
-  let plots = readJson('calendar-plots', []);
-  const varietyIndex = readJson('calendar-variety-index', []);
   const catalog = readJson('agro-catalog', {});
-  const cropFilter = document.getElementById('crop-filter');
-  const varietyFilter = document.getElementById('variety-filter');
-  const zoneFilter = document.getElementById('zone');
-  const yearFilter = document.getElementById('year');
-  const plotFilter = document.getElementById('calendar-plot');
-  const table = document.getElementById('cal-table');
-  const detail = document.getElementById('cal-detail');
-  const empty = document.getElementById('calendar-empty');
-  const yearNote = document.getElementById('calendar-year-note');
-  const realNote = document.getElementById('calendar-real-note');
-  let selectedReferenceId = null;
-  let activeTab = 'general';
+  const config = layout.dataset;
+  let selectedId = null;
+  let preferredVariety = (config.selectedVariety || '').trim().toLowerCase();
 
-  function element(tag, className, text) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined && text !== null) node.textContent = text;
-    return node;
+  function esc(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char];
+    });
   }
 
-  function safeUrl(value) {
-    if (!value) return '';
-    try {
-      const url = new URL(value, window.location.origin);
-      return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
-    } catch (error) { return ''; }
+  function fmt(value, digits) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('es-CL', { maximumFractionDigits: digits == null ? 2 : digits, minimumFractionDigits: 0 });
   }
 
-  function parseDate(value) {
-    if (!value) return null;
-    const [year, month, day] = value.split('-').map(Number);
-    return year && month && day ? { year, month, day } : null;
+  function monthRange(start, end) {
+    if (!start || !end) return '—';
+    if (start === end) return MONTHS[start - 1] || '—';
+    return (MONTHS[start - 1] || '—') + ' – ' + (MONTHS[end - 1] || '—');
   }
 
-  function formatDate(value) {
-    const date = parseDate(value);
-    return date ? String(date.day).padStart(2, '0') + '/' + String(date.month).padStart(2, '0') + '/' + date.year : 'Sin fecha';
+  function inRange(month, start, end) {
+    if (!start || !end) return false;
+    if (start <= end) return month >= start && month <= end;
+    return month >= start || month <= end;
   }
 
-  function ordinal(month, day) {
-    return month && day ? month * 32 + day : null;
-  }
-
-  function hasWindow(reference, prefix) {
-    return Boolean(reference[prefix + 'StartMonth'] && reference[prefix + 'StartDay'] && reference[prefix + 'EndMonth'] && reference[prefix + 'EndDay']);
-  }
-
-  function monthInWindow(month, reference, prefix) {
-    if (!hasWindow(reference, prefix)) return false;
-    const start = ordinal(reference[prefix + 'StartMonth'], reference[prefix + 'StartDay']);
-    const end = ordinal(reference[prefix + 'EndMonth'], reference[prefix + 'EndDay']);
-    const first = month * 32 + 1;
-    const last = month * 32 + 31;
-    if (start <= end) return first <= end && last >= start;
-    return last >= start || first <= end;
-  }
-
-  function crossesYear(reference) {
-    if (!hasWindow(reference, 'sowing') || !hasWindow(reference, 'harvest')) return false;
-    return ordinal(reference.harvestStartMonth, reference.harvestStartDay) < ordinal(reference.sowingStartMonth, reference.sowingStartDay) ||
-      ordinal(reference.sowingEndMonth, reference.sowingEndDay) < ordinal(reference.sowingStartMonth, reference.sowingStartDay);
-  }
-
-  function phase(reference, monthIndex) {
-    const month = monthIndex + 1;
-    if (monthInWindow(month, reference, 'sowing')) return 'sow';
-    if (monthInWindow(month, reference, 'harvest')) return 'harvest';
-    if (!hasWindow(reference, 'sowing') || !hasWindow(reference, 'harvest')) return 'none';
-    // Meses entre el fin de la siembra y el inicio de la cosecha (con salto de año).
-    let cursor = reference.sowingEndMonth % 12;
-    for (let count = 0; count < 12; count += 1) {
-      if (cursor === reference.harvestStartMonth - 1) return 'none';
-      if (cursor === monthIndex) return 'grow';
-      cursor = (cursor + 1) % 12;
+  function phase(row, month) {
+    if (inRange(month, row.sowStart, row.sowEnd)) return 'sow';
+    if (inRange(month, row.harvestStart, row.harvestEnd)) return 'harvest';
+    if (row.sowEnd && row.harvestStart) {
+      const afterSow = (row.sowEnd % 12) + 1;
+      let beforeHarvest = row.harvestStart - 1;
+      if (beforeHarvest < 1) beforeHarvest = 12;
+      // Entre el fin de la siembra y el inicio de la cosecha el cultivo está creciendo.
+      if (afterSow !== row.harvestStart && inRange(month, afterSow, beforeHarvest)) return 'grow';
     }
-    return 'none';
+    return 'idle';
   }
 
-  function verified(reference) {
-    return reference.sourceVerified && reference.status === 'verified';
+  function isVerified(ref) {
+    return Boolean(ref.sourceVerified);
   }
 
-  function visibleReferences() {
-    return references.filter((reference) => {
-      if (!verified(reference)) return false;
-      if (zoneFilter.value && String(reference.zoneId) !== zoneFilter.value) return false;
-      if (cropFilter.value && String(reference.cropId) !== cropFilter.value) return false;
-      if (varietyFilter.value !== '*' && (reference.variety || '') !== varietyFilter.value) return false;
+  function hasWindow(ref) {
+    return Boolean((ref.sowingStartMonth && ref.sowingEndMonth) || (ref.harvestStartMonth && ref.harvestEndMonth));
+  }
+
+  function referenceKey(ref) {
+    return [ref.cropId, ref.zoneId, String(ref.variety || '').toLowerCase()].join('|');
+  }
+
+  // Para el año elegido gana la referencia de ese año; si no existe, vale la recurrente (sin año).
+  function effectiveReferences(year) {
+    const specific = new Set();
+    references.forEach(function (ref) {
+      if (ref.referenceYear === year) specific.add(referenceKey(ref));
+    });
+    return references.filter(function (ref) {
+      return hasWindow(ref) && (ref.referenceYear === year
+        || (ref.referenceYear == null && !specific.has(referenceKey(ref))));
+    });
+  }
+
+  function toRow(ref) {
+    return {
+      id: ref.id,
+      ref: ref,
+      crop: ref.crop,
+      cropId: ref.cropId,
+      zone: ref.zone,
+      zoneId: ref.zoneId,
+      variety: ref.variety,
+      sowStart: ref.sowingStartMonth,
+      sowEnd: ref.sowingEndMonth,
+      harvestStart: ref.harvestStartMonth,
+      harvestEnd: ref.harvestEndMonth,
+      notes: ref.sowingConditions
+    };
+  }
+
+  function currentYear() {
+    return Number(yearSelect.value) || new Date().getFullYear();
+  }
+
+  function allRows() {
+    return effectiveReferences(currentYear()).map(toRow);
+  }
+
+  function rows() {
+    return allRows().filter(function (row) {
+      if (zoneSelect.value && String(row.zoneId) !== zoneSelect.value) return false;
+      if (cropFilter.value && String(row.cropId) !== cropFilter.value) return false;
       return true;
     });
   }
 
-  function varietiesFor(cropId, zoneId) {
-    return [...new Set(varietyIndex
-      .filter((item) => String(item.cropId) === String(cropId) && (!zoneId || String(item.zoneId) === String(zoneId)))
-      .map((item) => item.variety))].sort((a, b) => a.localeCompare(b, 'es'));
+  function optionCount(select) {
+    return Array.prototype.filter.call(select.options, function (option) { return option.value !== ''; }).length;
   }
 
-  function updateFilterVarieties(selectedValue) {
-    const previous = selectedValue === undefined ? varietyFilter.value : selectedValue;
-    const choices = cropFilter.value ? varietiesFor(cropFilter.value, zoneFilter.value) : [];
-    varietyFilter.replaceChildren(new Option('Todas las variedades', '*'), new Option('Solo referencia general', ''));
-    choices.forEach((variety) => varietyFilter.add(new Option(variety, variety)));
-    varietyFilter.value = previous === '' || choices.includes(previous) ? previous : '*';
+  function renderStats() {
+    const all = allRows();
+    const varieties = new Set(all.map(function (row) { return (row.variety || '').toLowerCase(); }).filter(Boolean));
+    document.getElementById('cal-stats').innerHTML = [
+      ['Calendarios', all.length],
+      ['Zonas', optionCount(zoneSelect)],
+      ['Cultivos', optionCount(cropFilter)],
+      ['Variedades', varieties.size]
+    ].map(function (pair) {
+      return '<div class="info-chip"><span>' + pair[0] + '</span><strong>' + pair[1] + '</strong></div>';
+    }).join('');
   }
 
-  function updateEvaluatorVarieties(form, preferred) {
-    const select = form.elements.variety;
-    const previous = preferred === undefined ? select.value : preferred;
-    const choices = form.elements.crop_id.value ? varietiesFor(form.elements.crop_id.value, form.elements.zone_id.value) : [];
-    select.replaceChildren(new Option('Referencia general', ''));
-    choices.forEach((variety) => select.add(new Option(variety, variety)));
-    if (previous && !choices.includes(previous)) {
-      // Variedad registrada por el agricultor sin referencia: se conserva para que el
-      // servidor informe que no hay ventana específica y use la general si existe.
-      select.add(new Option(previous + ' (sin referencia propia)', previous));
+  function cropInfo(row) {
+    return (catalog.cultivos || []).find(function (item) { return String(item.id) === String(row.cropId); }) || null;
+  }
+
+  function cropProducts(row) {
+    return (catalog.insumos || []).filter(function (item) {
+      return String(item.cropId) === String(row.cropId) && item.usable !== false;
+    }).slice(0, 4);
+  }
+
+  function splitList(text) {
+    return String(text || '').split(/[\n;]+/).map(function (item) { return item.trim(); }).filter(function (item) {
+      return item && item.length <= 120;
+    });
+  }
+
+  function cropProblems(row, products) {
+    const names = [];
+    (catalog.problemas || []).forEach(function (problem) {
+      if ((problem.cropIds || []).map(String).indexOf(String(row.cropId)) !== -1) names.push(problem.name);
+    });
+    products.forEach(function (item) {
+      (item.problems || []).forEach(function (name) { names.push(name); });
+    });
+    [row.ref.pests, row.ref.diseases, row.ref.weeds].forEach(function (text) {
+      splitList(text).forEach(function (name) { names.push(name); });
+    });
+    const seen = new Set();
+    return names.filter(function (name) {
+      const key = String(name).toLowerCase();
+      if (!name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 6);
+  }
+
+  function productUrl(id) {
+    return (config.productUrl || '/productos/0/').replace(/0\/$/, encodeURIComponent(id) + '/');
+  }
+
+  function formatDate(iso) {
+    const parts = String(iso || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : iso;
+  }
+
+  function sourceNote(ref) {
+    if (!isVerified(ref)) return '';
+    const label = [ref.sourceInstitution, ref.sourceDocument].filter(Boolean).join(' · ');
+    const text = esc(label) + (ref.sourceDate ? ' (consultada el ' + esc(formatDate(ref.sourceDate)) + ')' : '');
+    const linked = ref.sourceUrl && /^https?:\/\//i.test(ref.sourceUrl)
+      ? '<a class="text-link" href="' + esc(ref.sourceUrl) + '" target="_blank" rel="noopener noreferrer">' + text + '</a>'
+      : text;
+    return '<p class="muted cal-source">Fuente verificada: ' + linked + '</p>';
+  }
+
+  // La calculadora se abre con el mismo cultivo de la ventana elegida.
+  function calcLink(ref) {
+    const base = config.calcUrl || '/decisiones/?herramienta=llevar&tipo=semillas';
+    return ref && ref.cropId ? base + (base.indexOf('?') === -1 ? '?' : '&') + 'crop=' + encodeURIComponent(ref.cropId) : base;
+  }
+
+  function showDetail(row) {
+    if (!row) {
+      detail.innerHTML = '<h2>Elige un cultivo</h2><p class="muted">Toca una franja del calendario para ver variedad, ventana de siembra y manejo.</p>';
+      return;
     }
-    select.value = previous || '';
+    selectedId = row.id;
+    const ref = row.ref;
+    const crop = cropInfo(row);
+    const products = cropProducts(row);
+    const problems = cropProblems(row, products);
+    const density = crop && crop.density != null ? fmt(crop.density) + ' ' + (crop.unit || 'kg') + '/ha de semilla' : '';
+    const cycle = ref.cycleDays ? 'Ciclo de referencia: ' + ref.cycleDays + ' días' : '';
+    const yieldText = ref.yieldTonHa != null ? 'rendimiento ' + fmt(ref.yieldTonHa, 1) + ' t/ha' : '';
+    const manage = [cycle, density, yieldText].filter(Boolean).join(' · ');
+    const manageText = [ref.management, ref.integratedManagement].filter(Boolean).join('\n');
+    const harvestText = [ref.maturityIndicators, ref.harvestConsiderations].filter(Boolean).join('\n');
+    detail.innerHTML =
+      '<div class="cal-badges"><span class="badge">' + esc(row.zone) + '</span>' +
+      (isVerified(ref) ? '' : '<span class="badge amber">Demostración · sin fuente verificada</span>') + '</div>' +
+      '<h2>' + esc(row.crop) + '</h2>' +
+      (row.variety ? '<p class="cal-variety">' + esc(row.variety) + '</p>' : '') +
+      '<div class="metric-grid">' +
+      '<div class="metric"><span>Siembra</span><strong>' + monthRange(row.sowStart, row.sowEnd) + '</strong></div>' +
+      '<div class="metric"><span>Cosecha</span><strong>' + monthRange(row.harvestStart, row.harvestEnd) + '</strong></div>' +
+      '</div>' +
+      (crop && crop.description ? '<p>' + esc(crop.description) + '</p>' : '') +
+      (row.notes ? '<p>' + esc(row.notes) + '</p>' : '') +
+      (manageText || manage
+        ? '<div class="note-card"><h3>Manejo</h3>' +
+          (manageText ? '<p>' + esc(manageText).replace(/\n/g, '<br>') + '</p>' : '') +
+          (manage ? '<p class="muted">' + esc(manage) + '.</p>' : '') + '</div>'
+        : '') +
+      (harvestText ? '<div class="note-card"><h3>Cosecha</h3><p>' + esc(harvestText).replace(/\n/g, '<br>') + '</p></div>' : '') +
+      (problems.length
+        ? '<h3>Problemas frecuentes</h3><ul class="help-list">' + problems.map(function (name) { return '<li>' + esc(name) + '</li>'; }).join('') + '</ul>'
+        : '') +
+      (products.length
+        ? '<h3>Insumos del catálogo</h3><ul class="help-list">' + products.map(function (item) {
+          return '<li><a class="text-link" href="' + productUrl(item.id) + '">' + esc(item.name) + '</a> · ' + esc(item.type) + '</li>';
+        }).join('') + '</ul>'
+        : '') +
+      sourceNote(ref) +
+      '<div class="toolbar"><button class="button" type="button" id="cal-pdf">Descargar PDF de esta ventana</button>' +
+      '<a class="button secondary" href="' + esc(calcLink(ref)) + '">Calcular semilla</a></div>';
   }
 
-  function selectedPlot() {
-    return plotFilter ? plots.find((plot) => String(plot.id) === plotFilter.value) || null : null;
+  function emptyCatalog() {
+    const admin = config.adminUrl
+      ? '<a class="button secondary" href="' + esc(config.adminUrl) + '">Administrar referencias agronómicas</a>'
+      : '<p class="muted">Pide al administrador del catálogo que registre las referencias.</p>';
+    return '<div class="cal-empty"><h2>El catálogo todavía no tiene ventanas de siembra</h2>' +
+      '<p class="muted">AgroAsesor no inventa datos: las ventanas salen de referencias guardadas en la base de datos, con su cultivo, zona y fuente.</p>' +
+      '<p class="muted">Para ver el calendario con ejemplos marcados como demostración ejecuta <code>python manage.py cargar_demo_calendario</code>.</p>' +
+      admin + '</div>';
   }
 
-  function plotSeason(plot) {
-    if (!plot) return null;
-    return (plot.seasons || [])[0] || null;
-  }
-
-  function plotDates(plot) {
-    const season = plotSeason(plot);
-    return {
-      crop: season ? season.crop : plot.crop,
-      variety: season ? season.variety : plot.variety,
-      sowing: season ? season.sowingDate : plot.sowingDate,
-      harvest: season ? season.harvestDate : plot.harvestDate,
-      season: season ? season.season : '',
-      status: season ? season.statusLabel : plot.status,
-    };
-  }
-
-  function realPhase(dates, monthIndex, year) {
-    const sowing = parseDate(dates.sowing);
-    const harvest = parseDate(dates.harvest);
-    const key = year * 12 + monthIndex;
-    const sowingKey = sowing ? sowing.year * 12 + sowing.month - 1 : null;
-    const harvestKey = harvest ? harvest.year * 12 + harvest.month - 1 : null;
-    if (sowingKey === key) return 'real-sow';
-    if (harvestKey === key) return 'real-harvest';
-    if (sowingKey !== null && harvestKey !== null && key > sowingKey && key < harvestKey) return 'real-grow';
-    return '';
-  }
-
-  function addTabSection(container, heading, value, emptyText) {
-    const section = element('div', 'calendar-detail-section');
-    section.append(element('h4', '', heading));
-    if (value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length)) {
-      section.append(element('p', 'muted', emptyText || 'Sin información documentada en la fuente registrada.'));
-    } else if (Array.isArray(value)) {
-      const list = element('ul');
-      value.forEach((item) => list.append(element('li', '', item)));
-      section.append(list);
-    } else {
-      section.append(element('p', '', value));
+  function render(restoreFocus) {
+    renderStats();
+    const data = rows();
+    if (!data.length) {
+      board.innerHTML = references.length
+        ? '<p class="muted">No hay calendarios para esta zona y cultivo. Prueba otra zona.</p>'
+        : emptyCatalog();
+      showDetail(null);
+      return;
     }
-    container.append(section);
-  }
-
-  function formatWindow(reference, prefix) {
-    if (!hasWindow(reference, prefix)) return 'Sin información';
-    return reference[prefix + 'StartDay'] + ' de ' + monthNames[reference[prefix + 'StartMonth'] - 1] + ' – ' +
-      reference[prefix + 'EndDay'] + ' de ' + monthNames[reference[prefix + 'EndMonth'] - 1];
-  }
-
-  function cropCatalog(reference) {
-    return (catalog.cultivos || []).find((crop) => String(crop.id) === String(reference.cropId)) || null;
-  }
-
-  function productsFor(reference) {
-    return (catalog.insumos || []).filter((item) =>
-      item.usable !== false && item.active !== false &&
-      (String(item.cropId) === String(reference.cropId) || item.crop === reference.crop));
-  }
-
-  function productLink(item) {
-    const link = element('a', 'text-link', item.name);
-    link.href = '/decisiones/?herramienta=ficha&crop=' + encodeURIComponent(item.cropId || '') + '&insumo=' + encodeURIComponent(item.id);
-    return link;
-  }
-
-  function renderProducts(container, reference) {
-    const crop = cropCatalog(reference);
-    const seedSection = element('div', 'calendar-detail-section');
-    seedSection.append(element('h4', '', 'Densidad de siembra del catálogo'));
-    if (crop && crop.density !== null && crop.density !== undefined && crop.densitySource && crop.densityUrl) {
-      seedSection.append(element('p', '', crop.density + ' ' + (crop.unit || 'kg') + '/ha · Fuente: ' + crop.densitySource +
-        (crop.densityVerifiedAt ? ' (verificada ' + crop.densityVerifiedAt + ')' : '')));
-    } else {
-      seedSection.append(element('p', 'muted', 'No hay una densidad de siembra verificada con fuente para este cultivo.'));
+    board.innerHTML = '<div class="cal-grid-head"><span>Cultivo</span>' + MONTHS_SHORT.map(function (month) { return '<span>' + month + '</span>'; }).join('') + '</div>' +
+      data.map(function (row) {
+        const active = String(row.id) === String(selectedId) ? ' is-selected' : '';
+        const label = row.crop + (row.variety ? ' · ' + row.variety : '') + ': siembra ' + monthRange(row.sowStart, row.sowEnd) + '; cosecha ' + monthRange(row.harvestStart, row.harvestEnd);
+        return '<button type="button" class="cal-row' + active + '" data-id="' + row.id + '" aria-pressed="' + (active ? 'true' : 'false') + '" aria-label="' + esc(label) + '">' +
+          '<span class="cal-name"><strong>' + esc(row.crop) + '</strong><small>' + esc(row.variety || row.zone) + '</small></span>' +
+          MONTHS_SHORT.map(function (_, index) {
+            const kind = phase(row, index + 1);
+            return '<span class="cal-cell ' + kind + '" title="' + PHASE_LABELS[kind] + ' · ' + MONTHS[index] + '"></span>';
+          }).join('') +
+          '</button>';
+      }).join('');
+    let current = data.find(function (row) { return String(row.id) === String(selectedId); });
+    if (!current && preferredVariety) {
+      current = data.find(function (row) { return (row.variety || '').toLowerCase() === preferredVariety; });
+      preferredVariety = '';
     }
-    container.append(seedSection);
+    current = current || data[0];
+    selectedId = current.id;
+    board.querySelectorAll('.cal-row').forEach(function (button) {
+      const active = String(button.dataset.id) === String(selectedId);
+      button.classList.toggle('is-selected', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      if (active && restoreFocus) button.focus({ preventScroll: true });
+    });
+    showDetail(current);
+  }
 
-    const groups = [
-      ['seed', 'Semillas disponibles en el catálogo'],
-      ['fertilizer', 'Fertilizantes relacionados'],
-      ['phyto', 'Productos fitosanitarios con uso verificado'],
-      ['other', 'Otros insumos'],
+  board.addEventListener('click', function (event) {
+    const button = event.target.closest('[data-id]');
+    if (!button) return;
+    selectedId = button.dataset.id;
+    render(true);
+  });
+
+  detail.addEventListener('click', function (event) {
+    if (!event.target.closest('#cal-pdf')) return;
+    const data = rows();
+    const row = data.find(function (item) { return String(item.id) === String(selectedId); }) || data[0];
+    if (!row) return;
+    const verified = isVerified(row.ref);
+    const lines = [
+      { heading: row.zone + ' · ' + yearSelect.value },
+      { label: 'Variedad', value: row.variety || 'Referencia general' },
+      { label: 'Siembra', value: monthRange(row.sowStart, row.sowEnd) },
+      { label: 'Cosecha', value: monthRange(row.harvestStart, row.harvestEnd) },
+      { label: 'Observaciones', value: row.notes || '—' },
+      { label: 'Estado de la referencia', value: verified ? 'Verificada con fuente' : 'Demostración / sin fuente verificada' }
     ];
-    const products = productsFor(reference);
-    groups.forEach(([key, title]) => {
-      const items = products.filter((item) => key === 'phyto'
-        ? PHYTO.has(item.category) && item.verifiedUse === true
-        : item.category === key);
-      const section = element('div', 'calendar-detail-section');
-      section.append(element('h4', '', title));
-      if (!items.length) {
-        section.append(element('p', 'muted', key === 'phyto'
-          ? 'No hay productos con autorización, etiqueta, cultivo, objetivo y dosis verificados para este cultivo.'
-          : 'No hay registros en el catálogo para este cultivo.'));
-      } else {
-        const list = element('ul', 'calendar-product-list');
-        items.forEach((item) => {
-          const row = element('li');
-          row.append(productLink(item));
-          row.append(element('span', 'badge' + (item.verified ? '' : ' amber'), item.verified ? 'Verificado' : 'Sin verificar'));
-          const label = safeUrl(item.labelUrl || item.sourceUrl);
-          if (label) {
-            const doc = element('a', 'text-link', item.labelUrl ? 'Etiqueta' : 'Ficha técnica');
-            doc.href = label; doc.target = '_blank'; doc.rel = 'noopener noreferrer';
-            row.append(doc);
-          }
-          list.append(row);
-        });
-        section.append(list);
-      }
-      container.append(section);
-    });
-  }
-
-  const TABS = [
-    ['general', 'General'], ['sowing', 'Siembra'], ['growth', 'Desarrollo'],
-    ['harvest', 'Cosecha'], ['health', 'Sanidad'], ['products', 'Productos'], ['sources', 'Fuentes'],
-  ];
-
-  function renderTab(panel, reference) {
-    panel.replaceChildren();
-    const crop = cropCatalog(reference);
-    const allVarieties = varietiesFor(reference.cropId, reference.zoneId);
-    if (activeTab === 'general') {
-      addTabSection(panel, 'Nombre común', reference.crop);
-      addTabSection(panel, 'Nombre científico', reference.scientificName);
-      addTabSection(panel, 'Familia botánica', reference.botanicalFamily);
-      addTabSection(panel, 'Tipo de cultivo', reference.cropType);
-      addTabSection(panel, 'Variedades con referencia en esta zona', allVarieties, 'Solo existe referencia general del cultivo.');
-      addTabSection(panel, 'Zona agrícola de referencia', reference.zone + (reference.referenceYear ? ' · año ' + reference.referenceYear : ' · ventana recurrente anual'));
-      if (crop && crop.description) addTabSection(panel, 'Descripción del catálogo', crop.description);
-    } else if (activeTab === 'sowing') {
-      addTabSection(panel, 'Ventana referencial de siembra', formatWindow(reference, 'sowing'));
-      addTabSection(panel, 'Condiciones de establecimiento', reference.sowingConditions);
-      addTabSection(panel, 'Requerimientos relevantes', reference.requirements);
-      const density = crop && crop.density !== null && crop.density !== undefined && crop.densitySource
-        ? crop.density + ' ' + (crop.unit || 'kg') + '/ha · ' + crop.densitySource : '';
-      addTabSection(panel, 'Densidad de siembra verificada', density, 'Sin densidad verificada en el catálogo.');
-      addTabSection(panel, 'Profundidad de siembra', reference.sowingDepth);
-    } else if (activeTab === 'growth') {
-      addTabSection(panel, 'Duración referencial del ciclo', reference.cycleDays ? reference.cycleDays + ' días' : '');
-      addTabSection(panel, 'Etapas fenológicas', reference.phenologicalStages);
-      addTabSection(panel, 'Condiciones para el crecimiento', reference.growthConditions);
-      addTabSection(panel, 'Manejo agronómico general', reference.management);
-    } else if (activeTab === 'harvest') {
-      addTabSection(panel, 'Ventana de cosecha', formatWindow(reference, 'harvest'));
-      addTabSection(panel, 'Duración referencial del ciclo', reference.cycleDays ? reference.cycleDays + ' días' : '');
-      addTabSection(panel, 'Indicadores de madurez', reference.maturityIndicators);
-      addTabSection(panel, 'Consideraciones de cosecha', reference.harvestConsiderations);
-      if (reference.yieldTonHa) addTabSection(panel, 'Rendimiento referencial documentado', reference.yieldTonHa + ' ton/ha');
-      panel.append(element('p', 'calendar-disclaimer', 'La ventana estacional de cosecha no indica la madurez real del cultivo; confírmala con los indicadores observados en terreno.'));
-    } else if (activeTab === 'health') {
-      addTabSection(panel, 'Plagas relacionadas', reference.pests);
-      addTabSection(panel, 'Enfermedades frecuentes', reference.diseases);
-      addTabSection(panel, 'Malezas relevantes', reference.weeds);
-      const problems = (catalog.problemas || []).filter((item) => (item.cropIds || []).includes(String(reference.cropId)));
-      addTabSection(panel, 'Problemas documentados en el catálogo', problems.map((item) =>
-        (item.typeLabel ? item.typeLabel + ': ' : '') + item.name + (item.symptoms ? ' — ' + item.symptoms : '')), 'No hay problemas agrícolas asociados a este cultivo en el catálogo.');
-      addTabSection(panel, 'Manejo integrado documentado', reference.integratedManagement);
-    } else if (activeTab === 'products') {
-      renderProducts(panel, reference);
-    } else if (activeTab === 'sources') {
-      const source = element('div', 'calendar-source');
-      const rows = [
-        ['Institución', reference.sourceInstitution],
-        ['Documento', reference.sourceDocument],
-        ['Fecha de consulta', reference.sourceDate ? formatDate(reference.sourceDate) : ''],
-        ['Región o contexto', reference.zone + (reference.variety ? ' · variedad ' + reference.variety : ' · referencia general')],
-        ['Estado', verified(reference) ? 'Verificada con fuente' : 'Sin verificar'],
-      ];
-      const list = element('dl', 'calendar-source-list');
-      rows.forEach(([label, value]) => {
-        list.append(element('dt', '', label), element('dd', '', value || 'No registrado'));
-      });
-      source.append(list);
-      const url = safeUrl(reference.sourceUrl);
-      if (url) {
-        const link = element('a', 'text-link', 'Abrir documento original');
-        link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-        source.append(link);
-      }
-      panel.append(source);
+    if (verified) {
+      lines.push({ label: 'Fuente', value: [row.ref.sourceInstitution, row.ref.sourceDocument].filter(Boolean).join(' · ') });
     }
-  }
-
-  function showDetail(reference) {
-    detail.replaceChildren();
-    if (!reference) {
-      detail.append(element('h2', '', 'Ficha agronómica'));
-      detail.append(element('p', 'muted', references.length
-        ? 'Selecciona un cultivo y una zona con una referencia verificada para ver su ficha.'
-        : 'No hay referencias verificadas cargadas. La ficha se completará cuando el administrador registre fuentes oficiales.'));
-      return;
-    }
-    selectedReferenceId = reference.id;
-    const header = element('div', 'cal-detail-head');
-    header.append(element('h2', '', reference.crop + (reference.variety ? ' · ' + reference.variety : '')));
-    header.append(element('p', 'calendar-scientific', [reference.scientificName, reference.zone].filter(Boolean).join(' · ')));
-    detail.append(header);
-    const metrics = element('div', 'cal-metrics');
-    [['Siembra', formatWindow(reference, 'sowing')], ['Cosecha', formatWindow(reference, 'harvest')],
-      ['Ciclo', reference.cycleDays ? reference.cycleDays + ' días' : 'No documentado']].forEach(([label, value]) => {
-      const metric = element('div', 'metric');
-      metric.append(element('span', '', label), element('strong', '', value));
-      metrics.append(metric);
-    });
-    detail.append(metrics);
-    if (crossesYear(reference)) {
-      detail.append(element('p', 'calendar-cross-year', 'Ciclo entre años: la cosecha de una siembra de ' + yearFilter.value + ' ocurre en ' + (Number(yearFilter.value) + 1) + '.'));
-    }
-    const tabList = element('div', 'cal-tabs');
-    tabList.setAttribute('role', 'tablist');
-    const panel = element('div', 'cal-tab-panel');
-    panel.setAttribute('role', 'tabpanel');
-    panel.id = 'cal-tab-panel';
-    TABS.forEach(([key, label]) => {
-      const button = element('button', 'cal-tab' + (key === activeTab ? ' is-active' : ''), label);
-      button.type = 'button';
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', String(key === activeTab));
-      button.setAttribute('aria-controls', 'cal-tab-panel');
-      button.addEventListener('click', () => {
-        activeTab = key;
-        tabList.querySelectorAll('.cal-tab').forEach((item) => {
-          const selected = item === button;
-          item.classList.toggle('is-active', selected);
-          item.setAttribute('aria-selected', String(selected));
-        });
-        renderTab(panel, reference);
-      });
-      tabList.append(button);
-    });
-    detail.append(tabList, panel);
-    renderTab(panel, reference);
-    detail.append(element('p', 'calendar-disclaimer', 'Información orientativa de la fuente indicada; no evalúa suelo, clima ni condiciones observadas en tu predio.'));
-    table.querySelectorAll('tbody tr[data-reference-id]').forEach((row) => {
-      row.classList.toggle('is-selected', row.dataset.referenceId === String(reference.id));
-    });
-  }
-
-  function render() {
-    const rows = visibleReferences();
-    const year = Number(yearFilter.value);
-    table.replaceChildren();
-    const thead = element('thead');
-    const header = element('tr');
-    header.append(element('th', '', 'Cultivo / variedad'));
-    months.forEach((month) => header.append(element('th', '', month)));
-    thead.append(header);
-    table.append(thead);
-    const tbody = element('tbody');
-    rows.forEach((reference) => {
-      const row = element('tr');
-      row.dataset.referenceId = String(reference.id);
-      const labelCell = element('th');
-      const button = element('button', 'calendar-row-button', reference.crop + (reference.variety ? ' · ' + reference.variety : ' · general'));
-      button.type = 'button';
-      button.addEventListener('click', () => showDetail(reference));
-      labelCell.append(button);
-      if (reference.referenceYear) labelCell.append(element('small', 'cal-row-year', 'Año ' + reference.referenceYear));
-      row.append(labelCell);
-      const wraps = crossesYear(reference);
-      months.forEach((month, index) => {
-        const cell = element('td');
-        const key = phase(reference, index);
-        const marker = element('span', 'cell ' + key);
-        let title = month + ': ' + phaseLabels[key];
-        if (wraps && key === 'harvest' && reference.harvestStartMonth < reference.sowingStartMonth) {
-          marker.classList.add('next-year');
-          title += ' (corresponde a siembras del año anterior o continúa al año siguiente)';
-        }
-        marker.title = title;
-        marker.setAttribute('aria-label', title);
-        cell.append(marker);
-        row.append(cell);
-      });
-      tbody.append(row);
-    });
-
-    const plot = selectedPlot();
-    realNote.hidden = true;
-    if (plot) {
-      const dates = plotDates(plot);
-      const row = element('tr', 'cal-real-row');
-      const labelCell = element('th');
-      labelCell.append(element('strong', '', 'Tu registro · ' + plot.name));
-      labelCell.append(element('small', 'cal-row-year', (dates.crop || 'Sin cultivo') + (dates.season ? ' · ' + dates.season : '')));
-      row.append(labelCell);
-      months.forEach((month, index) => {
-        const cell = element('td');
-        const key = realPhase(dates, index, year);
-        const marker = element('span', 'cell real-cell ' + (key || 'none'));
-        marker.title = month + ': ' + ({ 'real-sow': 'Siembra registrada', 'real-grow': 'Cultivo en terreno (registro)', 'real-harvest': 'Cosecha prevista registrada' }[key] || 'Sin registro');
-        cell.append(marker);
-        row.append(cell);
-      });
-      tbody.append(row);
-      realNote.replaceChildren(
-        element('strong', '', 'Datos registrados por ti (no provienen del calendario): '),
-        document.createTextNode((dates.crop || 'Sin cultivo asignado') + (dates.variety ? ' · ' + dates.variety : '') +
-          ' · siembra ' + formatDate(dates.sowing) + ' · cosecha prevista ' + formatDate(dates.harvest) +
-          (dates.status ? ' · ' + dates.status : '') + '.'),
-      );
-      if (!dates.sowing && !dates.harvest) {
-        realNote.append(element('span', 'muted', ' Aún no registras fechas para este potrero; puedes hacerlo con el evaluador de abajo.'));
-      }
-      realNote.hidden = false;
-    }
-    table.append(tbody);
-    empty.hidden = rows.length > 0;
-    empty.replaceChildren(element('p', '', references.length
-      ? 'No hay referencias verificadas para esta combinación de zona, cultivo y variedad. Las ventanas solo se muestran cuando tienen fuente verificada.'
-      : 'Aún no hay referencias agronómicas verificadas para ' + yearFilter.value + '. No se muestran ventanas de demostración como si fueran datos reales.'));
-    yearNote.textContent = 'Año de referencia: ' + yearFilter.value + '. Las referencias de un año específico tienen prioridad; las ventanas sin año son recurrentes y no representan un calendario registrado por ti.';
-    const keep = rows.find((reference) => reference.id === selectedReferenceId);
-    showDetail(keep || rows[0] || null);
-    syncUrl();
-  }
-
-  function syncUrl() {
-    const params = new URLSearchParams(window.location.search);
-    [['zone', zoneFilter.value], ['crop', cropFilter.value], ['variety', varietyFilter.value], ['year', yearFilter.value],
-      ['potrero', plotFilter ? plotFilter.value : '']].forEach(([key, value]) => {
-      if (value) params.set(key, value); else params.delete(key);
-    });
-    window.history.replaceState(null, '', window.location.pathname + '?' + params.toString());
-  }
-
-  // ----- Evaluadores -----
-  const savePanel = document.getElementById('calendar-save');
-  const savePlot = document.getElementById('save-plot');
-  const saveSowing = document.getElementById('save-sowing');
-  const saveHarvest = document.getElementById('save-harvest');
-  const saveStatus = document.getElementById('save-status');
-  const saveContext = document.getElementById('save-context');
-  let lastEvaluation = null;
-
-  function showEvaluationResult(container, result, isError) {
-    container.replaceChildren();
-    container.hidden = false;
-    container.className = 'evaluation-result' + (isError ? ' is-error' : ' result-' + result.status);
-    if (isError) {
-      container.append(element('p', '', result));
-      return;
-    }
-    container.append(element('strong', 'evaluation-status status-' + result.status, result.status_label));
-    container.append(element('p', '', result.explanation));
-    const facts = element('dl', 'evaluation-facts');
-    const addFact = (label, value) => { if (value !== null && value !== undefined && value !== '') facts.append(element('dt', '', label), element('dd', '', value)); };
-    if (result.sowing_date) addFact('Fecha de siembra', formatDate(result.sowing_date));
-    addFact(result.sowing_date ? 'Fecha de cosecha propuesta' : 'Fecha propuesta', formatDate(result.proposed_date));
-    if (result.elapsed_days !== undefined && result.elapsed_days !== null) addFact('Días previstos', result.elapsed_days + ' días');
-    if (result.sowing_date) addFact('Duración referencial', result.expected_cycle_days ? result.expected_cycle_days + ' días' : 'No documentada');
-    if (result.cycle_difference_days !== undefined && result.cycle_difference_days !== null) {
-      addFact('Diferencia con el ciclo', (result.cycle_difference_days > 0 ? '+' : '') + result.cycle_difference_days + ' días');
-    }
-    if (result.reference_context) {
-      addFact('Referencia aplicada', result.reference_context.crop + ' · ' + result.reference_context.zone + ' · ' + result.reference_context.variety +
-        (result.reference_context.year ? ' · año ' + result.reference_context.year : ' · ventana recurrente'));
-    }
-    container.append(facts);
-    if (result.source) {
-      const source = element('p', 'evaluation-source');
-      source.append(document.createTextNode('Fuente: ' + result.source.institution + ' · ' + result.source.document + ' · consultada ' + formatDate(result.source.consulted_at) + ' · '));
-      const url = safeUrl(result.source.url);
-      if (url) {
-        const link = element('a', '', 'ver documento');
-        link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-        source.append(link);
-      }
-      container.append(source);
-    } else {
-      container.append(element('p', 'evaluation-source', 'Fuente: no hay una referencia verificada aplicable.'));
-    }
-    container.append(element('p', 'evaluation-limits', 'Factores no evaluados: ' + result.factors_not_evaluated.join('; ') + '.'));
-    container.append(element('p', 'calendar-disclaimer', result.disclaimer));
-  }
-
-  function populateSavePlots(preferred) {
-    if (!savePlot) return;
-    savePlot.replaceChildren(new Option('Selecciona un potrero', ''));
-    plots.forEach((plot) => savePlot.add(new Option(plot.farm + ' · ' + plot.name + (plot.crop ? ' · ' + plot.crop : ''), String(plot.id))));
-    if (preferred) savePlot.value = String(preferred);
-  }
-
-  function refreshSaveMode() {
-    if (!savePanel || !lastEvaluation) return;
-    const plot = plots.find((item) => String(item.id) === savePlot.value);
-    const season = plotSeason(plot);
-    const sameCrop = Boolean(season && String(season.cropId) === String(lastEvaluation.cropId));
-    const updateRadio = savePanel.querySelector('[name="save-mode"][value="update_dates"]');
-    const newRadio = savePanel.querySelector('[name="save-mode"][value="new"]');
-    updateRadio.disabled = !sameCrop;
-    if (!sameCrop) newRadio.checked = true;
-    saveContext.textContent = !plot ? 'Selecciona el potrero donde registrar las fechas.'
-      : sameCrop
-        ? 'Temporada actual: ' + season.crop + (season.season ? ' · ' + season.season : '') + ' (' + season.statusLabel + ').'
-        : season
-          ? 'La temporada actual del potrero es de ' + season.crop + '. Se creará una temporada nueva de ' + lastEvaluation.cropName + ' y la anterior se conservará en el historial.'
-          : 'El potrero aún no tiene temporadas. Se creará la primera temporada de ' + lastEvaluation.cropName + '.';
-  }
-
-  function openSavePanel(form, data) {
-    if (!savePanel || !plots.length) return;
-    const crop = form.elements.crop_id;
-    lastEvaluation = {
-      cropId: data.get('crop_id'),
-      cropName: crop.options[crop.selectedIndex] ? crop.options[crop.selectedIndex].text : '',
-      variety: data.get('variety') || '',
-    };
-    const picker = document.getElementById('plot-picker');
-    populateSavePlots((picker && picker.value) || (plotFilter && plotFilter.value) || savePlot.value);
-    if (form.dataset.evaluation === 'sowing') {
-      saveSowing.value = data.get('proposed_date') || '';
-    } else {
-      saveSowing.value = data.get('sowing_date') || '';
-      saveHarvest.value = data.get('proposed_date') || '';
-    }
-    saveStatus.textContent = '';
-    savePanel.hidden = false;
-    refreshSaveMode();
-  }
-
-  async function postJson(url, payload, token) {
-    const response = await fetch(url, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token, Accept: 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!(response.headers.get('Content-Type') || '').includes('application/json')) {
-      throw new Error('Tu sesión expiró o el servidor no respondió. Recarga la página.');
-    }
-    const data = await response.json();
-    if (!response.ok || data.ok === false || data.error) throw new Error(data.error || 'No se pudo completar la acción.');
-    return data;
-  }
-
-  function csrfToken() {
-    const input = document.querySelector('[name=csrfmiddlewaretoken]');
-    return input ? input.value : '';
-  }
-
-  document.querySelectorAll('.calendar-evaluator').forEach((form) => {
-    form.elements.crop_id.addEventListener('change', () => updateEvaluatorVarieties(form));
-    form.elements.zone_id.addEventListener('change', () => updateEvaluatorVarieties(form));
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const output = form.querySelector('.evaluation-result');
-      const data = new FormData(form);
-      const payload = {
-        evaluation: form.dataset.evaluation,
-        crop_id: data.get('crop_id'),
-        zone_id: data.get('zone_id'),
-        variety: data.get('variety'),
-        proposed_date: data.get('proposed_date'),
-        sowing_date: data.get('sowing_date'),
-      };
-      const button = form.querySelector('button[type=submit]');
-      button.disabled = true;
-      try {
-        const response = await fetch(form.dataset.endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
-          body: JSON.stringify(payload),
-          credentials: 'same-origin',
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'No se pudo evaluar la fecha.');
-        showEvaluationResult(output, result, false);
-        openSavePanel(form, data);
-      } catch (error) {
-        showEvaluationResult(output, error.message || 'No se pudo conectar con el evaluador.', true);
-      } finally {
-        button.disabled = false;
-      }
-    });
+    window.AgroPdf.download(
+      'calendario-' + window.AgroPdf.slug(row.crop) + '.pdf',
+      'Calendario de siembra · ' + row.crop,
+      lines,
+      { badge: verified ? '' : 'Datos de demostración' }
+    );
   });
 
-  if (savePanel) {
-    savePlot.addEventListener('change', refreshSaveMode);
-    document.getElementById('save-dates').addEventListener('click', async () => {
-      const plot = plots.find((item) => String(item.id) === savePlot.value);
-      if (!plot || !lastEvaluation) {
-        saveStatus.textContent = 'Selecciona un potrero y evalúa una fecha primero.';
-        return;
-      }
-      if (!saveSowing.value && !saveHarvest.value) {
-        saveStatus.textContent = 'Indica al menos una fecha para registrar.';
-        return;
-      }
-      const mode = savePanel.querySelector('[name="save-mode"]:checked').value;
-      const season = plotSeason(plot);
-      const now = new Date();
-      const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
-      const button = document.getElementById('save-dates');
-      button.disabled = true;
-      saveStatus.textContent = 'Guardando…';
-      try {
-        const data = await postJson(plot.assignUrl, {
-          mode,
-          season_id: mode === 'update_dates' && season ? season.id : null,
-          crop_id: lastEvaluation.cropId,
-          variety: lastEvaluation.variety,
-          sowing_date: saveSowing.value || null,
-          harvest_date: saveHarvest.value || null,
-          status: mode === 'update_dates' && season ? season.status : (saveSowing.value && saveSowing.value <= today ? 'sown' : 'planned'),
-          notes: 'Fechas registradas desde el calendario agronómico.',
-        }, csrfToken());
-        const updated = data.plot;
-        plots = plots.map((item) => String(item.id) === String(plot.id) ? {
-          ...item,
-          crop: updated.crop,
-          cropId: updated.cropId,
-          variety: updated.variety,
-          sowingDate: updated.sowing,
-          harvestDate: updated.harvest,
-          seasons: updated.seasons,
-          status: updated.status,
-        } : item);
-        saveStatus.textContent = data.message;
-        if (plotFilter) plotFilter.value = String(plot.id);
-        render();
-        refreshSaveMode();
-      } catch (error) {
-        saveStatus.textContent = error.message;
-      } finally {
-        button.disabled = false;
-      }
-    });
-  }
-
-  // ----- Potreros -----
-  const plotPicker = document.getElementById('plot-picker');
-  if (plotPicker) {
-    const seasonPicker = document.getElementById('season-picker');
-    function applyPlot(plot, season) {
-      document.querySelectorAll('.calendar-evaluator').forEach((form) => {
-        const cropId = season ? season.cropId : plot.cropId;
-        const variety = season ? season.variety : plot.variety;
-        if (cropId) form.elements.crop_id.value = String(cropId);
-        if (plot.zoneId) form.elements.zone_id.value = String(plot.zoneId);
-        updateEvaluatorVarieties(form, variety || '');
-        const sowingDate = season ? season.sowingDate : plot.sowingDate;
-        const harvestDate = season ? season.harvestDate : plot.harvestDate;
-        if (form.dataset.evaluation === 'sowing' && sowingDate) form.elements.proposed_date.value = sowingDate;
-        if (form.dataset.evaluation === 'harvest') {
-          if (sowingDate) form.elements.sowing_date.value = sowingDate;
-          if (harvestDate) form.elements.proposed_date.value = harvestDate;
-        }
-      });
-    }
-    plotPicker.addEventListener('change', () => {
-      const plot = plots.find((item) => String(item.id) === plotPicker.value);
-      seasonPicker.replaceChildren(new Option('Usar datos actuales del potrero', ''));
-      if (!plot) { seasonPicker.disabled = true; return; }
-      (plot.seasons || []).forEach((season) => {
-        seasonPicker.add(new Option((season.season ? season.season + ' · ' : '') + season.crop +
-          (season.variety ? ' · ' + season.variety : '') + ' · ' + season.statusLabel, String(season.id)));
-      });
-      seasonPicker.disabled = false;
-      applyPlot(plot, null);
-      if (!plot.zoneId) {
-        document.querySelectorAll('.calendar-evaluator .evaluation-result').forEach((box) => {
-          box.hidden = false;
-          box.className = 'evaluation-result';
-          box.replaceChildren(element('p', '', 'El predio de este potrero no tiene zona agrícola asignada; selecciónala manualmente o edítala en el predio.'));
-        });
-      }
-    });
-    seasonPicker.addEventListener('change', () => {
-      const plot = plots.find((item) => String(item.id) === plotPicker.value);
-      if (!plot) return;
-      applyPlot(plot, (plot.seasons || []).find((item) => String(item.id) === seasonPicker.value) || null);
-    });
-  }
-
-  // ----- Filtros -----
-  cropFilter.addEventListener('change', () => { updateFilterVarieties(); render(); });
-  varietyFilter.addEventListener('change', render);
-  zoneFilter.addEventListener('change', () => { updateFilterVarieties(); render(); });
-  yearFilter.addEventListener('change', () => {
-    syncUrl();
-    // El año cambia qué referencias aplican: se consulta nuevamente al servidor.
-    document.getElementById('calendar-filters').submit();
-  });
-  if (plotFilter) {
-    plotFilter.addEventListener('change', () => {
-      const plot = selectedPlot();
-      if (plot) {
-        const dates = plotDates(plot);
-        const season = plotSeason(plot);
-        const cropId = season ? season.cropId : plot.cropId;
-        if (cropId) cropFilter.value = String(cropId);
-        if (plot.zoneId) zoneFilter.value = String(plot.zoneId);
-        updateFilterVarieties(dates.variety && varietiesFor(cropFilter.value, zoneFilter.value).includes(dates.variety) ? dates.variety : '*');
-      }
-      render();
-    });
-  }
-
-  updateFilterVarieties(varietyFilter.dataset.selected || '*');
-  populateSavePlots();
-  if (plotFilter && plotFilter.value) plotFilter.dispatchEvent(new Event('change'));
-  else render();
+  cropFilter.addEventListener('change', function () { render(false); });
+  zoneSelect.addEventListener('change', function () { render(false); });
+  yearSelect.addEventListener('change', function () { render(false); });
+  render(false);
 })();

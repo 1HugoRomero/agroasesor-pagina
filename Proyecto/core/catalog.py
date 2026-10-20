@@ -1,4 +1,176 @@
-from .models import Cultivo, Insumo, TipoInsumo, Zona, ReferenciaAgronomica, ProblemaAgricola
+import unicodedata
+
+from .models import (
+    Cultivo, Insumo, TipoInsumo, Zona, ReferenciaAgronomica, ProblemaAgricola, Potrero, TemporadaCultivo,
+)
+
+
+# Cultivos de referencia para la agricultura de la zona central de Chile, agrupados para que el
+# selector sea fácil de recorrer. Son solo nombres: no incluyen rendimientos, densidades ni dosis,
+# que deben salir de fuentes verificadas cargadas por el administrador.
+CROP_GROUPS = [
+    ('Cereales y granos', ['Maíz', 'Trigo', 'Avena', 'Cebada', 'Arroz']),
+    ('Leguminosas', ['Poroto', 'Lenteja', 'Garbanzo', 'Arveja', 'Haba']),
+    ('Hortalizas', ['Tomate', 'Cebolla', 'Lechuga', 'Zapallo', 'Zanahoria', 'Ajo', 'Pimentón', 'Repollo', 'Sandía', 'Melón', 'Alcachofa', 'Acelga', 'Espinaca', 'Brócoli', 'Coliflor', 'Cilantro', 'Pepino', 'Zapallo italiano']),
+    ('Tubérculos y raíces', ['Papa', 'Remolacha']),
+    ('Forrajes y praderas', ['Alfalfa', 'Trébol', 'Ballica']),
+    ('Frutales', ['Vid', 'Palto', 'Cerezo', 'Manzano', 'Nogal', 'Arándano', 'Olivo', 'Limonero', 'Naranjo', 'Kiwi', 'Durazno', 'Ciruelo', 'Damasco', 'Almendro', 'Mandarino', 'Frutilla']),
+    ('Cultivos industriales', ['Raps', 'Maravilla']),
+]
+OTHER_CROPS_GROUP = 'Otros cultivos'
+
+# Clave visual y nombre corto de cada grupo para los filtros del selector de cultivos (solo presentación).
+CROP_GROUP_META = {
+    'Cereales y granos': ('cereales', 'Cereales'),
+    'Leguminosas': ('leguminosas', 'Leguminosas'),
+    'Hortalizas': ('hortalizas', 'Hortalizas'),
+    'Tubérculos y raíces': ('tuberculos', 'Tubérculos'),
+    'Forrajes y praderas': ('forrajes', 'Forrajeros'),
+    'Frutales': ('frutales', 'Frutales'),
+    'Cultivos industriales': ('industriales', 'Industriales'),
+    OTHER_CROPS_GROUP: ('otros', 'Otros'),
+}
+# Orden en que se sugieren cultivos cuando la persona aún no tiene historial. Solo se usan los que existen en el catálogo.
+SUGGESTED_CROPS = ['Maíz', 'Trigo', 'Papa', 'Poroto', 'Tomate']
+MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+
+def _plain(text):
+    return unicodedata.normalize('NFKD', text or '').encode('ascii', 'ignore').decode().casefold().strip()
+
+
+_CROP_GROUP_BY_NAME = {_plain(name): group for group, names in CROP_GROUPS for name in names}
+
+
+def crop_group_name(name):
+    """Grupo de un cultivo por su nombre ("Maíz grano" cae en el mismo grupo que "Maíz")."""
+    key = _plain(name)
+    if key in _CROP_GROUP_BY_NAME:
+        return _CROP_GROUP_BY_NAME[key]
+    first_word = key.split()[0] if key else ''
+    return _CROP_GROUP_BY_NAME.get(first_word, OTHER_CROPS_GROUP)
+
+
+def grouped_crop_choices(crops, empty_label):
+    """Opciones agrupadas (optgroup) para un <select> de cultivos."""
+    buckets = {}
+    for crop in sorted(crops, key=lambda item: _plain(item.nombre)):
+        buckets.setdefault(crop_group_name(crop.nombre), []).append((crop.pk, crop.nombre))
+    choices = [('', empty_label)]
+    for group in [name for name, _ in CROP_GROUPS] + [OTHER_CROPS_GROUP]:
+        if group in buckets:
+            choices.append((group, buckets[group]))
+    return choices
+
+
+def _month_window(start_month, end_month):
+    def name(month):
+        return MESES_CORTOS[month - 1] if month and 1 <= month <= 12 else ''
+    start, end = name(start_month), name(end_month)
+    if not start:
+        return ''
+    return start if not end or end == start else f'{start}–{end}'
+
+
+def crop_picker_data(user):
+    """Datos de apoyo del selector visual de cultivos (solo lectura, sin cifras inventadas).
+
+    - frequent: cultivos que la persona ya usó en sus potreros; si aún no hay historial, algunos
+      cultivos del catálogo marcados como «sugeridos» (frequentBasis lo distingue).
+    - details: ventanas de siembra/cosecha y ciclo SOLO desde referencias verificadas con fuente.
+    - groups: clave y nombre corto de cada categoría para los filtros.
+    """
+    crops = list(Cultivo.objects.filter(activo=True))
+    by_plain = {_plain(crop.nombre): crop.pk for crop in crops}
+
+    usage = {}
+    for crop_id, created in TemporadaCultivo.objects.filter(
+        potrero__predio__propietario=user, cultivo__activo=True,
+    ).values_list('cultivo_id', 'creado'):
+        count, last = usage.get(crop_id, (0, 0))
+        usage[crop_id] = (count + 1, max(last, created.timestamp()))
+    for crop_id in Potrero.objects.filter(
+        predio__propietario=user, cultivo__isnull=False, cultivo__activo=True,
+    ).values_list('cultivo_id', flat=True):
+        usage.setdefault(crop_id, (1, 0))
+    names = {crop.pk: crop.nombre for crop in crops}
+    used = sorted(usage, key=lambda pk: (-usage[pk][0], -usage[pk][1], _plain(names.get(pk, ''))))[:5]
+    if used:
+        frequent, basis = [str(pk) for pk in used], 'used'
+    else:
+        frequent = [str(by_plain[_plain(name)]) for name in SUGGESTED_CROPS if _plain(name) in by_plain]
+        basis = 'suggested' if frequent else ''
+
+    details = {}
+    references = ReferenciaAgronomica.objects.filter(
+        estado=ReferenciaAgronomica.Estado.VERIFICADA, cultivo__activo=True, zona__activo=True,
+    ).select_related('zona').order_by('cultivo__nombre', 'zona__nombre', 'variedad')
+    for reference in references:
+        if not reference.tiene_fuente_verificada:
+            continue
+        item = details.setdefault(str(reference.cultivo_id), {'type': '', 'family': '', 'scientific': '', 'windows': []})
+        item['type'] = item['type'] or reference.tipo_cultivo
+        item['family'] = item['family'] or reference.familia_botanica
+        item['scientific'] = item['scientific'] or reference.nombre_cientifico
+        sowing = _month_window(reference.siembra_inicio_mes, reference.siembra_fin_mes)
+        harvest = _month_window(reference.cosecha_inicio_mes, reference.cosecha_fin_mes)
+        if (sowing or harvest or reference.duracion_ciclo_dias) and len(item['windows']) < 3:
+            item['windows'].append({
+                'zone': reference.zona.nombre,
+                'variety': reference.variedad,
+                'sowing': sowing,
+                'harvest': harvest,
+                'cycleDays': reference.duracion_ciclo_dias,
+                'source': reference.institucion_fuente,
+            })
+
+    return {
+        'frequent': frequent,
+        'frequentBasis': basis,
+        'groups': [
+            {'name': name, 'key': CROP_GROUP_META[name][0], 'short': CROP_GROUP_META[name][1]}
+            for name in [group for group, _ in CROP_GROUPS] + [OTHER_CROPS_GROUP]
+        ],
+        'details': details,
+    }
+
+
+def ensure_base_crops():
+    """Crea los cultivos base que falten (sin tocar los existentes). Devuelve cuántos creó."""
+    existing = {_plain(name) for name in Cultivo.objects.values_list('nombre', flat=True)}
+    created = 0
+    for group, names in CROP_GROUPS:
+        for name in names:
+            if _plain(name) in existing:
+                continue
+            Cultivo.objects.create(nombre=name, descripcion=group, activo=True)
+            created += 1
+    return created
+
+
+DEFAULT_ZONE_NAME = 'Melipilla'
+DEFAULT_ZONE_DESCRIPTION = 'Comuna de Melipilla, Región Metropolitana.'
+
+
+def default_zone():
+    """Zona activa por defecto (Melipilla), si ya existe en el catálogo. No escribe en la base de datos."""
+    zones = list(Zona.objects.filter(activo=True, nombre__icontains='melipilla').order_by('nombre'))
+    exact = [zone for zone in zones if _plain(zone.nombre) == _plain(DEFAULT_ZONE_NAME)]
+    return (exact or zones or [None])[0]
+
+
+def ensure_default_zone():
+    """Asegura la zona «Melipilla» (la zona de trabajo inicial del proyecto). Devuelve (zona, creada).
+
+    Es una etiqueta geográfica, no un dato agronómico: no trae ventanas de siembra, rendimientos ni dosis.
+    Si el administrador la desactivó a propósito, se respeta y no se vuelve a crear.
+    """
+    zone = default_zone()
+    if zone:
+        return zone, False
+    if Zona.objects.filter(nombre__iexact=DEFAULT_ZONE_NAME).exists():
+        return None, False
+    return Zona.objects.create(nombre=DEFAULT_ZONE_NAME, descripcion=DEFAULT_ZONE_DESCRIPTION, activo=True), True
 
 
 def _num(value):
@@ -100,6 +272,7 @@ def catalog_payload():
             {
                 'id': str(cultivo.pk),
                 'name': cultivo.nombre,
+                'group': crop_group_name(cultivo.nombre),
                 'description': cultivo.descripcion,
                 'yield': _num(cultivo.rendimiento_ton_ha),
                 'density': _num(cultivo.densidad_siembra),
@@ -234,3 +407,16 @@ def catalog_payload():
             for problem in problems
         ],
     }
+
+
+CATEGORIAS_INSUMO = ['Fertilizante', 'Herbicida', 'Fungicida', 'Insecticida', 'Acaricida', 'Otros', 'Semilla']
+
+
+def ensure_insumo_categories():
+    """Carga las categorías base de insumo (tabla maestra TipoInsumo). Se puede repetir sin duplicar."""
+    from .models import TipoInsumo
+    created = 0
+    for name in CATEGORIAS_INSUMO:
+        _obj, was_created = TipoInsumo.objects.update_or_create(nombre=name)
+        created += int(was_created)
+    return created

@@ -1,7 +1,9 @@
 import json
 import math
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
@@ -10,16 +12,18 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import JsonResponse
 from django.db import IntegrityError, transaction
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Prefetch, Q, Sum
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
+from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
-from .catalog import CATEGORY_LABELS, catalog_payload, category_key
+from .catalog import CATEGORY_LABELS, catalog_payload, category_key, default_zone, ensure_base_crops, CROP_GROUPS, crop_picker_data
 from .seasons import assign_crop, current_season, season_payload, update_current_dates, agricultural_season_for, record_form_crop_change
 from .agronomy import evaluate_harvest_date, evaluate_sowing_date, find_reference
+from .geometry import coordinates_from_geojson
 from .forms import UNIDADES_DOSIS, ActividadAgricolaForm, RegistroForm, PredioForm, PotreroForm, TemporadaCultivoForm
 from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Predio, PredioHistorial, Potrero, Cultivo, Insumo, Zona, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola
 
@@ -31,6 +35,230 @@ NAV_GROUPS = [
 
 def map_config():
     return {'tile_url':settings.MAP_TILE_URL, 'attribution':settings.MAP_TILE_ATTRIBUTION}
+
+
+PLAN_TOTAL = 3  # pasos de planificación que ya existen en los datos: cultivo, fecha de siembra y fecha de cosecha
+
+
+def _task_summary(user, today):
+    """Labores pendientes/vencidas por potrero y predio, y la próxima de cada potrero (solo lectura)."""
+    from django.utils.formats import date_format
+    plots, farms = {}, {}
+    pending = ActividadAgricola.objects.filter(
+        usuario=user, estado=ActividadAgricola.Estado.PENDIENTE, potrero__predio__propietario=user,
+    ).select_related('potrero').order_by('fecha_programada', 'pk')
+    for activity in pending:
+        overdue = activity.fecha_programada < today
+        plot = plots.setdefault(activity.potrero_id, {'pending':0, 'overdue':0, 'next':None})
+        farm = farms.setdefault(activity.potrero.predio_id, {'pending':0, 'overdue':0})
+        plot['pending'] += 1
+        farm['pending'] += 1
+        if overdue:
+            plot['overdue'] += 1
+            farm['overdue'] += 1
+        if plot['next'] is None:
+            plot['next'] = {
+                'label':activity.get_tipo_display(), 'type':activity.tipo,
+                'icon':ACTIVITY_ICONS.get(activity.tipo, 'clipboard-list'),
+                'date':date_format(activity.fecha_programada, 'j M'), 'overdue':overdue,
+            }
+    return plots, farms
+
+
+def _plot_ui(plot, farm, tasks):
+    done = int(bool(plot.cultivo_id)) + int(bool(plot.fecha_siembra)) + int(bool(plot.fecha_cosecha))
+    info = tasks.get(plot.pk, {})
+    plan_query = {'potrero':plot.pk}
+    if plot.cultivo_id:
+        plan_query['crop'] = plot.cultivo_id
+    if farm.zona_id:
+        plan_query['zone'] = farm.zona_id
+    edit_url = reverse('potrero_edit', kwargs={'predio_pk':farm.pk, 'pk':plot.pk})
+    # Acción principal del potrero según lo que le falta; con cultivo y siembra ya se puede calcular.
+    if not plot.cultivo_id:
+        primary = {'label':'Asignar cultivo', 'url':edit_url}
+    elif not plot.fecha_siembra:
+        primary = {'label':'Continuar planificación', 'url':edit_url}
+    else:
+        primary = {'label':'Calcular semillas', 'url':decision_url('semillas', plot)}
+    tool_actions = []
+    if plot.cultivo_id:
+        tool_actions = [
+            {'label':'Calcular semillas', 'url':decision_url('semillas', plot), 'icon':'sprout'},
+            {'label':'Calcular insumos', 'url':decision_url('insumos', plot), 'icon':'flask-conical'},
+            {'label':'Ver si alcanza', 'url':decision_url('alcanza', plot), 'icon':'warehouse'},
+        ]
+    return {
+        'primary':primary, 'tool_actions':tool_actions, 'edit_url':edit_url, 'can_calculate':bool(plot.cultivo_id and plot.fecha_siembra),
+        'status':plot_season_summary(plot)['status'],
+        'has_crop':bool(plot.cultivo_id), 'plan_done':done, 'plan_total':PLAN_TOTAL,
+        'plan_complete':done == PLAN_TOTAL, 'plan_steps':[bool(plot.cultivo_id), bool(plot.fecha_siembra), bool(plot.fecha_cosecha)],
+        'pending':info.get('pending', 0), 'overdue':info.get('overdue', 0), 'next':info.get('next'),
+        'task_url':reverse('actividad_create') + '?' + urlencode({'potrero':plot.pk}),
+        'plan_url':reverse('calendario') + '?' + urlencode(plan_query),
+    }
+
+
+def _farm_next_step(farm, plots, pending=0):
+    """Una única recomendación para el predio, según lo que ya tiene registrado (solo presentación)."""
+    plots = sorted(plots, key=lambda item: item.pk)
+    if not plots:
+        return {
+            'key':'potrero', 'title':'Crea tu primer potrero',
+            'text':'Divide tu predio en sectores o usa todo el predio como un solo potrero.',
+            'cta':'Agregar potrero', 'url':reverse('potrero_create', kwargs={'predio_pk':farm.pk}),
+        }
+    without_crop = next((plot for plot in plots if not plot.cultivo_id), None)
+    if without_crop:
+        return {
+            'key':'cultivo', 'title':f'Asigna un cultivo a «{without_crop.nombre}»',
+            'text':'Con el cultivo podrás planificar la siembra y usar las herramientas de cálculo.',
+            'cta':'Asignar cultivo',
+            'url':reverse('potrero_edit', kwargs={'predio_pk':farm.pk, 'pk':without_crop.pk}),
+        }
+    unplanned = next((plot for plot in plots if not (plot.fecha_siembra and plot.fecha_cosecha)), None)
+    if unplanned:
+        return {
+            'key':'planificacion', 'title':f'Define la planificación de «{unplanned.nombre}»',
+            'text':'Registra la fecha de siembra y la cosecha prevista.',
+            'cta':'Definir planificación',
+            'url':reverse('potrero_edit', kwargs={'predio_pk':farm.pk, 'pk':unplanned.pk}),
+        }
+    first = plots[0]
+    return {
+        'key':'decisiones', 'title':f'Calcula lo que necesitas para «{first.nombre}»',
+        'text':'Tu predio ya está planificado: calcula semillas e insumos, o revisa si te alcanza.' + ('' if pending else ' Después puedes programar tus labores.'),
+        'cta':'Calcular semillas', 'url':decision_url('semillas', first),
+    }
+
+
+def _farm_ui(farm, plots, farm_tasks, plot_uis):
+    info = farm_tasks.get(farm.pk, {})
+    pending = info.get('pending', 0)
+    return {
+        'plot_count':len(plots), 'crop_count':len({plot.cultivo_id for plot in plots if plot.cultivo_id}),
+        'pending':pending, 'overdue':info.get('overdue', 0),
+        'all_planned':bool(plots) and all(plot_uis[plot.pk]['plan_complete'] for plot in plots),
+        'next_step':_farm_next_step(farm, plots, pending),
+    }
+
+
+ORIGIN_LABELS = {
+    'documented':'Dato documentado', 'catalog':'Dato de catálogo (sin respaldo completo)',
+    'adjusted':'Ajustado manualmente', 'simulation':'Simulación',
+}
+JOURNEY_PAGES = {'dashboard', 'predios', 'calendario', 'decisiones', 'reportes'}
+JOURNEY_HERE = {'predios': {'predio', 'potreros', 'cultivo'}, 'calendario': {'siembra'}, 'decisiones': {'decisiones'}, 'reportes': {'reporte'}}
+JOURNEY_NOTES = {
+    'calendario': 'Después de elegir cultivo, completa la fecha de siembra del potrero.',
+    'decisiones': 'Para calcular necesitas: potrero + cultivo + superficie + dosis (del catálogo o ingresada como simulación).',
+    'reportes': 'Los cálculos del Centro de decisiones quedan guardados y aparecen aquí.',
+}
+
+
+def decision_url(tool='semillas', plot=None):
+    """Enlace al Centro de decisiones con el potrero ya elegido (la herramienta y el cultivo se precargan)."""
+    query = {}
+    if tool in ('semillas', 'insumos'):
+        query['tipo'] = tool
+    elif tool in ('alcanza', 'cosecha', 'ficha'):
+        query['herramienta'] = tool
+    if plot is not None:
+        query['potrero'] = plot.pk if hasattr(plot, 'pk') else plot
+    return reverse('decisiones') + ('?' + urlencode(query) if query else '')
+
+
+def journey_payload(user, current):
+    """Ruta de trabajo del usuario: qué ya hizo y cuál es el siguiente paso (solo lectura, sin datos nuevos)."""
+    farms = list(Predio.objects.filter(propietario=user).order_by('pk'))
+    plots = list(Potrero.objects.filter(predio__propietario=user).select_related('cultivo', 'predio').order_by('pk'))
+    has_calculation = CalculoAgricola.objects.filter(usuario=user).exists()
+    farm_ids_with_plots = {plot.predio_id for plot in plots}
+    farm_without_plots = next((farm for farm in farms if farm.pk not in farm_ids_with_plots), None)
+    plot_without_crop = next((plot for plot in plots if not plot.cultivo_id), None)
+    plot_without_sowing = next((plot for plot in plots if plot.cultivo_id and not plot.fecha_siembra), None)
+    plot_with_crop = next((plot for plot in plots if plot.cultivo_id), None)
+
+    def action(label, url, primary=True, post=False):
+        return {'label': label, 'url': url, 'primary': primary, 'post': post}
+
+    # Estado 5: con cultivo y siembra planificada ya se pueden usar las herramientas de cálculo.
+    tools_actions = [
+        action('Calcular semillas', decision_url('semillas', plot_with_crop)),
+        action('Calcular insumos', decision_url('insumos', plot_with_crop), primary=False),
+        action('Ver si me alcanza', decision_url('alcanza', plot_with_crop), primary=False),
+        action('Consultar ficha de producto', decision_url('ficha', plot_with_crop), primary=False),
+    ]
+    split_url = farm_without_plots and reverse('potrero_create', kwargs={'predio_pk': farm_without_plots.pk})
+    potrero_actions = []
+    if farm_without_plots:
+        if farm_without_plots.geojson:
+            potrero_actions.append(action('Utilizar todo el predio', reverse('predio_usar_completo', kwargs={'pk': farm_without_plots.pk}), post=True))
+        potrero_actions.append(action('Dividir en potreros', split_url, primary=not farm_without_plots.geojson))
+    steps = [
+        {'key': 'predio', 'label': 'Predio', 'done': bool(farms), 'url': reverse('predios'),
+         'next': {'status': '', 'title': 'Comienza registrando tu predio',
+                  'text': 'Dibuja su perímetro en el mapa; después defines cómo trabajarlo.',
+                  'actions': [action('Registrar predio', reverse('predio_create'))]}},
+        {'key': 'potreros', 'label': 'Potreros', 'done': bool(plots) and not farm_without_plots, 'url': reverse('predios'),
+         'next': farm_without_plots and {
+             'status': 'Tu predio ya está registrado', 'title': '¿Cómo quieres trabajar este terreno?',
+             'text': f'«{farm_without_plots.nombre}»: los cálculos y la siembra se hacen por potrero: usa todo el predio como uno solo o divídelo en sectores.',
+             'actions': potrero_actions}},
+        {'key': 'cultivo', 'label': 'Cultivo', 'done': bool(plots) and not plot_without_crop, 'url': reverse('predios'),
+         'next': plot_without_crop and {
+             'status': 'Potrero listo', 'title': 'Selecciona qué quieres plantar',
+             'text': f'«{plot_without_crop.nombre}»: con el cultivo podrás planificar la siembra y usar las herramientas de cálculo.',
+             'actions': [action('Asignar cultivo', reverse('potrero_edit', kwargs={'predio_pk': plot_without_crop.predio_id, 'pk': plot_without_crop.pk}))]}},
+        {'key': 'siembra', 'label': 'Siembra', 'done': bool(plot_with_crop) and not plot_without_sowing, 'url': reverse('calendario'),
+         'next': plot_without_sowing and {
+             'status': 'Cultivo seleccionado', 'title': 'Planifica la siembra',
+             'text': f'{plot_without_sowing.cultivo.nombre} en «{plot_without_sowing.nombre}»: falta la fecha de siembra para dejar el potrero planificado.',
+             'actions': [action('Continuar planificación', reverse('potrero_edit', kwargs={'predio_pk': plot_without_sowing.predio_id, 'pk': plot_without_sowing.pk}))]}},
+        {'key': 'decisiones', 'label': 'Decisiones', 'done': has_calculation, 'url': reverse('decisiones'),
+         'next': {'status': 'Ya puedes utilizar las herramientas agrícolas' if plot_with_crop else '', 'title': 'Calcula cuánto llevar o si te alcanza',
+                  'text': 'Elige una herramienta; el potrero y el cultivo ya van cargados.' if plot_with_crop else 'Semillas, fertilizantes u otros insumos para tu potrero.',
+                  'actions': tools_actions if plot_with_crop else [action('Ir al Centro de decisiones', decision_url('semillas'))]}},
+        {'key': 'reporte', 'label': 'Reporte', 'done': False, 'url': reverse('reportes'),
+         'next': {'status': '', 'title': 'Revisa tus reportes y el historial',
+                  'text': 'Resumen del predio, cuaderno de campo y cálculos guardados.',
+                  'actions': [action('Ver reportes', reverse('reportes'))]}},
+    ]
+    # Un paso está hecho cuando no queda nada pendiente en él (todos los predios tienen potreros, todos los potreros
+    # tienen cultivo y fecha de siembra). El paso actual es el primero sin completar con una acción concreta por hacer.
+    current_key = None
+    for step in steps:
+        if step['key'] == 'reporte' or (not step['done'] and step['next']):
+            current_key = step['key']
+            break
+    here = JOURNEY_HERE.get(current, set())
+    items, current_step = [], None
+    for step in steps:
+        state = 'current' if step['key'] == current_key else ('done' if step['done'] else 'todo')
+        items.append({'key': step['key'], 'label': step['label'], 'url': step['url'], 'state': state, 'here': step['key'] in here})
+        if step['key'] == current_key:
+            current_step = dict(step['next'], cta=step['next']['actions'][0]['label'], url=step['next']['actions'][0]['url'])
+    return {
+        'steps': items, 'next': current_step, 'note': JOURNEY_NOTES.get(current, ''),
+        'done_count': sum(1 for step in steps if step['done']), 'total': len(steps) - 1,
+    }
+
+
+def farm_cards(user, predios=None):
+    """Predios con sus potreros y los indicadores de presentación que ya salen de los datos existentes."""
+    today = timezone.localdate()
+    task_plots, task_farms = _task_summary(user, today)
+    if predios is None:
+        predios = Predio.objects.filter(propietario=user).annotate(potreros_count=Count('potreros')).prefetch_related('potreros__cultivo', 'potreros__temporadas__cultivo')
+    cards = []
+    for farm in predios:
+        plots = list(farm.potreros.all())
+        plot_uis = {plot.pk:_plot_ui(plot, farm, task_plots) for plot in plots}
+        cards.append({
+            'predio':farm, 'ui':_farm_ui(farm, plots, task_farms, plot_uis),
+            'plots':[{'plot':plot, 'ui':plot_uis[plot.pk]} for plot in plots],
+        })
+    return cards
 
 
 def farm_payload(user):
@@ -73,18 +301,31 @@ def farm_payload(user):
         if total_farm_area
         else Decimal('0')
     )
+    task_plots, task_farms = _task_summary(user, timezone.localdate())
+    plots_by_farm = {}
+    for plot in sorted(plots, key=lambda item: item.pk):
+        plots_by_farm.setdefault(plot.predio_id, []).append(plot)
+    plot_ui = {plot.pk:_plot_ui(plot, plot.predio, task_plots) for plot in plots}
+    farm_ui = {farm.pk:_farm_ui(farm, plots_by_farm.get(farm.pk, []), task_farms, plot_ui) for farm in predios}
     return {
         'predios': [{'id':str(p.pk), 'name':p.nombre, 'location':p.ubicacion, 'area':float(p.superficie_ha),
+                     'cropCount':farm_ui[p.pk]['crop_count'], 'pendingTasks':farm_ui[p.pk]['pending'],
+                     'overdueTasks':farm_ui[p.pk]['overdue'], 'allPlanned':farm_ui[p.pk]['all_planned'],
+                     'nextStep':farm_ui[p.pk]['next_step'],
                      'zoneId':p.zona_id, 'zoneName':p.zona.nombre if p.zona_id else '',
                      'plotCount':p.potreros_count,
                      'updated':timezone.localtime(p.actualizado).strftime('%d/%m/%Y'),
                      'lat':p.latitud, 'lng':p.longitud, 'geojson':p.geojson,
                      'perimeterM':float(p.perimetro_m) if p.perimetro_m is not None else None,
                      'detailUrl':reverse('predio_detail', kwargs={'pk':p.pk}),
+                     'setupUrl':reverse('predio_detail', kwargs={'pk':p.pk}) + '?nuevo=1',
                      'editUrl':reverse('predio_edit', kwargs={'pk':p.pk}),
                      'potreroCreateUrl':reverse('potrero_create', kwargs={'predio_pk':p.pk})} for p in predios],
         'plots': [{**plot_season_summary(p), 'id':str(p.pk), 'predio':str(p.predio_id), 'farmName':p.predio.nombre,
                    'zoneId':p.predio.zona_id, 'zoneName':p.predio.zona.nombre if p.predio.zona_id else '',
+                   'planDone':plot_ui[p.pk]['plan_done'], 'planTotal':PLAN_TOTAL,
+                   'pendingTasks':plot_ui[p.pk]['pending'], 'overdueTasks':plot_ui[p.pk]['overdue'],
+                   'nextTask':plot_ui[p.pk]['next'], 'taskUrl':plot_ui[p.pk]['task_url'], 'planUrl':plot_ui[p.pk]['plan_url'], 'seedsUrl':decision_url('semillas', p),
                    'name':p.nombre, 'crop':p.cultivo.nombre if p.cultivo else '',
                    'variety':p.variedad, 'sowing':p.fecha_siembra.isoformat() if p.fecha_siembra else '',
                    'harvest':p.fecha_cosecha.isoformat() if p.fecha_cosecha else '', 'areaHa':float(p.superficie_ha),
@@ -153,6 +394,11 @@ def _page(request, template, current, extra=None):
         ).select_related('potrero', 'potrero__predio').order_by('fecha_programada', 'pk')[:5],
         'phase_a':current in {'dashboard','predios','calendario','admin_panel','actividades','decisiones','productos','reportes','busqueda'},
     }
+    if current in JOURNEY_PAGES:
+        context['journey'] = journey_payload(request.user, current)
+    if current in ('predios', 'decisiones'):
+        # Datos de apoyo del selector visual de cultivos (frecuentes y ventanas con fuente verificada).
+        context['crop_picker'] = crop_picker_data(request.user)
     context.update(extra)
     response = render(request, template, context)
     add_never_cache_headers(response)
@@ -243,6 +489,11 @@ def dashboard(request):
         'dashboard_plots':farm_data['plots'],
         'dashboard_activities':pending[:5],
         'pending_activity_count':pending.count(),
+        'dashboard_calculations':[
+            describe_calculation(item) for item in CalculoAgricola.objects.filter(
+                usuario=request.user, potrero__predio__propietario=request.user,
+            ).select_related('potrero__predio').order_by('-creado', '-pk')[:4]
+        ],
     })
 
 
@@ -494,7 +745,7 @@ def activity_create(request):
             return redirect(f"{reverse('actividad_create')}?potrero={activity.potrero_id}")
         return redirect('actividad_detail', pk=activity.pk)
     return _page(request, 'activity_form.html', 'actividades', _activity_form_context(
-        request, form, 'Planificar actividad agrícola',
+        request, form, 'Programar labor agrícola',
     ))
 
 
@@ -636,7 +887,7 @@ def activity_plan(request):
 def predios(request):
     predios_list = Predio.objects.filter(propietario=request.user).annotate(
         potreros_count=Count('potreros'),
-    ).prefetch_related('potreros__cultivo')
+    ).prefetch_related('potreros__cultivo', 'potreros__temporadas__cultivo')
     selected_predio_id = request.GET.get('predio', '')
     if selected_predio_id:
         selected_predio = get_object_or_404(
@@ -684,6 +935,7 @@ def predios(request):
     ).distinct().order_by('nombre')
     return _page(request, 'predios.html', 'predios', {
         'predios_list':predios_list,
+        'farm_cards':farm_cards(request.user, predios_list),
         'selected_predio':selected_predio,
         'selected_predio_id':str(selected_predio.pk) if selected_predio else '',
         'selected_potrero_id':selected_potrero_id,
@@ -697,6 +949,14 @@ def predios(request):
         },
         'maps_config':map_config(),
     })
+
+
+def _predio_next_step(predio, potreros):
+    """Una única recomendación contextual para la ficha del predio (solo presentación)."""
+    pending = ActividadAgricola.objects.filter(
+        usuario=predio.propietario, estado=ActividadAgricola.Estado.PENDIENTE, potrero__predio=predio,
+    ).count()
+    return _farm_next_step(predio, list(potreros), pending)
 
 
 @login_required
@@ -721,7 +981,17 @@ def predio_detail(request, pk):
         )
         historial = historial.filter(potrero=selected_potrero)
     superficie_utilizada = potreros.aggregate(total=Sum('superficie_ha'))['total'] or Decimal('0')
+    just_created = request.GET.get('nuevo') == '1' and not potreros
+    can_use_whole = bool(predio.geojson) and not potreros
+    farm_card = farm_cards(request.user, [predio])[0]
+    if just_created:
+        list(messages.get_messages(request))  # el aviso de éxito se muestra en la tarjeta de siguiente paso
     return _page(request, 'predio_detail.html', 'predios', {
+        'journey':None,  # la ficha ya trae su propio «Siguiente paso» por predio
+        'farm_card':farm_card,
+        'next_step':None if just_created else farm_card['ui']['next_step'],
+        'just_created':just_created,
+        'can_use_whole':can_use_whole,
         'predio':predio,
         'potreros':potreros,
         'historial':historial,
@@ -731,6 +1001,19 @@ def predio_detail(request, pk):
         'cultivos':Cultivo.objects.filter(potreros__predio=predio).distinct(),
         'maps_config':map_config(),
     })
+
+
+def _without_geometry(farm_data):
+    """Copia del resumen de predios sin trazados ni coordenadas.
+
+    El formulario de predio no necesita (ni debe recibir) las geometrías de otros predios o potreros:
+    la del predio en edición llega por el propio formulario.
+    """
+    return {
+        **farm_data,
+        'predios': [{**farm, 'geojson': None, 'lat': None, 'lng': None} for farm in farm_data['predios']],
+        'plots': [{**plot, 'geojson': None, 'coordinates': None, 'lat': None, 'lng': None} for plot in farm_data['plots']],
+    }
 
 
 @login_required
@@ -831,13 +1114,55 @@ def predio_form(request, pk=None):
                         superficie_anterior_ha=original['superficie_ha'] if area_changed else None,
                         superficie_nueva_ha=predio.superficie_ha if area_changed else None,
                     )
-            messages.success(request, 'El predio quedó guardado correctamente.')
+            messages.success(
+                request,
+                'El predio quedó guardado correctamente y ya aparece en Siembra.'
+                if original is None else 'El predio quedó guardado correctamente.',
+            )
+            if original is None:
+                return redirect(f"{reverse('predio_detail', args=[predio.pk])}?nuevo=1")
             return redirect('predio_detail', pk=predio.pk)
     return _page(request, 'terreno_form.html', 'predios', {
+        'journey':None,  # en un formulario se trabaja un solo paso: sin la ruta general
         'form':form, 'heading':'Editar predio' if pk else 'Registrar predio',
         'is_predio':True, 'maps_config':map_config(),
+        'farm_data':_without_geometry(farm_payload(request.user)),
         'registration_open':bool(request.method == 'POST' and form.errors),
     })
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def predio_usar_completo(request, pk):
+    """Crea un único potrero con la misma geometría del predio, sin pedir dibujar otra vez."""
+    predio = get_object_or_404(Predio.objects.select_for_update(), pk=pk, propietario=request.user)
+    if predio.potreros.exists():
+        messages.info(request, 'Este predio ya tiene potreros. Puedes agregar más desde esta ficha.')
+        return redirect('predio_detail', pk=predio.pk)
+    if not predio.geojson:
+        messages.error(request, 'Este predio no tiene un perímetro dibujado. Usa «Dividir mi predio» para registrar sus potreros.')
+        return redirect('predio_detail', pk=predio.pk)
+    name = ' '.join((request.POST.get('nombre') or '').split())[:150] or 'Potrero principal'
+    potrero = Potrero(
+        predio=predio, nombre=name, superficie_ha=predio.superficie_ha,
+        latitud=predio.latitud, longitud=predio.longitud,
+        perimetro=[list(point) for point in coordinates_from_geojson(predio.geojson)],
+    )
+    try:
+        potrero.full_clean()
+    except ValidationError as exc:
+        messages.error(request, 'No se pudo crear el potrero: ' + ' '.join(exc.messages))
+        return redirect('predio_detail', pk=predio.pk)
+    potrero.save()
+    PredioHistorial.objects.create(
+        predio=predio, potrero=potrero, usuario=request.user,
+        accion=PredioHistorial.Accion.POTRERO_CREADO,
+        resumen=f'Se creó el potrero «{potrero.nombre}» usando todo el predio ({potrero.superficie_ha} ha).',
+        geometria_nueva=potrero.geojson, superficie_nueva_ha=potrero.superficie_ha,
+    )
+    messages.success(request, f'Listo: «{potrero.nombre}» usa todo tu predio. Ahora indica qué cultivas aquí.')
+    return redirect('potrero_edit', predio_pk=predio.pk, pk=potrero.pk)
 
 
 @login_required
@@ -931,9 +1256,14 @@ def potrero_form(request, predio_pk, pk=None):
                     superficie_anterior_ha=original['superficie_ha'],
                     superficie_nueva_ha=current['superficie_ha'],
                 )
-        messages.success(request, 'Potrero, cultivo y ubicación guardados en la base de datos.')
+        messages.success(
+            request,
+            'Potrero, cultivo y ubicación guardados. Ya aparece en Siembra.'
+            if original is None else 'Potrero, cultivo y ubicación guardados en la base de datos.',
+        )
         return redirect('predio_detail', pk=predio.pk)
     return _page(request, 'terreno_form.html', 'predios', {
+        'journey':None,  # en un formulario se trabaja un solo paso: sin la ruta general
         'form':form, 'heading':'Editar potrero' if pk else 'Registrar potrero', 'predio':predio,
         'is_potrero':True, 'maps_config':map_config(),
         'potrero_superficie_disponible':available_area,
@@ -972,6 +1302,7 @@ def temporada_form(request, predio_pk, potrero_pk, pk=None):
         )
         return redirect('predio_detail', pk=predio.pk)
     return _page(request, 'temporada_form.html', 'predios', {
+        'journey':None,
         'form':form,
         'predio':predio,
         'potrero':potrero,
@@ -1112,39 +1443,57 @@ def calculate(request):
                 submitted_unit = unit.removesuffix('/ha').casefold()
                 if registered_unit != submitted_unit:
                     raise ValueError('La unidad ingresada no coincide con la unidad registrada del producto.')
-            if product and product.dosis_maxima_hectarea is not None:
-                if not product.dosis_con_fuente:
-                    raise ValueError('La dosis máxima del producto no está vigente y verificada con fuente.')
-                if dose > product.dosis_maxima_hectarea:
-                    raise ValueError(
-                        f'La dosis supera el máximo registrado de '
-                        f'{product.dosis_maxima_hectarea} {product.unidad_dosis_maxima}.'
-                    )
-            # Procedencia del dato: solo es "documentado" si coincide con una dosis o
-            # densidad verificada con fuente; en cualquier otro caso es una simulación.
+            # Dosis máxima documentada: superarla no impide calcular, pero se advierte con claridad.
+            above_max = bool(
+                product and product.dosis_maxima_hectarea is not None and product.dosis_con_fuente
+                and dose > product.dosis_maxima_hectarea
+            )
+            # Origen del dato, en cuatro niveles:
+            #   documented → coincide con un valor del catálogo que tiene fuente verificada;
+            #   catalog    → coincide con un valor del catálogo sin respaldo completo;
+            #   adjusted   → la persona cambió un valor que el catálogo sí tenía;
+            #   simulation → no había valor en el catálogo y se ingresó a mano.
             same_unit = lambda a, b: a.removesuffix('/ha').casefold() == b.removesuffix('/ha').casefold()
+            catalog_reference = None  # (valor, unidad, ¿con respaldo?, fuente, url, fecha)
+            if product and product.dosis_hectarea is not None and product.unidad_dosis:
+                catalog_reference = (
+                    product.dosis_hectarea, product.unidad_dosis, product.dosis_con_fuente,
+                    product.dosis_fuente or product.fuente_nombre, product.etiqueta_url or product.fuente_url,
+                    product.fecha_verificacion.isoformat() if product.fecha_verificacion else '',
+                )
+            elif not product and crop and calculation_type == 'semillas' and crop.densidad_siembra is not None:
+                backed = bool(crop.densidad_fuente and crop.densidad_url and crop.densidad_verificada)
+                catalog_reference = (
+                    crop.densidad_siembra, (crop.unidad_siembra or 'kg') + '/ha', backed,
+                    crop.densidad_fuente, crop.densidad_url,
+                    crop.densidad_verificada.isoformat() if crop.densidad_verificada else '',
+                )
+            origin = 'simulation'
             provenance = {'verified':False, 'source':'', 'source_url':'', 'source_date':''}
-            if product and product.dosis_con_fuente and dose == product.dosis_hectarea and same_unit(unit, product.unidad_dosis):
-                provenance = {
-                    'verified':True,
-                    'source':product.dosis_fuente or product.fuente_nombre,
-                    'source_url':product.etiqueta_url or product.fuente_url,
-                    'source_date':product.fecha_verificacion.isoformat() if product.fecha_verificacion else '',
-                }
-            elif (
-                not product and crop and calculation_type == 'semillas'
-                and crop.densidad_siembra is not None and crop.densidad_fuente and crop.densidad_url
-                and crop.densidad_verificada and dose == crop.densidad_siembra
-                and same_unit(unit, crop.unidad_siembra or 'kg')
-            ):
-                provenance = {
-                    'verified':True,
-                    'source':crop.densidad_fuente,
-                    'source_url':crop.densidad_url,
-                    'source_date':crop.densidad_verificada.isoformat(),
-                }
+            if catalog_reference:
+                if dose == catalog_reference[0] and same_unit(unit, catalog_reference[1]):
+                    origin = 'documented' if catalog_reference[2] else 'catalog'
+                    if catalog_reference[2]:
+                        provenance = {
+                            'verified':True, 'source':catalog_reference[3],
+                            'source_url':catalog_reference[4], 'source_date':catalog_reference[5],
+                        }
+                else:
+                    origin = 'adjusted'
+            max_reference = (
+                (float(product.dosis_maxima_hectarea), product.unidad_dosis_maxima or product.unidad_dosis)
+                if product and product.dosis_maxima_hectarea is not None and product.dosis_con_fuente else None
+            )
             provenance.update({
-                'simulation':not provenance['verified'],
+                'origin':origin,
+                'origin_label':ORIGIN_LABELS[origin],
+                'adjusted':origin == 'adjusted',
+                'catalog_dose':float(catalog_reference[0]) if origin == 'adjusted' else None,
+                'catalog_unit':catalog_reference[1] if origin == 'adjusted' else '',
+                'above_max':above_max,
+                'max_dose':max_reference[0] if above_max else None,
+                'max_unit':max_reference[1] if above_max else '',
+                'simulation':origin != 'documented',
                 'product':product.nombre if product else '',
                 'crop':crop.nombre if crop else '',
                 'plot':plot.nombre,
@@ -1355,7 +1704,10 @@ def calculate(request):
 
 
 def decisiones(request):
-    return _page(request, 'decisiones.html', 'decisiones')
+    tool = request.GET.get('herramienta') or ('ficha' if request.GET.get('modo') == 'ficha' else 'llevar')
+    if tool not in {'llevar', 'alcanza', 'cosecha', 'ficha'}:
+        tool = 'llevar'
+    return _page(request, 'decisiones.html', 'decisiones', {'initial_tool': tool})
 
 
 def calendar_reference_payload(reference):
@@ -1407,10 +1759,139 @@ def calendar_reference_payload(reference):
     }
 
 
+ACTIVITY_ICONS = {
+    'preparacion':'shovel', 'siembra':'sprout', 'fertilizacion':'flask-conical', 'riego':'droplets',
+    'monitoreo':'scan-search', 'control_fitosanitario':'shield-alert', 'cosecha':'wheat',
+}
+
+
+def _days_text(days):
+    return f'{days} día' if days == 1 else f'{days} días'
+
+
+def _sowing_next_steps(user, farms, today):
+    """Próximas labores del agricultor y qué le falta completar en sus potreros."""
+    pending = list(
+        ActividadAgricola.objects.filter(
+            usuario=user,
+            estado=ActividadAgricola.Estado.PENDIENTE,
+            potrero__predio__propietario=user,
+        ).select_related('potrero', 'potrero__predio').order_by('fecha_programada', 'pk')
+    )
+    upcoming = []
+    for activity in pending[:6]:
+        days = (activity.fecha_programada - today).days
+        if days < 0:
+            label, tone = f'Atrasada {_days_text(-days)}', 'late'
+        elif days == 0:
+            label, tone = 'Hoy', 'today'
+        elif days == 1:
+            label, tone = 'Mañana', 'soon'
+        else:
+            label, tone = f'En {_days_text(days)}', 'soon' if days <= 7 else 'later'
+        upcoming.append({
+            'activity':activity, 'label':label, 'tone':tone,
+            'icon':ACTIVITY_ICONS.get(activity.tipo, 'clipboard-list'),
+        })
+    overdue = sum(1 for activity in pending if activity.fecha_programada < today)
+    sowing_planned = {
+        activity.potrero_id for activity in pending if activity.tipo == ActividadAgricola.Tipo.SIEMBRA
+    }
+
+    tasks = []
+    for farm in farms:
+        plots = list(farm.potreros.all())
+        if not plots:
+            tasks.append({
+                'icon':'layout-grid', 'tone':'info',
+                'text':f'Agrega el primer potrero de «{farm.nombre}»',
+                'hint':'Sin potreros no se puede planificar la siembra.',
+                'url':reverse('potrero_create', kwargs={'predio_pk':farm.pk}), 'cta':'Agregar potrero',
+            })
+            continue
+        for plot in plots:
+            edit_url = reverse('potrero_edit', kwargs={'predio_pk':farm.pk, 'pk':plot.pk})
+            if not plot.cultivo_id:
+                tasks.append({
+                    'icon':'sprout', 'tone':'warn',
+                    'text':f'Asigna un cultivo a «{plot.nombre}»',
+                    'hint':f'{farm.nombre} · {number_format(plot.superficie_ha, decimal_pos=2)} ha',
+                    'url':edit_url, 'cta':'Asignar cultivo',
+                })
+            elif not plot.fecha_siembra:
+                tasks.append({
+                    'icon':'calendar-plus', 'tone':'warn',
+                    'text':f'Registra la fecha de siembra de «{plot.nombre}»',
+                    'hint':f'{plot.cultivo.nombre} · {farm.nombre}',
+                    'url':edit_url, 'cta':'Registrar fecha',
+                })
+            elif not plot.fecha_cosecha:
+                tasks.append({
+                    'icon':'wheat', 'tone':'info',
+                    'text':f'Agrega la cosecha prevista de «{plot.nombre}»',
+                    'hint':f'{plot.cultivo.nombre} · siembra {plot.fecha_siembra:%d/%m/%Y}',
+                    'url':edit_url, 'cta':'Agregar fecha',
+                })
+            if plot.fecha_siembra and plot.fecha_siembra >= today and plot.pk not in sowing_planned:
+                query = urlencode({'potrero':plot.pk, 'tipo':'siembra', 'fecha':plot.fecha_siembra.isoformat()})
+                tasks.append({
+                    'icon':'clipboard-list', 'tone':'action',
+                    'text':f'Programa la labor de siembra de «{plot.nombre}»',
+                    'hint':f'Siembra prevista el {plot.fecha_siembra:%d/%m/%Y}',
+                    'url':reverse('actividad_create') + '?' + query, 'cta':'Programar labor',
+                })
+    return {
+        'upcoming':upcoming, 'pending_total':len(pending), 'overdue':overdue,
+        'tasks':tasks[:8], 'tasks_total':len(tasks),
+    }
+
+
+def _sowing_timeline(farms, year, today):
+    """Barras siembra -> cosecha de los potreros del usuario para un año (posiciones en %)."""
+    import calendar as month_calendar
+
+    def position(day):
+        day = min(max(day, date(year, 1, 1)), date(year, 12, 31))
+        days_in_month = month_calendar.monthrange(year, day.month)[1]
+        return (day.month - 1 + (day.day - 1) / days_in_month) / 12 * 100
+
+    rows, undated, outside = [], 0, 0
+    for farm in farms:
+        for plot in farm.potreros.all():
+            sow, harvest = plot.fecha_siembra, plot.fecha_cosecha
+            if not (sow or harvest):
+                undated += 1
+                continue
+            start, end = sow or harvest, harvest or sow
+            if end < date(year, 1, 1) or start > date(year, 12, 31):
+                outside += 1
+                continue
+            left = position(start)
+            right = position(end) + (100 / 12 / 30 if end.year == year else 0)
+            width = max(right - left, 1.6)
+            if sow and harvest:
+                kind = 'range'
+            elif sow:
+                kind = 'sow'
+            else:
+                kind = 'harvest'
+            rows.append({
+                'farm':farm, 'plot':plot, 'kind':kind, 'start':start, 'end':end,
+                'left':f'{left:.2f}', 'width':f'{min(width, 100 - left):.2f}',
+                'cut_left':start.year < year, 'cut_right':end.year > year,
+                'crop':plot.cultivo.nombre if plot.cultivo_id else '',
+            })
+    rows.sort(key=lambda row: (row['start'], row['farm'].nombre, row['plot'].nombre))
+    return {
+        'rows':rows, 'undated':undated, 'outside':outside, 'year':year,
+        'today':f'{position(today):.2f}' if today.year == year else '',
+        'months':['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'],
+    }
+
+
 @login_required
 def calendario(request):
     zones = list(Zona.objects.filter(activo=True).order_by('nombre'))
-    configuration = ConfiguracionAgronomica.objects.get_or_create(pk=1)[0]
     current_year = timezone.localdate().year
     try:
         selected_year = int(request.GET.get('year', current_year))
@@ -1422,93 +1903,87 @@ def calendario(request):
     selected_zone = request.GET.get('zone', '')
     if selected_zone and not any(str(zone.pk) == selected_zone for zone in zones):
         selected_zone = ''
-    if not selected_zone and zones:
-        selected_zone = str(zones[0].pk)
     selected_crop = request.GET.get('crop', '')
-    if selected_crop and not Cultivo.objects.filter(pk=selected_crop, activo=True).exists():
+    if selected_crop and not (
+        selected_crop.isdigit()
+        and Cultivo.objects.filter(pk=selected_crop, activo=True).exists()
+    ):
         selected_crop = ''
     selected_variety = request.GET.get('variety', '*').strip()[:150]
-    if not selected_variety:
-        selected_variety = ''
 
-    # Se envían todas las referencias del año (todas las zonas y cultivos) para que
-    # los filtros de zona, cultivo y variedad actualicen la ficha sin recargar.
-    reference_query = ReferenciaAgronomica.objects.filter(
-        cultivo__activo=True,
-        zona__activo=True,
-    ).exclude(estado=ReferenciaAgronomica.Estado.RETIRADA).filter(
-        Q(anio_referencia__isnull=True) | Q(anio_referencia=selected_year),
-    )
-    matching_references = list(
-        reference_query.select_related('cultivo', 'zona').order_by(
+    # Se envían todas las referencias vigentes (todas las zonas, cultivos y años): el año,
+    # la zona y el cultivo se filtran en el navegador sin recargar la página.
+    references = list(
+        ReferenciaAgronomica.objects.filter(
+            cultivo__activo=True,
+            zona__activo=True,
+        ).exclude(
+            estado=ReferenciaAgronomica.Estado.RETIRADA,
+        ).select_related('cultivo', 'zona').order_by(
             'cultivo__nombre', 'zona__nombre', 'variedad', 'pk',
         )
     )
-    year_specific_keys = {
-        (reference.cultivo_id, reference.zona_id, reference.variedad.casefold())
-        for reference in matching_references
-        if reference.anio_referencia == selected_year
-    }
-    references = [
-        reference for reference in matching_references
-        if (
-            reference.anio_referencia == selected_year
-            or (
-                reference.anio_referencia is None
-                and (
-                    reference.cultivo_id,
-                    reference.zona_id,
-                    reference.variedad.casefold(),
-                ) not in year_specific_keys
-            )
-        )
-    ]
-    plots = Potrero.objects.filter(
-        predio__propietario=request.user,
-    ).select_related('predio__zona', 'cultivo').prefetch_related(
-        'temporadas__cultivo',
-    ).order_by('predio__nombre', 'nombre', 'pk')
-    variety_index = [
-        {'cropId':crop_id, 'zoneId':zone_id, 'variety':variety}
-        for crop_id, zone_id, variety in ReferenciaAgronomica.objects.filter(
-            estado=ReferenciaAgronomica.Estado.VERIFICADA,
-            cultivo__activo=True,
-            zona__activo=True,
-        ).exclude(variedad='').values_list('cultivo_id', 'zona_id', 'variedad').distinct()
-    ]
-    selected_plot = request.GET.get('potrero', '').strip()
+    if not selected_zone and zones:
+        # Sin zona en la URL se abre la del primer predio del usuario (si la tiene) y, si no,
+        # la zona con más ventanas registradas (a igualdad, la primera por nombre).
+        own_zone = Predio.objects.filter(
+            propietario=request.user,
+            zona__in=zones,
+        ).values_list('zona_id', flat=True).first()
+        preferred_zone = default_zone()
+        if own_zone:
+            selected_zone = str(own_zone)
+        elif preferred_zone and preferred_zone in zones:
+            selected_zone = str(preferred_zone.pk)  # Melipilla, la zona de trabajo por defecto
+        else:
+            windows = Counter(reference.zona_id for reference in references)
+            selected_zone = str(max(zones, key=lambda zone: windows[zone.pk]).pk)
+    # Registro de siembra: todos los predios del usuario con sus potreros, siempre leídos de la
+    # base de datos, para que cada predio/potrero recién creado aparezca aquí sin pasos extra.
+    sowing_farms = list(
+        Predio.objects.filter(propietario=request.user)
+        .select_related('zona')
+        .prefetch_related(Prefetch(
+            'potreros',
+            queryset=Potrero.objects.select_related('cultivo').prefetch_related('temporadas__cultivo').order_by('nombre', 'pk'),
+        ))
+        .order_by('nombre', 'pk')
+    )
+    try:
+        timeline_year = int(request.GET.get('anio', current_year))
+    except (TypeError, ValueError):
+        timeline_year = current_year
+    if not 2000 <= timeline_year <= 2100:
+        timeline_year = current_year
+    timeline = _sowing_timeline(sowing_farms, timeline_year, timezone.localdate())
+    next_steps = _sowing_next_steps(request.user, sowing_farms, timezone.localdate())
+    years = {current_year, current_year + 1, selected_year}
+    years.update(reference.anio_referencia for reference in references if reference.anio_referencia)
     return _page(request, 'calendario.html', 'calendario', {
-        'activities':_activities_for_user(request.user),
         'calendar_references': [
             calendar_reference_payload(reference) for reference in references
         ],
         'calendar_crops':Cultivo.objects.filter(activo=True).order_by('nombre'),
         'calendar_zones':zones,
-        'calendar_years':sorted(set(range(current_year - 1, current_year + 4)) | {selected_year}),
+        'calendar_years':sorted(years),
         'calendar_current_year':selected_year,
         'calendar_default_zone':int(selected_zone) if selected_zone else '',
         'calendar_selected_crop':selected_crop,
         'calendar_selected_variety':selected_variety or '*',
-        'calendar_margin_days':configuration.margen_ventana_dias,
-        'calendar_variety_index':variety_index,
-        'calendar_selected_plot':selected_plot,
-        'calendar_plots':[
-            {
-                **plot_season_summary(plot),
-                'assignUrl':reverse('potrero_assign_crop', kwargs={'pk':plot.pk}),
-                'id':plot.pk,
-                'name':plot.nombre,
-                'farm':plot.predio.nombre,
-                'cropId':plot.cultivo_id,
-                'crop':plot.cultivo.nombre if plot.cultivo_id else '',
-                'variety':plot.variedad,
-                'sowingDate':plot.fecha_siembra.isoformat() if plot.fecha_siembra else '',
-                'harvestDate':plot.fecha_cosecha.isoformat() if plot.fecha_cosecha else '',
-                'zoneId':plot.predio.zona_id,
-                'zone':plot.predio.zona.nombre if plot.predio.zona_id else '',
-            }
-            for plot in plots
-        ],
+        'sowing_farms':sowing_farms,
+        'farm_cards':farm_cards(request.user, sowing_farms),
+        'timeline':timeline,
+        'next_steps':next_steps,
+        'timeline_prev':timeline_year - 1,
+        'timeline_next':timeline_year + 1,
+        'sowing_plot_total':sum(len(farm.potreros.all()) for farm in sowing_farms),
+        'sowing_area_total':sum((farm.superficie_ha for farm in sowing_farms), Decimal('0')),
+        'sowing_planted_total':sum(
+            1 for farm in sowing_farms for plot in farm.potreros.all() if plot.cultivo_id and plot.fecha_siembra
+        ),
+        'calendar_has_unverified':any(
+            not reference.tiene_fuente_verificada for reference in references
+        ),
     })
 
 
@@ -1647,7 +2122,14 @@ def describe_calculation(calculation):
         value = f"{_fmt_number(data.get('production'))} ton"
         detail = f"{_fmt_number(data.get('rate'))} ton/ha × {_fmt_number(entry.get('area_ha'))} ha"
     source = data.get('source') or data.get('nutrientSource') or ''
-    if data.get('simulation'):
+    kind = data.get('origin')
+    if kind == 'adjusted' or (kind is None and data.get('adjusted')):
+        origin = f"Ajustado manualmente (catálogo: {_fmt_number(data.get('catalog_dose'), 3)} {data.get('catalog_unit', '')}) · simulación"
+    elif kind == 'catalog':
+        origin = 'Dato de catálogo (sin respaldo completo)'
+    elif kind == 'documented':
+        origin = f'Documentado: {source}' if source else 'Documentado'
+    elif data.get('simulation'):
         origin = 'Simulación (dato sin fuente verificada)'
     elif data.get('verified') or data.get('source_verified'):
         origin = f'Documentado: {source}' if source else 'Documentado'
@@ -1856,7 +2338,21 @@ def admin_panel(request):
         'Agricultores':get_user_model().objects.filter(is_staff=False).count(), 'Predios':Predio.objects.count(),
         'Potreros':Potrero.objects.count(), 'Cultivos':Cultivo.objects.count(),
         'Insumos vigentes':Insumo.objects.filter(vigente=True).count(), 'Zonas':Zona.objects.count(),
-    }})
+    }, 'base_crops_total':sum(len(names) for _group, names in CROP_GROUPS)})
+
+
+@login_required
+@require_POST
+def cultivos_base_cargar(request):
+    """Acción explícita del administrador: carga los cultivos base que falten."""
+    if not request.user.is_staff:
+        raise PermissionDenied
+    created = ensure_base_crops()
+    if created:
+        messages.success(request, f'Se cargaron {created} cultivos base. Ya aparecen al registrar potreros y cultivos.')
+    else:
+        messages.info(request, 'Los cultivos base ya estaban cargados; no se cambió nada.')
+    return redirect('admin_panel')
 
 
 def _json_body(request):

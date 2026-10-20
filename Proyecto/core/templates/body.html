@@ -8,12 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/body.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'css/body.css' %}?v=4">
+    <link rel="stylesheet" href="{% static 'css/cards.css' %}?v=1">
+    {% if crop_picker %}<link rel="stylesheet" href="{% static 'css/crop-picker.css' %}?v=1">{% endif %}
     {% if current == 'predios' %}
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.css">
     {% endif %}
     {% if current == 'decisiones' %}<link rel="stylesheet" href="{% static 'css/decision-flow.css' %}">{% endif %}
+    {% if journey %}<link rel="stylesheet" href="{% static 'css/journey.css' %}?v=2">{% endif %}
     {% block extra_css %}{% endblock %}
 </head>
 <body class="app-body">
@@ -41,28 +44,12 @@
                 {% endfor %}
             </nav>
             <nav class="sidebar-quick-links" id="sidebar-quick-links" aria-label="Accesos rápidos">
-                <p class="nav-label">ACCESOS RÁPIDOS</p>
-                <a class="nav-link" href="{% url 'predio_create' %}"><i data-lucide="plus"></i><span>Registrar predio</span></a>
-                <a class="nav-link" href="{% url 'predios' %}"><i data-lucide="map"></i><span>Abrir mapa</span></a>
-                <a class="nav-link{% if current == 'actividades' %} is-active{% endif %}" href="{% url 'actividad_create' %}"><i data-lucide="calendar-plus"></i><span>Planificar actividad</span></a>
-                <a class="nav-link" href="{% url 'decisiones' %}"><i data-lucide="sprout"></i><span>Centro de decisiones</span></a>
-                <a class="nav-link{% if current == 'decisiones' and request.GET.tipo == 'insumos' %} is-active{% endif %}" href="{% url 'decisiones' %}?herramienta=llevar&amp;tipo=insumos"><i data-lucide="calculator"></i><span>Calcular insumos</span></a>
-                <a class="nav-link{% if current == 'productos' %} is-active{% endif %}" href="{% url 'productos' %}"><i data-lucide="package-search"></i><span>Consultar productos</span></a>
-                <a class="nav-link{% if current == 'reportes' %} is-active{% endif %}" href="{% url 'reportes' %}"><i data-lucide="file-text"></i><span>Generar reporte</span></a>
+                <p class="nav-label">Accesos rápidos</p>
+                <a class="nav-link{% if request.resolver_match.url_name == 'predio_create' %} is-active{% endif %}" href="{% url 'predio_create' %}" title="Dibuja el perímetro y registra un nuevo predio"><i data-lucide="plus"></i><span>Registrar predio</span></a>
+                <a class="nav-link{% if current == 'decisiones' and request.GET.tipo == 'semillas' %} is-active{% endif %}" href="{% url 'decisiones' %}?herramienta=llevar&amp;tipo=semillas" title="Calcula cuánta semilla necesitas para un potrero"><i data-lucide="calculator"></i><span>Calcular semillas</span></a>
+                <a class="nav-link{% if current == 'decisiones' and request.GET.tipo == 'insumos' %} is-active{% endif %}" href="{% url 'decisiones' %}?herramienta=llevar&amp;tipo=insumos" title="Calcula la dosis de fertilizante o producto para un potrero"><i data-lucide="flask-conical"></i><span>Calcular insumos</span></a>
+                <a class="nav-link{% if current == 'productos' %} is-active{% endif %}" href="{% url 'productos' %}" title="Revisa fichas, dosis y advertencias de los productos del catálogo"><i data-lucide="package-search"></i><span>Consultar productos</span></a>
             </nav>
-            <div class="sidebar-guide">
-                <p>Así se usa</p>
-                <ol>
-                    <li>Elige el potrero</li>
-                    <li>Calcula la cantidad</li>
-                    <li>Revisa si alcanza y la cosecha</li>
-                </ol>
-            </div>
-            <div class="sidebar-bottom">
-                <span class="status-dot" aria-hidden="true"></span>
-                Prototipo demostrativo
-                <small>CAPSTONE 003D · Duoc UC</small>
-            </div>
         </aside>
         <div class="workspace">
             <header class="topbar">
@@ -111,6 +98,7 @@
                 <div class="page-container">
                 {% for message in messages %}<p class="callout" role="status">{{ message }}</p>{% endfor %}
                 {% if not phase_a %}<p class="callout">Módulo pendiente de consolidación. Verifica las dosis con una fuente técnica antes de utilizarlas.</p>{% endif %}
+                {% if journey %}{% include 'partials/journey.html' %}{% endif %}
                 {% block content %}{% endblock %}
                 </div>
             </main>
@@ -120,11 +108,14 @@
     {% csrf_token %}
     {{ catalog|json_script:"agro-catalog" }}
     {{ farm_data|json_script:"agro-farms" }}
+    {% if crop_picker %}{{ crop_picker|json_script:"agro-crop-picker" }}{% endif %}
     {{ request.user.pk|json_script:"agro-user-id" }}
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
     <script src="{% static 'js/data/mock.js' %}"></script>
     <script src="{% static 'js/services.js' %}"></script>
     <script src="{% static 'js/layout.js' %}"></script>
+    <script src="{% static 'js/row-menu.js' %}?v=1"></script>
+    {% if crop_picker %}<script src="{% static 'js/crop-picker.js' %}?v=1"></script>{% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

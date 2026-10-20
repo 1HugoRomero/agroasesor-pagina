@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from .models import ActividadAgricola, Predio, Potrero, Cultivo, Zona, TemporadaCultivo, Insumo
 from django.db import models
+from .catalog import default_zone, grouped_crop_choices
 from .geometry import polygon_area, coordinates_from_geojson
 
 
@@ -97,18 +98,29 @@ class PredioForm(forms.ModelForm):
             'superficie_ha', 'zona', 'latitud', 'longitud', 'geojson',
         ]
         labels = {
+            'nombre': 'Nombre del predio',
             'superficie_ha': 'Superficie total (ha)',
             'ubicacion': 'Referencia de ubicación',
             'descripcion': 'Descripción (opcional)',
             'observaciones': 'Observaciones (opcional)',
         }
+        # Superficie, latitud y longitud las calcula el mapa: viajan como campos ocultos, no se editan a mano.
         widgets = {
+            'nombre': forms.TextInput(attrs={'placeholder': 'Ej: Fundo Santa Rosa'}),
+            'ubicacion': forms.TextInput(attrs={'placeholder': 'Ej: Camino a Bollenar, parcela 12'}),
             'descripcion': forms.Textarea(attrs={'rows': 3}),
             'observaciones': forms.Textarea(attrs={'rows': 3}),
-            'superficie_ha': forms.NumberInput(attrs={'min':'0.0001','step':'0.0001','readonly':'readonly'}),
-            'latitud': forms.NumberInput(attrs={'min':-85,'max':85,'step':'any'}),
-            'longitud': forms.NumberInput(attrs={'min':-180,'max':180,'step':'any'}),
+            'superficie_ha': forms.HiddenInput(),
+            'latitud': forms.HiddenInput(),
+            'longitud': forms.HiddenInput(),
         }
+
+    # Descripción y observaciones se muestran como un solo campo; ambas columnas se conservan en la base.
+    notas = forms.CharField(
+        label='Notas del predio (opcional)',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Ej: Sector destinado a hortalizas, acceso por camino interior.'}),
+    )
 
     def __init__(self, *args, **kwargs):
         instance = kwargs.get('instance')
@@ -123,9 +135,43 @@ class PredioForm(forms.ModelForm):
                     kwargs['data'] = bound_data
         super().__init__(*args, **kwargs)
         self.fields['superficie_ha'].required = False
-        self.fields['zona'].queryset = Zona.objects.filter(activo=True)
+        # Melipilla va primero y queda preseleccionada en un predio nuevo: es la zona de trabajo del proyecto.
+        self.fields['zona'].queryset = Zona.objects.filter(activo=True).annotate(
+            _orden=models.Case(
+                models.When(nombre__icontains='melipilla', then=models.Value(0)),
+                default=models.Value(1), output_field=models.IntegerField(),
+            ),
+        ).order_by('_orden', 'nombre')
+        self.fields['zona'].label = 'Zona agrícola'
+        self.fields['zona'].empty_label = 'Selecciona una zona'
+        # La zona es obligatoria solo cuando el catálogo ya tiene zonas: así nunca se bloquea el registro.
+        has_zones = self.fields['zona'].queryset.exists()
+        legacy_without_zone = bool(instance and instance.pk and not instance.zona_id)
+        self.fields['zona'].required = has_zones and not legacy_without_zone
+        preferred = default_zone()
+        if not (instance and instance.pk) and preferred:
+            self.initial['zona'] = preferred.pk  # el valor inicial del modelo (vacío) pisaría al del campo
+        if has_zones:
+            self.fields['zona'].help_text = (
+                'Define las ventanas de siembra y las referencias que se usan para tu predio'
+                + (f'. Por defecto: {preferred.nombre}.' if preferred and not (instance and instance.pk) else '.')
+            )
+        else:
+            self.fields['zona'].help_text = 'Aún no hay zonas cargadas; puedes guardar el predio sin zona.'
+        if instance and instance.pk:
+            self.initial['notas'] = '\n\n'.join(
+                text.strip() for text in (instance.descripcion, instance.observaciones) if text and text.strip()
+            )
         if instance and instance.pk:
             self.fields['fecha_creacion'].initial = timezone.localtime(instance.creado).strftime('%d/%m/%Y %H:%M')
+
+    def _post_clean(self):
+        super()._post_clean()
+        # Si llegan las notas unificadas, se guardan en «descripcion» y «observaciones» queda vacía
+        # (el texto antiguo ya se mostró dentro de las notas, así que no se pierde nada).
+        if 'notas' in self.data:
+            self.instance.descripcion = self.cleaned_data.get('notas', '')
+            self.instance.observaciones = ''
 
     def clean(self):
         data = super().clean()
@@ -157,7 +203,11 @@ class PotreroForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['cultivo'].queryset = Cultivo.objects.filter(activo=True)
+        crops = Cultivo.objects.filter(activo=True)
+        self.fields['cultivo'].queryset = crops
+        self.fields['cultivo'].choices = grouped_crop_choices(crops, 'Sin cultivo por ahora')
+        self.fields['cultivo'].label = 'Cultivo'
+        self.fields['cultivo'].help_text = 'Qué se siembra en este potrero. Puedes dejarlo vacío y asignarlo después.'
         self.fields['superficie_ha'].required = False
 
     def clean(self):
@@ -198,8 +248,9 @@ class TemporadaCultivoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['cultivo'].queryset = Cultivo.objects.filter(activo=True).order_by('nombre')
-        self.fields['cultivo'].empty_label = 'Selecciona un cultivo'
+        crops = Cultivo.objects.filter(activo=True).order_by('nombre')
+        self.fields['cultivo'].queryset = crops
+        self.fields['cultivo'].choices = grouped_crop_choices(crops, 'Selecciona un cultivo')
         self.fields['temporada_agricola'].widget.attrs.update({'placeholder':'2026-2027', 'pattern':'[0-9]{4}-[0-9]{4}'})
         self.fields['fecha_siembra'].required = False
         self.fields['fecha_cosecha'].required = False

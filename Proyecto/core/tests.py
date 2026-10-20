@@ -3,6 +3,7 @@ import json
 import re
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.exceptions import ValidationError
@@ -151,7 +152,7 @@ class AuthenticationTests(TestCase):
             'perimetro_aceptado':'on',
         })
         farm = Predio.objects.get(nombre='Campo de María')
-        self.assertRedirects(response, f'/predios/{farm.pk}/')
+        self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         self.assertEqual(farm.propietario, registered_user)
 
         self.assertRedirects(self.client.post('/logout/'), '/login/')
@@ -226,6 +227,240 @@ class TerrainTests(TestCase):
         return {'nombre':'Potrero norte','cultivo':self.crop.pk,'variedad':'','superficie_ha':'2',
                 'fecha_siembra':'2026-10-02','fecha_cosecha':'2027-03-01','latitud':'','longitud':'','perimetro':'[]', **values}
 
+    def test_new_predio_and_potrero_appear_in_siembra(self):
+        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
+        self.assertNotContains(self.client.get('/calendario/'), 'Campo en siembra')
+        response = self.client.post('/predios/nuevo/', {
+            'nombre':'Campo en siembra','ubicacion':'Paine','superficie_ha':'5',
+            'geojson':json.dumps(feature),'perimetro_aceptado':'on',
+        }, follow=True)
+        self.assertContains(response, 'ya aparece en Siembra')
+        p = Predio.objects.get(nombre='Campo en siembra')
+        page = self.client.get('/calendario/')
+        self.assertContains(page, 'Campo en siembra')
+        self.assertContains(page, 'aún no tiene potreros')
+        response = self.client.post(f'/predios/{p.pk}/potreros/nuevo/', self.plot_data(nombre='Potrero siembra'), follow=True)
+        self.assertContains(response, 'Ya aparece en Siembra')
+        page = self.client.get('/calendario/?anio=2026')
+        self.assertContains(page, 'Potrero siembra')
+        self.assertContains(page, '02/10/2026')
+        self.assertContains(page, 'Mis fechas en el año')
+        self.assertContains(page, 'tl-bar kind-range')
+
+    def test_siembra_next_steps_guide_the_farmer(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        today = timezone.localdate()
+        page = self.client.get('/calendario/?anio=2026')
+        self.assertContains(page, 'Lo que sigue en tus potreros')
+        self.assertContains(page, 'Agrega el primer potrero de «Mi campo»')
+        self.assertContains(page, 'No tienes labores pendientes')
+        bare = Potrero.objects.create(predio=self.predio, nombre='Lote sin cultivo', superficie_ha=1)
+        nodate = Potrero.objects.create(predio=self.predio, nombre='Lote sin fecha', superficie_ha=1, cultivo=self.crop)
+        soon = Potrero.objects.create(
+            predio=self.predio, nombre='Lote por sembrar', superficie_ha=2, cultivo=self.crop,
+            fecha_siembra=today + timedelta(days=10), fecha_cosecha=today + timedelta(days=120),
+        )
+        page = self.client.get('/calendario/?anio=2026')
+        self.assertContains(page, 'Asigna un cultivo a «Lote sin cultivo»')
+        self.assertContains(page, 'Registra la fecha de siembra de «Lote sin fecha»')
+        self.assertContains(page, 'Programa la labor de siembra de «Lote por sembrar»')
+        self.assertContains(page, f'/actividades/nueva/?potrero={soon.pk}')
+        ActividadAgricola.objects.create(
+            usuario=self.user, potrero=soon, nombre='Sembrar lote',
+            tipo=ActividadAgricola.Tipo.SIEMBRA, fecha_programada=today - timedelta(days=2),
+        )
+        page = self.client.get('/calendario/?anio=2026')
+        self.assertContains(page, 'Sembrar lote')
+        self.assertContains(page, 'Atrasada 2 días')
+        self.assertContains(page, '1 atrasada')
+        self.assertNotContains(page, 'Programa la labor de siembra de «Lote por sembrar»')
+        self.assertNotContains(page, 'No tienes labores pendientes')
+
+    def test_siembra_next_steps_never_show_other_users_data(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        other_farm = Predio.objects.create(propietario=self.other, nombre='Campo ajeno', superficie_ha=5)
+        other_plot = Potrero.objects.create(predio=other_farm, nombre='Lote ajeno', superficie_ha=1)
+        ActividadAgricola.objects.create(
+            usuario=self.other, potrero=other_plot, nombre='Labor ajena',
+            tipo=ActividadAgricola.Tipo.RIEGO, fecha_programada=timezone.localdate() + timedelta(days=1),
+        )
+        page = self.client.get('/calendario/')
+        for text in ('Campo ajeno', 'Lote ajeno', 'Labor ajena'):
+            self.assertNotContains(page, text)
+
+    def test_siembra_hides_empty_reference_catalog_from_farmers(self):
+        page = self.client.get('/calendario/')
+        self.assertNotContains(page, 'Cuándo sembrar según el catálogo')
+        self.assertNotContains(page, 'cal-notice')
+        self.user.is_staff = True
+        self.user.save()
+        self.assertContains(self.client.get('/calendario/'), 'cal-notice')
+
+    def test_sidebar_quick_links_are_clear_and_all_work(self):
+        import re as regex
+        page = self.client.get('/calendario/')
+        html = page.content.decode()
+        block = html[html.index('id="sidebar-quick-links"'):]
+        block = block[:block.index('</nav>')]
+        links = regex.findall(r'href="([^"]+)"[^>]*>.*?<span>([^<]+)</span>', block)
+        labels = [label for _, label in links]
+        self.assertEqual(labels, ['Registrar predio', 'Calcular semillas', 'Calcular insumos', 'Consultar productos'])
+        self.assertEqual(len(set(href for href, _ in links)), len(links))
+        for href, label in links:
+            response = self.client.get(href.replace('&amp;', '&'))
+            self.assertEqual(response.status_code, 200, f'{label} ({href}) no abre')
+        nav = html[html.index('aria-label="Principal"'):html.index('id="sidebar-quick-links"')]
+        for label in ('Hoy', 'Mis predios y potreros', 'Siembra', 'Centro de decisiones', 'Reporte'):
+            self.assertIn(f'<span>{label}</span>', nav)
+        # «Labores» y «Programar labor» ya no están en el menú ni en los accesos rápidos (las rutas siguen existiendo).
+        self.assertNotIn('<span>Labores</span>', nav)
+        self.assertNotIn('Programar labor', block)
+        self.assertNotIn('clipboard-list', nav)
+        self.assertNotIn("href=\"/actividades/\"", html[html.index('<aside'):html.index('</aside>')])
+        self.assertNotIn("href=\"/actividades/nueva/\"", html[html.index('<aside'):html.index('</aside>')])
+        self.assertEqual(html[html.index('<aside'):html.index('</aside>')].count('class="nav-link is-active"'), 1)  # solo «Siembra»
+        for url in ('/actividades/', '/actividades/nueva/'):
+            page = self.client.get(url)
+            self.assertEqual(page.status_code, 200)  # la ruta sigue existiendo para los enlaces internos
+            body = page.content.decode()
+            primary = body[body.index('aria-label="Principal"'):body.index('id="sidebar-quick-links"')]
+            self.assertNotIn('is-active', primary)  # el menú ya no apunta a «Labores»; en esas páginas no queda nada marcado
+
+    def test_crop_selector_is_grouped_and_base_crops_load_safely(self):
+        from .catalog import crop_group_name, ensure_base_crops, CROP_GROUPS
+        self.assertEqual(crop_group_name('Maíz'), 'Cereales y granos')
+        self.assertEqual(crop_group_name('maiz grano'), 'Cereales y granos')
+        self.assertEqual(crop_group_name('Palto Hass'), 'Frutales')
+        self.assertEqual(crop_group_name('Quinoa'), 'Otros cultivos')
+        total = sum(len(names) for _group, names in CROP_GROUPS)
+        Cultivo.objects.create(nombre='Trigo', densidad_siembra=Decimal('160'))
+        created = ensure_base_crops()
+        self.assertEqual(created, total - 1)
+        self.assertEqual(ensure_base_crops(), 0)
+        self.assertEqual(Cultivo.objects.get(nombre='Trigo').densidad_siembra, Decimal('160'))
+        html = self.client.get(self.url).content.decode()
+        select = html[html.index('name="cultivo"'):]
+        select = select[:select.index('</select>')]
+        self.assertIn('Sin cultivo por ahora', select)
+        for group in ('Cereales y granos', 'Hortalizas', 'Frutales', 'Forrajes y praderas'):
+            self.assertIn(f'<optgroup label="{group}">', select)
+        self.assertLess(select.index('Cereales y granos'), select.index('Frutales'))
+        wheat = Cultivo.objects.get(nombre='Trigo')
+        response = self.client.post(self.url, self.plot_data(cultivo=wheat.pk))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Potrero.objects.get(nombre='Potrero norte').cultivo, wheat)
+
+    def test_only_staff_can_load_base_crops_from_admin_panel(self):
+        response = self.client.post('/panel-admin/cultivos-base/')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(Cultivo.objects.filter(nombre='Maíz').count(), 0)
+        self.user.is_staff = True
+        self.user.save()
+        self.assertContains(self.client.get('/panel-admin/'), 'Cargar cultivos base')
+        response = self.client.post('/panel-admin/cultivos-base/', follow=True)
+        self.assertContains(response, 'cultivos base')
+        self.assertTrue(Cultivo.objects.filter(nombre='Maíz').exists())
+        self.assertContains(self.client.post('/panel-admin/cultivos-base/', follow=True), 'ya estaban cargados')
+        self.assertEqual(self.client.get('/panel-admin/cultivos-base/').status_code, 405)
+
+    def test_register_forms_explain_predio_and_potrero(self):
+        predio_page = self.client.get('/predios/nuevo/')
+        self.assertNotContains(predio_page, 'terrain-guide')  # la pantalla de predio ya no repite la guía larga
+        self.assertContains(predio_page, 'Dibujar el contorno')
+        self.assertContains(predio_page, 'id="step-confirm"')
+        self.assertNotContains(predio_page, '1 de 3')
+        Cultivo.objects.all().delete()
+        potrero_page = self.client.get(self.url)
+        self.assertContains(potrero_page, 'Nombre y cultivo')
+        self.assertContains(potrero_page, 'terrain-guide')
+        self.assertContains(potrero_page, 'Cada lote del predio')
+        self.assertContains(potrero_page, 'Aparecerá en Siembra')
+        self.assertNotContains(potrero_page, 'id="step-confirm"')
+        self.assertContains(potrero_page, 'Aún no hay cultivos para elegir')
+
+    def test_perimeter_confirmation_lives_in_right_column_without_duplicate_actions(self):
+        html = self.client.get('/predios/nuevo/').content.decode()
+        for element_id in ('perimeter-confirmation', 'confirm-and-continue', 'return-to-edit', 'confirm-area',
+                           'confirm-perimeter', 'confirm-vertices', 'step-draw', 'step-confirm', 'step-data', 'step-save'):
+            self.assertEqual(html.count(f'id="{element_id}"'), 1, element_id)
+        self.assertEqual(html.count('Confirmar y continuar'), 1)
+        self.assertEqual(html.count('Volver a editar'), 1)
+        form_card = html.index('terrain-form-card')
+        self.assertGreater(html.index('id="perimeter-confirmation"'), form_card)
+        self.assertLess(html.index('id="registration-prompt"'), html.index('id="perimeter-confirmation"'))
+        self.assertLess(html.index('id="perimeter-confirmation"'), html.index('id="terrain-form"'))
+        self.assertContains(self.client.get('/predios/nuevo/'), 'Perímetro listo')
+        self.assertContains(self.client.get('/predios/nuevo/'), 'Primero delimita el predio')
+
+    def test_predio_panel_separates_user_data_from_calculated_measurement(self):
+        Zona.objects.create(nombre='Zona panel')
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertIn('Ej: Fundo Santa Rosa', html)
+        self.assertIn('Ej: Camino a Bollenar, parcela 12', html)
+        self.assertIn('Selecciona una zona', html)
+        self.assertIn('Notas del predio (opcional)', html)
+        for hidden in ('superficie_ha', 'latitud', 'longitud'):
+            self.assertIn(f'type="hidden" name="{hidden}"', html)
+        for gone in ('Superficie total (ha)', 'Fecha de creación', 'Se asignará automáticamente', 'Observaciones (opcional)', 'Descripción (opcional)'):
+            self.assertNotIn(gone, html)
+        self.assertIn('Medición confirmada', html)
+        self.assertIn('Ver coordenadas', html)
+        self.assertEqual(html.count('Guardar predio'), 1)
+        for element_id in ('map-summary-m2', 'map-summary-vertices', 'map-summary-lat', 'map-summary-lng'):
+            self.assertEqual(html.count(f'id="{element_id}"'), 1)
+
+    def test_zone_is_required_only_when_zones_exist_and_notes_are_unified(self):
+        from .forms import PredioForm
+        Zona.objects.all().delete()
+        self.assertFalse(PredioForm().fields['zona'].required)
+        zone = Zona.objects.create(nombre='Zona obligatoria')
+        self.assertTrue(PredioForm().fields['zona'].required)
+        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
+        data = {'nombre':'Predio notas','ubicacion':'Camino','geojson':json.dumps(feature),'perimetro_aceptado':'on',
+                'latitud':'-33.687','longitud':'-71.216','notas':'Sector de hortalizas'}
+        self.assertContains(self.client.post('/predios/nuevo/', data), 'Este campo es obligatorio')
+        self.assertFalse(Predio.objects.filter(nombre='Predio notas').exists())
+        response = self.client.post('/predios/nuevo/', {**data, 'zona':zone.pk})
+        farm = Predio.objects.get(nombre='Predio notas')
+        self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
+        self.assertEqual((farm.descripcion, farm.observaciones, farm.zona_id), ('Sector de hortalizas', '', zone.pk))
+        self.assertIsNotNone(farm.geojson)
+        self.assertGreater(farm.superficie_ha, 0)
+        self.assertEqual(farm.latitud, -33.687)
+
+    def test_edit_shows_old_description_and_observations_inside_notes(self):
+        from .forms import PredioForm
+        farm = Predio.objects.create(propietario=self.user, nombre='Con notas', ubicacion='X', superficie_ha=Decimal('1'),
+                                     descripcion='Descripción vieja', observaciones='Observación vieja')
+        notes = PredioForm(instance=farm).initial['notas']
+        self.assertIn('Descripción vieja', notes)
+        self.assertIn('Observación vieja', notes)
+
+    def test_new_predio_detail_offers_next_steps_only_once(self):
+        farm = Predio.objects.create(propietario=self.user, nombre='Recién creado', ubicacion='X', superficie_ha=Decimal('1'))
+        response = self.client.get(f'/predios/{farm.pk}/?nuevo=1')
+        self.assertContains(response, 'Predio registrado correctamente')
+        self.assertContains(response, 'Dividir mi predio')
+        self.assertContains(response, f'/predios/{farm.pk}/potreros/nuevo/')
+        self.assertContains(response, 'Lo haré más tarde')
+        self.assertNotContains(response, 'Utilizar todo el predio')  # sin perímetro dibujado no se puede copiar
+        self.assertNotContains(self.client.get(f'/predios/{farm.pk}/'), 'Predio registrado correctamente')
+        Potrero.objects.create(predio=farm, nombre='Lote', superficie_ha=Decimal('0.5'))
+        self.assertNotContains(self.client.get(f'/predios/{farm.pk}/?nuevo=1'), 'Predio registrado correctamente')
+
+    def test_activity_form_explains_product_section_instead_of_greying_it(self):
+        self.client.post(self.url, self.plot_data())
+        page = self.client.get('/actividades/nueva/')
+        self.assertContains(page, 'id="input-section" data-state="pending"')
+        self.assertContains(page, 'id="product-fields"')
+        self.assertContains(page, 'id="input-callout"')
+        self.assertContains(page, 'Producto y dosis')
+        self.assertNotContains(page, 'is-muted')
+
     def test_create_and_edit_predio(self):
         boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
         feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
@@ -236,7 +471,7 @@ class TerrainTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         p = Predio.objects.get(nombre='Campo nuevo')
-        self.assertRedirects(response, f'/predios/{p.pk}/')
+        self.assertRedirects(response, f'/predios/{p.pk}/?nuevo=1')
         self.assertEqual(p.propietario,self.user)
         self.assertRedirects(self.client.post(f'/predios/{p.pk}/editar/',{'nombre':'Actualizado','ubicacion':'Paine','superficie_ha':'6'}), f'/predios/{p.pk}/')
         p.refresh_from_db()
@@ -263,7 +498,7 @@ class TerrainTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         farm = Predio.objects.get(nombre='Campo delimitado')
-        self.assertRedirects(response, f'/predios/{farm.pk}/')
+        self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         self.assertEqual(farm.geojson, feature)
         self.assertEqual(
             farm.superficie_ha,
@@ -369,10 +604,12 @@ class TerrainTests(TestCase):
         self.client.post(self.url, self.plot_data())
         response = self.client.get(f'/predios/{self.predio.pk}/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Historial del terreno')
+        self.assertContains(response, 'Historial del predio')
         self.assertContains(response, 'Potrero creado')
         self.assertContains(response, 'Superficie utilizada')
-        self.assertContains(response, 'Planificación de siembra')
+        self.assertContains(response, 'Siguiente paso')
+        self.assertContains(response, 'Ver planificación')  # el potrero de este flujo ya tiene cultivo
+        self.assertNotContains(response, 'Planificación de siembra')
         self.assertContains(response, 'data-map-layer="normal"')
         self.assertContains(response, 'data-map-layer="satellite"')
         self.assertContains(response, 'predio-map-status')
@@ -491,13 +728,14 @@ class TerrainTests(TestCase):
         response = self.client.get('/predios/')
         self.assertContains(response, 'Selecciona un predio para registrar y administrar sus potreros.')
         self.assertContains(response, 'Este predio todavía no tiene potreros registrados.')
-        self.assertContains(response, 'Registrar primer potrero')
+        self.assertContains(response, 'Agregar potrero')
+        self.assertNotContains(response, 'Registrar primer potrero')
 
         new_user = User.objects.create_user('empty', email='empty@example.com', password=PASSWORD)
         self.client.force_login(new_user)
         empty_response = self.client.get('/predios/')
         self.assertContains(empty_response, 'No tienes predios registrados.')
-        self.assertContains(empty_response, 'Registrar predio')
+        self.assertContains(empty_response, 'Registrar primer predio')
         self.assertNotContains(empty_response, 'Aún no hay potreros ubicados en el mapa.')
 
     def test_polygon_area_is_calculated_on_server(self):
@@ -678,19 +916,26 @@ class TerrainTests(TestCase):
                 quick_links = response.content.decode().split(
                     'id="sidebar-quick-links"', 1
                 )[1].split('</nav>', 1)[0]
-                self.assertEqual(quick_links.count('<a '), 7)
+                # Los accesos rápidos son acciones distintas; predios, decisiones y reporte
+                # ya están en el menú principal y no se repiten. Labores ya no aparece en el sidebar.
+                self.assertEqual(quick_links.count('<a '), 4)
+                self.assertNotIn('href="/actividades/nueva/"', quick_links)
                 for href in (
-                    '/predios/nuevo/', '/predios/', '/actividades/nueva/',
-                    '/decisiones/', '/decisiones/?herramienta=llevar&amp;tipo=insumos', '/productos/',
-                    '/reportes/',
+                    '/predios/nuevo/',
+                    '/decisiones/?herramienta=llevar&amp;tipo=semillas',
+                    '/decisiones/?herramienta=llevar&amp;tipo=insumos', '/productos/',
                 ):
                     self.assertIn(f'href="{href}"', quick_links)
+                main_nav = response.content.decode().split('aria-label="Principal"', 1)[1].split('</nav>', 1)[0]
+                for href in ('/', '/predios/', '/calendario/', '/decisiones/', '/busqueda/', '/reportes/'):
+                    self.assertIn(f'href="{href}"', main_nav)
+                self.assertNotIn('href="/actividades/"', main_nav)
 
     def test_decision_center_tools_and_single_sidebar_link(self):
         response = self.client.get('/decisiones/')
         self.assertContains(response, 'Centro de decisiones')
-        self.assertContains(response, 'Calcula, planifica y optimiza los recursos de tu terreno')
-        for text in ('Cuánto llevar', 'Si alcanza', 'Cosecha', 'Ficha de insumo'):
+        self.assertContains(response, 'Calcula, planifica y optimiza los recursos de tus predios')
+        for text in ('Cuánto llevar', '¿Me alcanza?', 'Cosecha', 'Ficha de insumo'):
             self.assertContains(response, text)
         decision_group = next(items for label, items in response.context['nav_groups'] if label == 'La decisión')
         self.assertEqual([(name, title) for name, title, _icon in decision_group], [('decisiones', 'Centro de decisiones')])
@@ -996,8 +1241,12 @@ class ServerCalculationTests(TestCase):
             dose='1.6',
             unit='kg',
         )
-        self.assertEqual(excessive.status_code, 400)
-        self.assertIn('supera el máximo', excessive.json()['error'])
+        # Superar la dosis máxima documentada ya no bloquea: calcula y entrega una advertencia.
+        self.assertEqual(excessive.status_code, 200)
+        data = excessive.json()
+        self.assertTrue(data['above_max'])
+        self.assertEqual((data['max_dose'], data['max_unit']), (1.5, 'kg/ha'))
+        self.assertEqual(data['origin'], 'adjusted')
 
         product.vigencia_hasta = timezone.localdate() - timedelta(days=1)
         product.save(update_fields=['vigencia_hasta'])
@@ -1108,7 +1357,6 @@ class ActividadAgricolaTests(TestCase):
         another_session.force_login(self.user)
         self.assertContains(another_session.get('/actividades/'), 'Aplicar riego')
         self.assertContains(another_session.get('/'), 'Aplicar riego')
-        self.assertContains(another_session.get('/calendario/'), 'Aplicar riego')
 
     def test_dashboard_counters_use_owned_farm_data(self):
         crop = Cultivo.objects.create(nombre='Cultivo del potrero')
@@ -1193,7 +1441,8 @@ class ActividadAgricolaTests(TestCase):
         self.assertEqual(stats['predios'], 1)
         self.assertEqual(stats['potreros'], 1)
         self.assertContains(response, 'No hay actividades pendientes guardadas')
-        self.assertContains(response, 'Aún no hay historial persistente de cálculos')
+        self.assertContains(response, 'Aún no has guardado cálculos')
+        self.assertNotContains(response, 'Aún no hay historial persistente de cálculos')
         self.assertContains(response, 'Centro de decisiones')
 
         self.client.force_login(User.objects.create_user(
@@ -1242,7 +1491,7 @@ class ActividadAgricolaTests(TestCase):
         activity.refresh_from_db()
         self.assertEqual(activity.estado, ActividadAgricola.Estado.COMPLETADA)
         self.assertEqual(self.client.get('/').context['pending_activity_count'], 0)
-        self.assertContains(self.client.get('/calendario/'), 'Riego actualizado')
+        self.assertContains(self.client.get('/actividades/'), 'Riego actualizado')
 
     def test_invalid_activity_fields_and_foreign_potrero_are_rejected(self):
         invalid_values = [
@@ -1382,6 +1631,26 @@ class AgronomicCalendarTests(TestCase):
             content_type='application/json',
         )
 
+    def test_calendar_without_own_zone_opens_the_zone_with_most_windows(self):
+        zone_a = Zona.objects.create(nombre='Zona A')
+        zone_b = Zona.objects.create(nombre='Zona B')
+        # 'Zona de prueba' tiene 1 ventana, 'Zona B' tiene 2 y 'Zona A' ninguna.
+        self.create_reference()
+        self.create_reference(zona=zone_b)
+        self.create_reference(zona=zone_b, variedad='Otra')
+        response = self.client.get('/calendario/')
+        self.assertEqual(response.context['calendar_default_zone'], zone_b.pk)
+        # Una zona indicada en la URL sigue teniendo prioridad.
+        self.assertEqual(
+            self.client.get(f'/calendario/?zone={zone_a.pk}').context['calendar_default_zone'],
+            zone_a.pk,
+        )
+        # Con la misma cantidad de ventanas gana la primera por nombre.
+        self.create_reference(zona=zone_a)
+        self.create_reference(zona=zone_a, variedad='Otra')
+        response = self.client.get('/calendario/')
+        self.assertEqual(response.context['calendar_default_zone'], zone_a.pk)
+
     def test_calendar_displays_only_documented_verified_references(self):
         verified = self.create_reference()
         self.create_reference(
@@ -1394,13 +1663,34 @@ class AgronomicCalendarTests(TestCase):
         )
         response = self.client.get('/calendario/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Ventana de siembra')
+        self.assertContains(response, 'Cuándo sembrar')
         self.assertContains(response, 'calendar-references')
         self.assertEqual(
             [reference['id'] for reference in response.context['calendar_references']],
             [verified.pk, verified.pk + 1],
         )
         self.assertNotContains(response, 'Referencia general para la Zona Central')
+
+    def test_calendar_marks_unverified_references_and_ignores_invalid_filters(self):
+        self.create_reference()
+        response = self.client.get('/calendario/')
+        self.assertFalse(response.context['calendar_has_unverified'])
+        self.assertNotContains(response, 'sin fuente verificada')
+        self.create_reference(
+            variedad='Sin fuente',
+            estado=ReferenciaAgronomica.Estado.BORRADOR,
+            institucion_fuente='',
+            documento_fuente='',
+            url_fuente='',
+            fecha_consulta_fuente=None,
+        )
+        response = self.client.get('/calendario/?crop=abc&zone=xyz&year=zzz')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['calendar_has_unverified'])
+        self.assertContains(response, 'sin fuente verificada')
+        self.assertEqual(response.context['calendar_selected_crop'], '')
+        self.assertEqual(response.context['calendar_default_zone'], self.zone.pk)
+        self.assertEqual(response.context['calendar_current_year'], timezone.localdate().year)
 
     def test_missing_verified_reference_returns_insufficient_information(self):
         response = self.evaluate()
@@ -1714,17 +2004,17 @@ class TemporadaCultivoTests(TestCase):
         self.assertEqual(self.client.get(edit_other_url).status_code, 404)
         self.assertNotContains(self.client.get(f'/predios/{self.predio.pk}/'), 'Potrero privado')
 
-    def test_calendar_only_offers_the_current_users_plots_and_seasons(self):
-        own_season = TemporadaCultivo.objects.create(
-            potrero=self.potrero,
-            cultivo=self.new_crop,
-            fecha_siembra='2026-09-15',
-        )
+    def test_calendar_default_zone_uses_only_the_current_users_farm(self):
+        first_zone = Zona.objects.create(nombre='Zona A')
+        own_zone = Zona.objects.create(nombre='Zona B')
+        self.predio.zona = own_zone
+        self.predio.save(update_fields=['zona'])
         other_farm = Predio.objects.create(
             propietario=self.other,
             nombre='Predio privado',
             ubicacion='Paine',
             superficie_ha=4,
+            zona=first_zone,
         )
         other_plot = Potrero.objects.create(
             predio=other_farm,
@@ -1737,13 +2027,17 @@ class TemporadaCultivoTests(TestCase):
             fecha_siembra='2026-09-15',
         )
         response = self.client.get('/calendario/')
+        self.assertEqual(response.context['calendar_default_zone'], own_zone.pk)
+        self.assertNotContains(response, 'Predio privado')
+        self.assertNotContains(response, 'Potrero privado')
+        # Una zona indicada en la URL tiene prioridad; una inexistente se ignora.
         self.assertEqual(
-            [plot['id'] for plot in response.context['calendar_plots']],
-            [self.potrero.pk],
+            self.client.get(f'/calendario/?zone={first_zone.pk}').context['calendar_default_zone'],
+            first_zone.pk,
         )
         self.assertEqual(
-            [season['id'] for season in response.context['calendar_plots'][0]['seasons']],
-            [own_season.pk],
+            self.client.get('/calendario/?zone=9999').context['calendar_default_zone'],
+            own_zone.pk,
         )
 
 
@@ -1881,14 +2175,20 @@ class CalendarIntegrationTests(IntegrationBase):
     def evaluate(self, **payload):
         return self.post_json('/calendario/evaluar/', payload)
 
-    def test_calendar_sends_all_zones_and_variety_index(self):
+    def test_calendar_sends_all_zones_and_references(self):
         response = self.client.get('/calendario/')
         self.assertEqual(response.status_code, 200)
         crops = {item['crop'] for item in response.context['calendar_references']}
         self.assertEqual(crops, {'Maíz prueba', 'Trigo prueba'})
-        self.assertIn({'cropId': self.wheat.pk, 'zoneId': self.zone2.pk, 'variety': 'Invernal'}, response.context['calendar_variety_index'])
-        self.assertContains(response, 'Fuera de ventanas documentadas')
-        self.assertContains(response, 'id="calendar-save"')
+        sent = [
+            {'cropId': item['cropId'], 'zoneId': item['zoneId'], 'variety': item['variety']}
+            for item in response.context['calendar_references']
+        ]
+        self.assertIn({'cropId': self.wheat.pk, 'zoneId': self.zone2.pk, 'variety': 'Invernal'}, sent)
+        self.assertEqual([zone.pk for zone in response.context['calendar_zones']], [self.zone.pk, self.zone2.pk])
+        self.assertEqual(response.context['calendar_default_zone'], self.zone.pk)
+        for marker in ('id="cal-board"', 'id="cal-detail"', 'id="zone"', 'id="crop-filter"', 'id="year"'):
+            self.assertContains(response, marker)
 
     def test_year_specific_reference_has_priority(self):
         ReferenciaAgronomica.objects.create(cultivo=self.maize, zona=self.zone, anio_referencia=2027,
@@ -1955,6 +2255,40 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         manual = self.calc(operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk).json()
         self.assertTrue(manual['simulation'])
 
+    def test_changing_a_catalog_dose_marks_the_result_as_adjusted_manually(self):
+        from .views import describe_calculation
+        same = self.calc(operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk).json()
+        self.assertTrue(same['verified'])
+        self.assertFalse(same['adjusted'])
+        changed = self.calc(operation='dose', calculation_type='semillas', area='3', dose='30', unit='kg/ha', product_id=self.seed.pk).json()
+        self.assertTrue(changed['adjusted'])
+        self.assertTrue(changed['simulation'])
+        self.assertEqual((changed['catalog_dose'], changed['catalog_unit']), (22, 'kg/ha'))
+        # Sin dato en el catálogo no hay nada que «ajustar»: es una simulación ingresada a mano.
+        manual = self.calc(operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk).json()
+        self.assertFalse(manual['adjusted'])
+        self.assertTrue(manual['simulation'])
+        origin = describe_calculation(CalculoAgricola.objects.get(pk=changed['calculation_id']))['origin']
+        self.assertIn('Ajustado manualmente', origin)
+        self.assertIn('kg/ha', origin)
+        self.assertNotIn('Documentado', origin)
+        self.assertEqual((same['origin'], changed['origin'], manual['origin']), ('documented', 'adjusted', 'simulation'))
+
+    def test_catalog_value_without_full_support_is_labelled_catalog_not_documented(self):
+        from .views import describe_calculation
+        kind = TipoInsumo.objects.create(nombre='Otros')
+        loose = Insumo.objects.create(tipo=kind, nombre='Producto de catálogo sin fuente', dosis_hectarea=Decimal('4'), unidad_dosis='kg/ha')
+        data = self.calc(operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk).json()
+        self.assertEqual(data['origin'], 'catalog')
+        self.assertFalse(data['verified'])
+        self.assertFalse(data['above_max'])
+        self.assertEqual(data['amount'], 8)
+        self.assertIn('Dato de catálogo', describe_calculation(CalculoAgricola.objects.get(pk=data['calculation_id']))['origin'])
+        # Un valor máximo sin fuente no genera advertencias: solo se advierte contra referencias documentadas.
+        loose.dosis_maxima_hectarea = Decimal('3'); loose.unidad_dosis_maxima = 'kg/ha'; loose.save()
+        again = self.calc(operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk).json()
+        self.assertFalse(again['above_max'])
+
     def test_category_and_crop_mismatches_are_rejected(self):
         self.assertEqual(self.calc(operation='dose', calculation_type='semillas', area='1', dose='5', unit='kg/ha', product_id=self.fert.pk).status_code, 400)
         self.assertEqual(self.calc(operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.seed.pk).status_code, 400)
@@ -1980,6 +2314,15 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         for tool in ('data-tool="llevar"', 'data-tool="alcanza"', 'data-tool="cosecha"', 'data-tool="ficha"', 'Cálculo avanzado'):
             self.assertContains(response, tool)
 
+    def test_calculator_panel_and_initial_tool_come_from_the_url(self):
+        response = self.client.get('/decisiones/')
+        self.assertEqual(response.context['initial_tool'], 'llevar')
+        for marker in ('id="calc-form"', 'id="calc-modes"', 'id="calc-result"', 'calc-panel.js'):
+            self.assertContains(response, marker)
+        self.assertEqual(self.client.get('/decisiones/?herramienta=alcanza').context['initial_tool'], 'alcanza')
+        self.assertEqual(self.client.get('/decisiones/?modo=ficha').context['initial_tool'], 'ficha')
+        self.assertEqual(self.client.get('/decisiones/?herramienta=<script>').context['initial_tool'], 'llevar')
+
     def test_empty_catalog_is_reported_without_fake_options(self):
         Insumo.objects.all().delete()
         response = self.client.get('/decisiones/')
@@ -1997,9 +2340,9 @@ class CatalogImportCommandTests(TestCase):
 
     def test_dry_run_then_apply(self):
         path = self.write({'zonas': [{'nombre': 'Zona import'}], 'cultivos': [{'nombre': 'Cultivo import'}]})
-        call_command('importar_catalogo', path, verbosity=0, stdout=open(os.devnull, 'w'))
+        call_command('importar_catalogo', path, verbosity=0, stdout=open(os.devnull, 'w', encoding='utf-8'))
         self.assertFalse(Cultivo.objects.filter(nombre='Cultivo import').exists())
-        call_command('importar_catalogo', path, '--aplicar', stdout=open(os.devnull, 'w'))
+        call_command('importar_catalogo', path, '--aplicar', stdout=open(os.devnull, 'w', encoding='utf-8'))
         self.assertTrue(Cultivo.objects.filter(nombre='Cultivo import').exists())
 
     def test_verified_reference_without_source_rolls_back_everything(self):
@@ -2009,13 +2352,13 @@ class CatalogImportCommandTests(TestCase):
             'referencias': [{'cultivo': 'C', 'zona': 'Z', 'estado': 'verified'}],
         })
         with self.assertRaises(CommandError):
-            call_command('importar_catalogo', path, '--aplicar', stdout=open(os.devnull, 'w'))
+            call_command('importar_catalogo', path, '--aplicar', stdout=open(os.devnull, 'w', encoding='utf-8'))
         self.assertFalse(Zona.objects.filter(nombre='Z').exists())
 
     def test_template_has_no_agronomic_values(self):
         import tempfile
         path = tempfile.mktemp(suffix='.json')
-        call_command('importar_catalogo', '--plantilla', path, stdout=open(os.devnull, 'w'))
+        call_command('importar_catalogo', '--plantilla', path, stdout=open(os.devnull, 'w', encoding='utf-8'))
         data = json.load(open(path, encoding='utf-8'))
         self.assertIsNone(data['cultivos'][0]['densidad_siembra'])
         self.assertIsNone(data['insumos'][0]['dosis_hectarea'])
@@ -2114,3 +2457,1346 @@ class ProfessionalModulesTests(IntegrationBase):
         self.assertIn('Insecticida X', content)
         self.assertIn('26/10/2026', content)
         self.assertNotIn('Ajena', content)
+
+
+class CatalogCsvAndUsoTests(TestCase):
+    """Importador CSV, categorías base y relación cultivo → problema → insumo."""
+
+    def folder(self, files):
+        import tempfile
+        from pathlib import Path
+        base = Path(tempfile.mkdtemp())
+        for name, text in files.items():
+            (base / name).write_text(text, encoding='utf-8')
+        return str(base)
+
+    def run_import(self, *args):
+        call_command('importar_catalogo', *args, stdout=open(os.devnull, 'w', encoding='utf-8'))
+
+    def files(self):
+        return {
+            'zonas.csv': 'nombre;descripcion\nZona TEST;solo pruebas\n',
+            'cultivos.csv': 'nombre;densidad_siembra;unidad_siembra\nCultivo TEST;1,5;kg\n',
+            'problemas.csv': 'nombre;tipo;cultivos\nProblema TEST;pest;Cultivo TEST\n',
+            'insumos.csv': 'nombre;tipo;dosis_hectarea;unidad_dosis\nInsumo TEST;Fungicida;2,5;L/ha\n',
+            'usos.csv': 'cultivo;problema;insumo;fuente_nombre;fecha_verificacion\nCultivo TEST;Problema TEST;Insumo TEST;Fuente TEST;2026-01-15\n',
+            'calendario.csv': 'cultivo;zona;siembra_inicio_mes;siembra_inicio_dia;siembra_fin_mes;siembra_fin_dia\nCultivo TEST;Zona TEST;9;1;11;30\n',
+            'rendimientos.csv': 'cultivo;zona;rendimiento_ton_ha\nCultivo TEST;Zona TEST;12,5\n',
+        }
+
+    def test_base_categories_load_without_duplicates(self):
+        self.run_import('--categorias')
+        self.run_import('--categorias')
+        names = set(TipoInsumo.objects.values_list('nombre', flat=True))
+        self.assertTrue({'Fertilizante', 'Herbicida', 'Fungicida', 'Insecticida', 'Acaricida', 'Otros'} <= names)
+        self.assertEqual(TipoInsumo.objects.filter(nombre='Otros').count(), 1)
+
+    def test_csv_folder_is_idempotent_and_merges_calendar_with_yield(self):
+        folder = self.folder(self.files())
+        self.run_import('--categorias')
+        self.run_import(folder)  # simulación
+        self.assertFalse(Cultivo.objects.filter(nombre='Cultivo TEST').exists())
+        self.run_import(folder, '--aplicar')
+        self.run_import(folder, '--aplicar')
+        self.run_import(folder, '--aplicar', '--actualizar')
+        from .models import UsoInsumoCultivo
+        crop = Cultivo.objects.get(nombre='Cultivo TEST')
+        self.assertEqual(crop.densidad_siembra, Decimal('1.5'))
+        self.assertEqual(ReferenciaAgronomica.objects.count(), 1)
+        ref = ReferenciaAgronomica.objects.get()
+        self.assertEqual((ref.siembra_inicio_mes, ref.rendimiento_ton_ha), (9, Decimal('12.5')))
+        self.assertEqual(Insumo.objects.get().dosis_hectarea, Decimal('2.5'))
+        self.assertEqual(UsoInsumoCultivo.objects.count(), 1)
+        self.assertTrue(UsoInsumoCultivo.objects.get().recomendable)
+
+    def test_initial_csv_loads_only_crop_names_and_zone_without_invented_technical_data(self):
+        from pathlib import Path
+        from django.conf import settings
+        data_dir = Path(settings.BASE_DIR) / 'data'
+        self.run_import(str(data_dir), '--aplicar')
+        self.run_import(str(data_dir), '--aplicar')  # repetir no duplica ni modifica
+        self.assertGreater(Cultivo.objects.count(), 40)
+        self.assertEqual(Cultivo.objects.filter(nombre='Maíz').count(), 1)
+        self.assertEqual(Zona.objects.filter(nombre='Melipilla', activo=True).count(), 1)
+        # Sin densidades, rendimientos, insumos ni referencias inventadas.
+        self.assertFalse(Cultivo.objects.filter(densidad_siembra__isnull=False).exists())
+        self.assertFalse(Cultivo.objects.filter(rendimiento_ton_ha__isnull=False).exists())
+        self.assertEqual(Insumo.objects.count(), 0)
+
+    def test_invalid_csv_value_is_rejected_and_rolls_back(self):
+        from django.core.management.base import CommandError
+        files = self.files()
+        files['rendimientos.csv'] = 'cultivo;zona;rendimiento_ton_ha\nCultivo TEST;Zona TEST;mucho\n'
+        with self.assertRaises(CommandError):
+            self.run_import(self.folder(files), '--aplicar')
+        self.assertFalse(Zona.objects.filter(nombre='Zona TEST').exists())
+
+    def test_uso_requires_source_and_stops_being_recommended_when_inactive(self):
+        from datetime import date
+        from django.core.exceptions import ValidationError
+        from .models import UsoInsumoCultivo
+        self.run_import('--categorias')
+        self.run_import(self.folder(self.files()), '--aplicar')
+        uso = UsoInsumoCultivo.objects.get()
+        uso.fuente_nombre = ' '
+        with self.assertRaises(ValidationError):
+            uso.full_clean()
+        uso.refresh_from_db()
+        uso.fecha_verificacion = date(2999, 1, 1)
+        with self.assertRaises(ValidationError):
+            uso.full_clean()
+        uso.refresh_from_db()
+        uso.insumo.vigente = False
+        self.assertFalse(uso.recomendable)
+        uso.insumo.vigente = True
+        uso.activo = False
+        self.assertFalse(uso.recomendable)
+
+
+class PredioPotreroFlowAndPrivacyTests(TestCase):
+    """Flujo Predio → Potrero sin volver a dibujar y aislamiento entre usuarios."""
+
+    def setUp(self):
+        self.a = User.objects.create_user('ua', email='ua@example.com', password=PASSWORD)
+        self.b = User.objects.create_user('ub', email='ub@example.com', password=PASSWORD)
+        self.client.force_login(self.a)
+        self.ring = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        self.feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]}}
+
+    def create_predio(self, **extra):
+        data = {'nombre': 'Predio A', 'ubicacion': 'Melipilla', 'geojson': json.dumps(self.feature),
+                'perimetro_aceptado': 'on', 'latitud': '-33.687', 'longitud': '-71.216', **extra}
+        response = self.client.post('/predios/nuevo/', data)
+        return Predio.objects.get(nombre=data['nombre']), response
+
+    def test_ownership_checkbox_removed_and_discreet_privacy_notes_shown(self):
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertNotIn('autorizacion_predio', html)
+        self.assertNotIn('Declaro que soy propietario', html)
+        self.assertNotIn('consent-box', html)
+        self.assertNotIn('type="checkbox"', html)
+        self.assertIn('Tus datos se guardan de forma privada en tu cuenta.', html)
+        self.assertIn('Registra únicamente predios que administras o tienes autorización para gestionar. Este trazado no acredita propiedad legal.', html)
+        self.assertNotIn('Propiedad verificada', html)
+        self.assertLess(html.index('id="map-form-summary"'), html.index('Guardar predio'))
+        self.assertLess(html.index('Guardar predio'), html.index('Registra únicamente predios'))
+
+    def test_predio_saves_without_ownership_checkbox_and_keeps_geometry(self):
+        farm, response = self.create_predio()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(farm.propietario, self.a)
+        self.assertEqual(farm.geojson['geometry']['type'], 'Polygon')
+        self.assertIsNotNone(farm.latitud)
+        self.assertIsNotNone(farm.longitud)
+        self.assertGreater(farm.superficie_ha, 0)
+        resumen = farm.historial.get().resumen
+        self.assertTrue(resumen.startswith('Predio creado con una superficie de'))
+        self.assertNotIn('declaró', resumen)
+
+    def test_map_tools_grouped_and_help_accordion_is_closed_with_five_steps(self):
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertIn('map-toolbar is-predio', html)
+        for button in ('draw-perimeter', 'measure-line', 'undo-point', 'finish-perimeter', 'edit-perimeter', 'locate-me', 'center-map'):
+            self.assertIn(f'id="{button}"', html)
+        self.assertIn('¿Cómo delimito mi predio?', html)
+        self.assertNotIn('<details class="map-help" open', html)
+        self.assertEqual(html[html.index('<details class="map-help"'):].split('</details>')[0].count('<li>'), 5)
+        self.assertNotIn('map-privacy-note', html)
+        self.assertIn('id="map-confirmed-line"', html)
+        self.assertNotIn('id="confirm-location"', html)
+        order = [html.index(x) for x in ('Nombre del predio', 'Referencia de ubicación', 'Zona', 'Notas del predio (opcional)', 'Medición confirmada', 'Guardar predio')]
+        self.assertEqual(order, sorted(order))
+
+    def sur_feature(self):
+        ring = [[-71.300, -33.800], [-71.296, -33.800], [-71.296, -33.796], [-71.300, -33.796]]
+        return {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [ring + [ring[0]]]}}
+
+    def test_new_predio_map_starts_clean_when_user_already_has_predios(self):
+        norte, _ = self.create_predio(nombre='Predio Norte')
+        response = self.client.get('/predios/nuevo/')
+        html = response.content.decode()
+        self.assertContains(response, 'data-mode="create"')
+        # Ni el trazado ni las coordenadas del predio anterior llegan al mapa de creación.
+        self.assertNotIn('-71.216', html)
+        self.assertNotIn('-33.687', html)
+        self.assertNotIn('"Polygon"', html)
+        for item in response.context['farm_data']['predios']:
+            self.assertIsNone(item['geojson'])
+            self.assertIsNone(item['lat'])
+            self.assertIsNone(item['lng'])
+        for field in ('id_latitud', 'id_longitud', 'id_superficie_ha'):
+            self.assertRegex(html, rf'id="{field}"(?! value)')
+        self.assertIn('id="id_geojson"', html)
+        self.assertNotIn(norte.nombre + '</', html.split('id="terrain-form"')[1])
+        # El predio sigue existiendo y se ve en «Mis predios y potreros».
+        self.assertContains(self.client.get('/predios/'), 'Predio Norte')
+
+    def test_two_predios_same_user_keep_only_their_own_geometry(self):
+        norte, _ = self.create_predio(nombre='Predio Norte')
+        sur_feature = self.sur_feature()
+        sur, response = self.create_predio(
+            nombre='Predio Sur', geojson=json.dumps(sur_feature), latitud='-33.800', longitud='-71.300')
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Predio.objects.filter(propietario=self.a).count(), 2)
+        norte.refresh_from_db()
+        self.assertEqual(norte.geojson['geometry']['coordinates'], self.feature['geometry']['coordinates'])
+        self.assertEqual(sur.geojson['geometry']['coordinates'], sur_feature['geometry']['coordinates'])
+        self.assertNotEqual(norte.geojson, sur.geojson)
+        self.assertNotEqual(norte.superficie_ha, 0)
+        listing = self.client.get('/predios/')
+        self.assertContains(listing, 'Predio Norte')
+        self.assertContains(listing, 'Predio Sur')
+
+    def test_editing_shows_only_that_predios_geometry(self):
+        norte, _ = self.create_predio(nombre='Predio Norte')
+        sur, _ = self.create_predio(nombre='Predio Sur', geojson=json.dumps(self.sur_feature()),
+                                    latitud='-33.800', longitud='-71.300')
+        response = self.client.get(f'/predios/{sur.pk}/editar/')
+        html = response.content.decode()
+        self.assertContains(response, 'data-mode="edit"')
+        self.assertIn('-71.3', html)           # su propia geometría llega por el formulario
+        self.assertNotIn('-71.216', html)      # la del otro predio no
+        for item in response.context['farm_data']['predios']:
+            self.assertIsNone(item['geojson'])
+
+    def test_other_user_never_receives_geometry_of_user_a_in_new_predio_form(self):
+        self.create_predio(nombre='Predio Norte')
+        self.client.force_login(self.b)
+        response = self.client.get('/predios/nuevo/')
+        html = response.content.decode()
+        self.assertEqual(response.context['farm_data']['predios'], [])
+        self.assertNotIn('-71.216', html)
+        self.assertNotIn('Predio Norte', html)
+        self.assertEqual(self.client.get(f'/predios/{Predio.objects.get(nombre="Predio Norte").pk}/editar/').status_code, 404)
+
+    def test_map_script_resets_state_uses_overview_zoom_and_fits_new_polygon(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        self.assertIn('NEW_PREDIO_ZOOM = 12', source)
+        self.assertIn('MY_LOCATION_ZOOM = 16', source)
+        self.assertIn('resetNewPredioState', source)
+        self.assertIn("if (!form || isPredioForm) return;", source)
+        self.assertIn("fitBounds(layerBounds(currentLayer), { padding: [56, 56], maxZoom: 17 })", source)
+        self.assertIn("['Normal', normalTiles], ['Satélite', satelliteTiles]", source)
+        self.assertNotIn('localStorage', source)
+        self.assertNotIn('sessionStorage', source)
+
+    def test_case_a_use_whole_predio_creates_main_potrero_without_redrawing(self):
+        farm, response = self.create_predio()
+        self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
+        page = self.client.get(f'/predios/{farm.pk}/?nuevo=1')
+        for text in ('Predio registrado correctamente', 'Ya registraste el límite completo de tu predio', 'Un solo potrero',
+                     'Utilizar todo el predio', 'Dividir en potreros', 'Dividir mi predio', 'Lo haré más tarde'):
+            self.assertContains(page, text)
+        response = self.client.post(f'/predios/{farm.pk}/usar-completo/', {'nombre': ''})
+        plot = Potrero.objects.get(predio=farm)
+        self.assertRedirects(response, f'/predios/{farm.pk}/potreros/{plot.pk}/editar/')
+        self.assertEqual(plot.nombre, 'Potrero principal')
+        self.assertEqual(plot.superficie_ha, farm.superficie_ha)
+        self.assertEqual(plot.geojson['geometry'], farm.geojson['geometry'])
+        self.assertEqual(plot.perimetro, [list(point) for point in self.ring])
+        self.assertEqual((plot.latitud, plot.longitud), (farm.latitud, farm.longitud))
+        crop = Cultivo.objects.create(nombre='Cultivo flujo')
+        plot.cultivo = crop
+        plot.full_clean()
+        plot.save()
+        self.assertEqual(Potrero.objects.get(pk=plot.pk).cultivo, crop)
+        # No se crea un segundo potrero por doble envío y la acción solo acepta POST.
+        self.client.post(f'/predios/{farm.pk}/usar-completo/', {'nombre': 'Otro'})
+        self.assertEqual(Potrero.objects.filter(predio=farm).count(), 1)
+        self.assertEqual(self.client.get(f'/predios/{farm.pk}/usar-completo/').status_code, 405)
+        self.assertNotContains(self.client.get(f'/predios/{farm.pk}/?nuevo=1'), 'Predio registrado correctamente')
+
+    def test_case_b_split_shows_reference_and_accepts_several_potreros(self):
+        farm, _ = self.create_predio()
+        page = self.client.get(f'/predios/{farm.pk}/potreros/nuevo/')
+        self.assertContains(page, 'Estás creando potreros dentro de tu predio')
+        self.assertContains(page, 'Predio A')
+        self.assertContains(page, 'No necesitas volver a marcar todo el predio')
+        west = [[-71.216, -33.687], [-71.2145, -33.687], [-71.2145, -33.684], [-71.216, -33.684]]
+        east = [[-71.2144, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.2144, -33.684]]
+        for name, ring in (('Oeste', west), ('Este', east)):
+            response = self.client.post(f'/predios/{farm.pk}/potreros/nuevo/', {
+                'nombre': name, 'cultivo': '', 'variedad': '', 'superficie_ha': '', 'fecha_siembra': '', 'fecha_cosecha': '',
+                'latitud': '', 'longitud': '', 'perimetro': json.dumps(ring)})
+            self.assertRedirects(response, f'/predios/{farm.pk}/')
+        self.assertEqual(set(farm.potreros.values_list('nombre', flat=True)), {'Oeste', 'Este'})
+        outside = [[-71.3, -33.7], [-71.29, -33.7], [-71.29, -33.69], [-71.3, -33.69]]
+        response = self.client.post(f'/predios/{farm.pk}/potreros/nuevo/', {
+            'nombre': 'Afuera', 'superficie_ha': '', 'latitud': '', 'longitud': '', 'perimetro': json.dumps(outside)})
+        self.assertContains(response, 'debe quedar dentro del predio')
+        self.assertFalse(Potrero.objects.filter(nombre='Afuera').exists())
+
+    def test_use_whole_requires_a_drawn_perimeter(self):
+        farm = Predio.objects.create(propietario=self.a, nombre='Sin trazo', ubicacion='X', superficie_ha=Decimal('2'))
+        response = self.client.post(f'/predios/{farm.pk}/usar-completo/', follow=True)
+        self.assertContains(response, 'no tiene un perímetro dibujado')
+        self.assertFalse(farm.potreros.exists())
+
+    def test_case_c_user_b_cannot_reach_user_a_data_by_direct_url(self):
+        farm, _ = self.create_predio(nombre='Predio privado A')
+        self.client.post(f'/predios/{farm.pk}/usar-completo/', {'nombre': 'Lote secreto'})
+        plot = farm.potreros.get()
+        crop = Cultivo.objects.create(nombre='Cultivo privado')
+        act = ActividadAgricola.objects.create(usuario=self.a, potrero=plot, nombre='Labor privada', tipo='riego', fecha_programada=_date(2026, 5, 1))
+        client_b = self.client_class()
+        client_b.force_login(self.b)
+        get_urls = [
+            f'/predios/{farm.pk}/', f'/predios/{farm.pk}/editar/', f'/predios/{farm.pk}/potreros/nuevo/',
+            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/', f'/predios/{farm.pk}/potreros/{plot.pk}/temporadas/nueva/',
+            f'/api/potreros/{plot.pk}/', f'/actividades/{act.pk}/', f'/actividades/{act.pk}/editar/', f'/actividades/{act.pk}/eliminar/',
+        ]
+        for url in get_urls:
+            self.assertIn(client_b.get(url).status_code, (403, 404), url)
+        post_urls = [
+            f'/predios/{farm.pk}/usar-completo/', f'/predios/{farm.pk}/editar/', f'/predios/{farm.pk}/potreros/nuevo/',
+            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/', f'/api/potreros/{plot.pk}/cultivo/',
+            f'/actividades/{act.pk}/estado/', f'/actividades/{act.pk}/eliminar/',
+        ]
+        for url in post_urls:
+            self.assertIn(client_b.post(url, {'estado': 'completada', 'cultivo': crop.pk}).status_code, (403, 404), url)
+        self.assertEqual(client_b.post('/calculos/ejecutar/', json.dumps({'operation': 'yield', 'plot_id': plot.pk, 'area': '1'}),
+                                       content_type='application/json').status_code, 400)
+        # Nada de A llega a las páginas de B: ni HTML, ni JSON embebido, ni reportes.
+        lat_text = '-33.687'
+        for url in ('/', '/predios/', '/calendario/', '/actividades/', '/decisiones/', '/reportes/', '/reportes/?tipo=resumen&formato=csv',
+                    '/busqueda/?q=privado', '/panel-admin/'):
+            response = client_b.get(url)
+            body = response.content.decode()
+            for secret in ('Predio privado A', 'Lote secreto', 'Labor privada', lat_text):
+                self.assertNotIn(secret, body, f'{secret} en {url}')
+        # Los datos de A siguen intactos.
+        self.assertTrue(Predio.objects.filter(pk=farm.pk).exists())
+        self.assertTrue(ActividadAgricola.objects.filter(pk=act.pk).exists())
+        self.assertEqual(farm.potreros.count(), 1)
+
+    def test_anonymous_users_and_policy_page(self):
+        farm, _ = self.create_predio()
+        anonymous = self.client_class()
+        for url in (f'/predios/{farm.pk}/', f'/api/potreros/{farm.potreros.count()}/', '/predios/'):
+            self.assertIn(anonymous.get(url).status_code, (302, 403, 404))
+        self.assertEqual(anonymous.post(f'/predios/{farm.pk}/usar-completo/').status_code, 302)
+
+
+class DemoCatalogEndToEndTests(TestCase):
+    """data_demo/ (catálogo ficticio) debe importarse sin errores y reproducir los resultados calculados a mano."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from io import StringIO
+        from pathlib import Path
+        out = StringIO()
+        call_command('importar_catalogo', '--categorias', stdout=out)
+        cls.demo_dir = Path(__file__).resolve().parent.parent / 'data_demo'
+        call_command('importar_catalogo', str(cls.demo_dir), '--aplicar', stdout=out)
+        cls.import_output = out.getvalue()
+
+    def setUp(self):
+        from .models import Zona
+        self.user = User.objects.create_user('demo-user', email='demo@example.com', password=PASSWORD)
+        self.client.force_login(self.user)
+        self.papa = Cultivo.objects.get(nombre='PAPA DEMO')
+        self.predio = Predio.objects.create(
+            propietario=self.user, nombre='Predio DEMO', ubicacion='DEMO', superficie_ha=5,
+            zona=Zona.objects.get(nombre='ZONA DEMO MELIPILLA'))
+        self.potrero = Potrero.objects.create(predio=self.predio, nombre='Potrero Norte DEMO', superficie_ha=2, cultivo=self.papa)
+
+    def calc(self, **payload):
+        return self.client.post('/calculos/ejecutar/', data=json.dumps(
+            {'plot_id': self.potrero.pk, 'crop': 'PAPA DEMO', 'area': '2', **payload}), content_type='application/json')
+
+    def test_import_counts_and_demo_labels(self):
+        from .models import ProblemaAgricola, UsoInsumoCultivo, Zona
+        self.assertEqual(Zona.objects.filter(activo=True).count(), 2)
+        self.assertEqual(Cultivo.objects.count(), 3)
+        self.assertEqual(ProblemaAgricola.objects.count(), 3)
+        self.assertEqual(ReferenciaAgronomica.objects.count(), 3)
+        self.assertEqual(Insumo.objects.count(), 4)
+        self.assertEqual(UsoInsumoCultivo.objects.count(), 3)
+        for model in (Zona, Cultivo, ProblemaAgricola, Insumo):
+            self.assertFalse(model.objects.exclude(nombre__contains='DEMO').exists(), model)
+        for reference in ReferenciaAgronomica.objects.all():  # calendario + rendimientos se fusionaron
+            self.assertEqual(reference.estado, 'verified')
+            self.assertIsNotNone(reference.rendimiento_ton_ha)
+            self.assertIsNotNone(reference.siembra_inicio_mes)
+            self.assertEqual(reference.zona.nombre, 'ZONA DEMO MELIPILLA')
+        self.assertFalse(Insumo.objects.filter(nombre='SEMILLA DEMO PAPA').exclude(numero_autorizacion_sag='').exists())
+        # Reimportar no duplica nada.
+        from io import StringIO
+        call_command('importar_catalogo', str(self.demo_dir), '--aplicar', stdout=StringIO())
+        self.assertEqual(Insumo.objects.count(), 4)
+        self.assertEqual(ReferenciaAgronomica.objects.count(), 3)
+
+    def test_catalog_counters_are_no_longer_zero(self):
+        from .catalog import catalog_payload
+        stats = catalog_payload()['stats']
+        self.assertEqual((stats['crops'], stats['zones'], stats['seeds'], stats['cropsWithDensity']), (3, 2, 1, 3))
+        self.assertEqual((stats['fertilizers'], stats['otherInputs'], stats['products'], stats['problems']), (1, 2, 4, 3))
+
+    def test_seed_calculation_two_ha_by_2500(self):
+        data = self.calc(operation='dose', calculation_type='semillas', dose='2500', unit='kg').json()
+        self.assertEqual(data['amount'], 5000)
+        self.assertEqual(data['unit'], 'kg')
+        self.assertTrue(data['verified'])
+        self.assertFalse(data['simulation'])
+
+    def test_insecticide_quantity_and_coverage(self):
+        product = Insumo.objects.get(nombre='INSUMO DEMO INSECTICIDA')
+        need = self.calc(operation='dose', calculation_type='proteccion', product_id=product.pk, target='PLAGA DEMO A').json()
+        self.assertEqual((need['amount'], need['unit'], need['dose']), (4, 'L', 2))
+        self.assertEqual(need['package'], {'size': 5.0, 'unit': 'L', 'count': 1})
+        coverage = self.calc(operation='coverage', calculation_type='coverage', product_id=product.pk,
+                             target='PLAGA DEMO A', stock='3').json()
+        self.assertEqual((coverage['needed'], coverage['percent'], coverage['missingQty'], coverage['missingHa']), (4, 75, 1, 0.5))
+
+    def test_dose_limits_and_fungicide_belongs_to_other_crop(self):
+        insecticide = Insumo.objects.get(nombre='INSUMO DEMO INSECTICIDA')
+        # En fitosanitarios la dosis sale de la ficha: una dosis escrita a mano (4 L/ha) se ignora.
+        forced = self.calc(operation='dose', calculation_type='proteccion', product_id=insecticide.pk,
+                           target='PLAGA DEMO A', dose='4', unit='L/ha').json()
+        self.assertEqual(forced['dose'], 2)
+        # En el fertilizante, superar el máximo de 150 kg/ha calcula igual pero con advertencia.
+        fert = Insumo.objects.get(nombre='FERTILIZANTE DEMO NPK')
+        over = self.calc(operation='dose', calculation_type='insumos', product_id=fert.pk, dose='200', unit='kg/ha')
+        self.assertEqual(over.status_code, 200)
+        self.assertTrue(over.json()['above_max'])
+        self.assertEqual(over.json()['origin'], 'adjusted')
+        ok = self.calc(operation='dose', calculation_type='insumos', product_id=fert.pk, dose='100', unit='kg/ha').json()
+        self.assertEqual((ok['amount'], ok['package']['count']), (200, 8))
+        fungicide = Insumo.objects.get(nombre='INSUMO DEMO FUNGICIDA')
+        wrong = self.calc(operation='dose', calculation_type='proteccion', product_id=fungicide.pk, target='ENFERMEDAD DEMO B')
+        self.assertEqual(wrong.status_code, 400)
+
+    def test_harvest_estimate_uses_verified_demo_reference(self):
+        data = self.calc(operation='yield').json()
+        self.assertEqual(data['production'], 40)
+        self.assertEqual(data['rate'], 20)
+        self.assertTrue(data['source_verified'])
+        self.assertIn('FUENTE DEMO AGROASESOR', data['source'])
+
+    def test_ficha_lists_insecticide_for_papa_and_pest(self):
+        from .catalog import catalog_payload
+        catalog = catalog_payload()
+        problem = next(item for item in catalog['problemas'] if item['name'] == 'PLAGA DEMO A')
+        matches = [item['name'] for item in catalog['insumos']
+                   if item['cropId'] == str(self.papa.pk) and str(problem['id']) in item['problemIds']
+                   and item['type'] == 'Insecticida']
+        self.assertEqual(matches, ['INSUMO DEMO INSECTICIDA'])
+
+
+class ButtonHierarchyAndNextStepTests(TestCase):
+    """Jerarquía de acciones (principal/secundaria/terciaria) y «Siguiente paso» contextual."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('jerarquia', email='jerarquia@example.com', password=PASSWORD)
+        self.client.force_login(self.user)
+        self.ring = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        self.feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]}}
+
+    def farm(self, **extra):
+        return Predio.objects.create(propietario=self.user, nombre='Predio flujo', ubicacion='Melipilla',
+                                     superficie_ha=Decimal('2'), **extra)
+
+    def page(self, url):
+        # Solo el HTML visible: los JSON de los <script> no cuentan como contenido de la pantalla.
+        return re.sub(r'<script.*?</script>', '', self.client.get(url).content.decode(), flags=re.S)
+
+    def test_1_user_without_predios_sees_only_register_first_predio(self):
+        html = self.page('/predios/')
+        self.assertEqual(html.count('Registrar primer predio'), 1)
+        self.assertEqual(html.count('class="btn-primary-agro" href="/predios/nuevo/"'), 1)
+        self.assertNotIn('Mostrar todos los predios</a>', html)
+        calendar = self.page('/calendario/')
+        self.assertIn('No tienes predios registrados.', calendar)
+        self.assertEqual(calendar.count('Registrar primer predio'), 1)
+        self.assertNotIn('Nuevo predio', calendar)
+
+    def test_2_predio_without_potreros_recommends_adding_one_potrero(self):
+        farm = self.farm()
+        listing = self.page(f'/predios/?predio={farm.pk}')
+        self.assertEqual(listing.count('Registrar predio</a>'), 1)  # solo la cabecera (el menú lateral queda aparte)
+        self.assertIn('id="register-selected-plot"', listing)
+        self.assertRegex(listing, r'id="register-selected-plot"\s+hidden')  # sin potreros, el estado vacío tiene el único CTA
+        self.assertEqual(listing.count('Configurar potrero'), 1)
+        self.assertNotIn('Registrar primer potrero', listing)
+        detail = self.page(f'/predios/{farm.pk}/')
+        self.assertIn('Siguiente paso', detail)
+        self.assertIn('→ Crea tu primer potrero', detail)
+        self.assertIn(f'/predios/{farm.pk}/potreros/nuevo/', detail)
+        self.assertNotIn('Registrar potrero', detail)
+        self.assertNotIn('Planificación de siembra', detail)
+        calendar = self.page('/calendario/')
+        self.assertIn('Agregar potrero', calendar)
+        self.assertIn('Ver predio', calendar)
+
+    def test_3_potrero_without_crop_recommends_assigning_crop(self):
+        farm = self.farm()
+        Potrero.objects.create(predio=farm, nombre='Lote sin cultivo', superficie_ha=Decimal('1'))
+        detail = self.page(f'/predios/{farm.pk}/')
+        self.assertIn('Siguiente paso', detail)
+        self.assertIn('Asigna un cultivo a «Lote sin cultivo»', detail)
+        self.assertNotIn('class="btn-primary-agro"', detail.split('<main>')[1])  # el siguiente paso es una llamada discreta
+        self.assertEqual(detail.count('Agregar potrero'), 1)  # cabecera: un solo «Agregar potrero» una vez que hay potreros
+        listing = self.page(f'/predios/?predio={farm.pk}')
+        self.assertRegex(listing, r'data-assign-crop="\d+" data-quick\s*>')  # acción rápida visible sin cultivo
+        calendar = self.page('/calendario/')
+        self.assertIn('btn-primary-agro btn-sm" href', calendar)
+        self.assertIn('Asignar cultivo', calendar)
+        self.assertIn('Predio registrado', calendar)  # checklist informativo
+        self.assertIn('class="check-mark"', calendar)
+
+    def test_4_potrero_with_crop_recommends_planning_and_labor(self):
+        farm = self.farm()
+        crop = Cultivo.objects.create(nombre='Cultivo jerarquía')
+        plot = Potrero.objects.create(predio=farm, nombre='Lote con cultivo', superficie_ha=Decimal('1'), cultivo=crop,
+                                      fecha_siembra=timezone.localdate() + timedelta(days=30),
+                                      fecha_cosecha=timezone.localdate() + timedelta(days=150))
+        detail = self.page(f'/predios/{farm.pk}/')
+        self.assertIn('→ Calcula lo que necesitas para «Lote con cultivo»', detail)
+        self.assertNotIn('Asignar cultivo', detail)
+        listing = self.page(f'/predios/?predio={farm.pk}')
+        self.assertIn('Cambiar cultivo', listing)
+        self.assertRegex(listing, r'data-quick\s+hidden')  # con cultivo no hay acción rápida de asignar
+        self.assertIn(f'data-plot-planning="{plot.pk}"', listing)
+        calendar = self.page('/calendario/')
+        self.assertNotIn('Asignar cultivo', calendar)
+        # Sin labores: solo el CTA dentro del estado vacío; con labores: «Programar labor» arriba.
+        self.assertIn('Programar primera labor', calendar)
+        ActividadAgricola.objects.create(usuario=self.user, potrero=plot, nombre='Riego flujo',
+                                         tipo=ActividadAgricola.Tipo.RIEGO,
+                                         fecha_programada=timezone.localdate() + timedelta(days=2))
+        calendar = self.page('/calendario/')
+        self.assertNotIn('Programar primera labor', calendar)
+        self.assertIn('Programar labor</a>', calendar)
+        self.assertIn('→ Calcula lo que necesitas para «Lote con cultivo»', self.page(f'/predios/{farm.pk}/'))
+
+    def test_5_new_predio_shows_only_the_usage_decision(self):
+        farm = self.farm(geojson=self.feature)
+        html = self.page(f'/predios/{farm.pk}/?nuevo=1')
+        self.assertIn('¿Cómo utilizas este predio?', html)
+        self.assertIn('Utilizar todo el predio', html)
+        self.assertIn('Dividir mi predio', html)
+        self.assertIn('Lo haré más tarde', html)
+        self.assertNotIn('Siguiente paso', html)
+        self.assertNotIn('Agregar potrero', html)
+        self.assertNotIn('Registrar potrero', html)
+        self.assertEqual(html.count('Utilizar todo el predio'), 1)
+
+    def test_6_predio_with_potreros_does_not_show_onboarding_again(self):
+        farm = self.farm(geojson=self.feature)
+        Potrero.objects.create(predio=farm, nombre='Principal', superficie_ha=Decimal('1'))
+        html = self.page(f'/predios/{farm.pk}/?nuevo=1')
+        self.assertNotIn('¿Cómo utilizas este predio?', html)
+        self.assertNotIn('Utilizar todo el predio', html)
+        self.assertNotIn('Predio registrado correctamente', html)
+
+    def test_selected_panel_is_informative_and_script_has_no_duplicate_actions(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        for old_label in ("'Registrar potrero'", "'Registrar primer potrero'", "'Ficha e historial del predio'", "'Editar predio'"):
+            self.assertNotIn(old_label, source)
+        self.assertIn('createPlotLink.hidden = farmPlots.length === 0', source)
+
+    def test_button_system_classes_exist_in_css(self):
+        from pathlib import Path
+        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'body.css').read_text(encoding='utf-8')
+        for name in ('.btn-primary-agro', '.btn-secondary-agro', '.btn-ghost-agro', '.btn-danger-agro', '.btn-disabled'):
+            self.assertIn(name, css)
+
+
+class VisualVarietyTests(TestCase):
+    """Tarjetas de entidad, menús ⋯, chips, selector de vista, línea de meses, labores y herramientas."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('variedad', email='variedad@example.com', password=PASSWORD)
+        self.other = User.objects.create_user('ajeno', email='ajeno@example.com', password=PASSWORD)
+        self.client.force_login(self.user)
+        self.today = timezone.localdate()
+        self.crop = Cultivo.objects.create(nombre='Papa visual')
+        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo visual', ubicacion='Chocalán', superficie_ha=Decimal('10'))
+        self.planned = Potrero.objects.create(predio=self.farm, nombre='Potrero planificado', superficie_ha=Decimal('2'), cultivo=self.crop,
+                                              fecha_siembra=self.today + timedelta(days=20), fecha_cosecha=self.today + timedelta(days=140))
+        self.bare = Potrero.objects.create(predio=self.farm, nombre='Potrero pelado', superficie_ha=Decimal('1'))
+
+    def labor(self, plot, days, tipo=ActividadAgricola.Tipo.RIEGO, user=None):
+        return ActividadAgricola.objects.create(usuario=user or self.user, potrero=plot, nombre=f'Labor {days}', tipo=tipo,
+                                                fecha_programada=self.today + timedelta(days=days))
+
+    def html(self, url):
+        return re.sub(r'<script.*?</script>', '', self.client.get(url).content.decode(), flags=re.S)
+
+    def test_farm_and_plot_cards_have_context_menus_without_delete(self):
+        html = self.html('/predios/')
+        self.assertGreaterEqual(html.count('class="row-menu-trigger"'), 3)  # predio + 2 potreros
+        for text in ('Ver predio', 'Editar información', 'Ver en mapa', 'Agregar potrero', 'Ver historial', 'Ver planificación',
+                     'Generar reporte', 'Programar labor', 'Ver ficha e historial', 'Editar potrero'):
+            self.assertIn(text, html)
+        self.assertIn(f'/reportes/?predio={self.farm.pk}', html)
+        self.assertNotIn('Eliminar predio', html)  # no existe aún un flujo de borrado con confirmación
+        self.assertNotIn('Eliminar potrero', html)
+        # El menú del potrero cambia según el estado: sin cultivo «Asignar», con cultivo «Cambiar».
+        self.assertEqual(html.count('data-assign-label>Asignar cultivo'), 1)
+        self.assertEqual(html.count('data-assign-label>Cambiar cultivo'), 1)
+
+    def test_state_chips_and_plan_meter_use_real_data_only(self):
+        self.labor(self.planned, 3)
+        self.labor(self.planned, -2, ActividadAgricola.Tipo.MONITOREO)
+        html = self.html('/predios/')
+        for text in ('Con cultivo', 'Sin cultivo', 'Sin planificar', 'Planificación completa', 'Labores vencidas · 1', 'Próxima labor'):
+            self.assertIn(text, html)
+        self.assertIn('Planificación <strong>3 de 3</strong>', html)
+        self.assertRegex(html, rf'data-plot-plan="{self.bare.pk}"\s+hidden')  # sin cultivo no se inventa un avance
+        self.assertNotRegex(html, r'Planificación <strong>\d+%')
+        self.assertIn('Siguiente paso', html)
+        self.assertIn('→ Asigna un cultivo a «Potrero pelado»', html)
+
+    def test_payload_exposes_task_and_plan_data_for_the_side_panel(self):
+        self.labor(self.planned, 3)
+        self.labor(self.planned, -2, ActividadAgricola.Tipo.MONITOREO)
+        self.labor(Potrero.objects.create(predio=Predio.objects.create(propietario=self.other, nombre='Ajeno', superficie_ha=1),
+                                          nombre='Lote ajeno', superficie_ha=1), 1, user=self.other)
+        data = self.client.get('/predios/').context['farm_data']
+        farm = data['predios'][0]
+        self.assertEqual((farm['pendingTasks'], farm['overdueTasks'], farm['cropCount']), (2, 1, 1))
+        self.assertEqual(farm['nextStep']['cta'], 'Asignar cultivo')
+        plot = next(item for item in data['plots'] if item['name'] == 'Potrero planificado')
+        self.assertEqual((plot['planDone'], plot['planTotal'], plot['pendingTasks']), (3, 3, 2))
+        self.assertEqual(plot['nextTask']['label'], 'Monitoreo')  # la más cercana en el tiempo, aunque esté vencida
+        bare = next(item for item in data['plots'] if item['name'] == 'Potrero pelado')
+        self.assertEqual((bare['planDone'], bare['pendingTasks'], bare['nextTask']), (0, 0, None))
+        self.assertNotIn('Lote ajeno', json.dumps(data))
+
+    def test_next_step_is_a_single_suggestion_with_five_states(self):
+        from .views import _farm_next_step
+        farm = Predio.objects.create(propietario=self.user, nombre='Estados', superficie_ha=1)
+        self.assertEqual(_farm_next_step(farm, [])['key'], 'potrero')
+        plot = Potrero.objects.create(predio=farm, nombre='A', superficie_ha=1)
+        self.assertEqual(_farm_next_step(farm, [plot])['key'], 'cultivo')
+        plot.cultivo = self.crop
+        self.assertEqual(_farm_next_step(farm, [plot])['key'], 'planificacion')
+        plot.fecha_siembra, plot.fecha_cosecha = self.today, self.today + timedelta(days=90)
+        # Con la planificación completa el siguiente paso es calcular (las labores se programan después).
+        self.assertEqual(_farm_next_step(farm, [plot])['key'], 'decisiones')
+        self.assertEqual(_farm_next_step(farm, [plot], pending=2)['key'], 'decisiones')
+        self.assertEqual(_farm_next_step(farm, [plot])['url'], f'/decisiones/?tipo=semillas&potrero={plot.pk}')
+
+    def test_view_switch_is_front_end_only_and_remembered_in_local_storage(self):
+        html = self.html('/predios/')
+        for marker in ('data-view-mode="list"', 'data-view-mode="cards"', 'data-view-focus="map"', 'id="farm-picker-list"'):
+            self.assertIn(marker, html)
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-view.js').read_text(encoding='utf-8')
+        self.assertIn('localStorage', source)
+        self.assertNotIn('fetch(', source)
+        self.assertNotIn('XMLHttpRequest', source)
+
+    def test_context_menu_script_handles_keyboard_and_aria(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'row-menu.js').read_text(encoding='utf-8')
+        for marker in ("'Escape'", "'ArrowDown'", 'aria-expanded', 'closest'):
+            self.assertIn(marker, source)
+
+    def test_selected_panel_script_shows_summary_and_single_next_action(self):
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        for marker in ("'Próxima acción'", "'Abrir predio'", "'Labores pendientes'", "'Potreros'", 'farm.nextStep'):
+            self.assertIn(marker, source)
+
+    def test_siembra_shows_month_line_menus_and_no_new_predio_button(self):
+        html = self.html('/calendario/')
+        self.assertIn('data-role="months"', html)
+        self.assertIn('class="row-menu-trigger"', html)
+        self.assertIn('Programar labor', html)
+        self.assertNotIn('Nuevo predio', html)
+        from pathlib import Path
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'siembra-registro.js').read_text(encoding='utf-8')
+        self.assertIn('renderMonths', source)
+        self.assertIn('if (!holder || (!sow && !harvest)) return;', source)  # sin fechas no se dibuja nada
+
+    def test_labores_show_type_icon_color_bar_and_useful_empty_state(self):
+        empty = self.html('/actividades/')
+        self.assertIn('No tienes labores', empty)
+        self.assertIn('Programa una tarea como riego, fertilización o monitoreo.', empty)
+        self.assertEqual(empty.count('Programar primera labor'), 1)
+        self.assertNotIn('Programar labor</a>', empty)  # un solo CTA en el estado vacío
+        self.labor(self.planned, 2)
+        html = self.html('/actividades/')
+        self.assertIn('activity-table-row type-riego', html)
+        self.assertIn('data-lucide="droplets"', html)
+        self.assertIn('Programar labor</a>', html)
+        self.assertNotIn('Programar primera labor', html)
+
+    def test_decision_center_tools_are_differentiated_cards(self):
+        html = self.html('/decisiones/')
+        for tag in ('Calculadora', 'Cobertura', 'Rendimiento', 'Catálogo'):
+            self.assertIn(f'<span class="tool-card-tag">{tag}</span>', html)
+        for label in ('Cuánto llevar', '¿Me alcanza?', 'Cosecha', 'Ficha de insumo'):
+            self.assertIn(f'<strong>{label}</strong>', html)
+        self.assertEqual(html.count('class="tool-ico tone-'), 4)
+
+    def test_ficha_predio_shows_summary_chips_and_plot_menus(self):
+        self.labor(self.planned, -1)
+        html = self.html(f'/predios/{self.farm.pk}/')
+        self.assertIn('detail-summary-row', html)
+        self.assertIn('Labores vencidas · 1', html)
+        self.assertGreaterEqual(html.count('class="row-menu-trigger"'), 3)  # predio + 2 potreros
+        self.assertIn('Registrar nueva temporada', html)
+        self.assertIn('Siguiente paso', html)
+        self.assertEqual(html.count('class="next-step-line"'), 1)
+
+
+class CropPickerTests(TestCase):
+    """Selector visual de cultivos: usa solo cultivos y datos reales, sin listas fijas ni cifras inventadas."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('selector', email='selector@example.com', password=PASSWORD)
+        self.other = User.objects.create_user('selector_ajeno', email='selector_ajeno@example.com', password=PASSWORD)
+        self.client.force_login(self.user)
+        self.zone = Zona.objects.create(nombre='Zona Central')
+        self.maiz = Cultivo.objects.create(nombre='Maíz')
+        self.papa = Cultivo.objects.create(nombre='Papa')
+        self.lechuga = Cultivo.objects.create(nombre='Lechuga')
+        self.raro = Cultivo.objects.create(nombre='Cultivo exótico del catálogo')
+        self.inactivo = Cultivo.objects.create(nombre='Cultivo retirado', activo=False)
+        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo selector', ubicacion='Chocalán', superficie_ha=Decimal('20'), zona=self.zone)
+        self.plot = Potrero.objects.create(predio=self.farm, nombre='Potrero Norte', superficie_ha=Decimal('4.8'))
+        self.today = timezone.localdate()
+
+    def picker(self, url='/predios/'):
+        html = self.client.get(url).content.decode()
+        match = re.search(r'<script id="agro-crop-picker" type="application/json">(.*?)</script>', html, re.S)
+        self.assertIsNotNone(match, 'La página debe incluir los datos del selector de cultivos.')
+        return json.loads(match.group(1)), html
+
+    def season(self, plot, crop):
+        return TemporadaCultivo.objects.create(potrero=plot, cultivo=crop, temporada_agricola='2026-2027')
+
+    def reference(self, **extra):
+        data = dict(cultivo=self.papa, zona=self.zone, tipo_cultivo='Tubérculo', siembra_inicio_mes=9, siembra_fin_mes=11,
+                    cosecha_inicio_mes=1, cosecha_fin_mes=3, duracion_ciclo_dias=120, institucion_fuente='INIA',
+                    documento_fuente='Manual de papa', url_fuente='https://example.org/papa', fecha_consulta_fuente=self.today,
+                    estado=ReferenciaAgronomica.Estado.VERIFICADA)
+        data.update(extra)
+        return ReferenciaAgronomica.objects.create(**data)
+
+    def test_assets_and_data_only_load_on_pages_that_choose_crops(self):
+        _data, html = self.picker('/predios/')
+        self.assertIn('js/crop-picker.js', html)
+        self.assertIn('css/crop-picker.css', html)
+        self.assertIn('id="crop-picker"', html)
+        other = self.client.get('/dashboard/' if self.client.get('/dashboard/').status_code == 200 else '/actividades/').content.decode()
+        self.assertNotIn('crop-picker.js', other)
+        self.assertNotIn('agro-crop-picker', other)
+
+    def test_without_history_only_catalog_crops_are_suggested_and_no_statistics_are_sent(self):
+        data, _html = self.picker()
+        self.assertEqual(data['frequentBasis'], 'suggested')
+        suggested = {Cultivo.objects.get(pk=int(pk)).nombre for pk in data['frequent']}
+        self.assertEqual(suggested, {'Maíz', 'Papa'})  # solo los sugeridos que existen y están activos en el catálogo
+        self.assertNotIn(str(self.inactivo.pk), data['frequent'])
+        self.assertNotIn(str(self.raro.pk), data['frequent'])
+        self.assertFalse(any(key in data for key in ('counts', 'usage', 'stats', 'percent')))
+
+    def test_frequent_crops_come_from_own_history_and_never_from_other_users(self):
+        farm2 = Predio.objects.create(propietario=self.other, nombre='Fundo ajeno', superficie_ha=Decimal('5'))
+        plot2 = Potrero.objects.create(predio=farm2, nombre='Potrero ajeno', superficie_ha=Decimal('1'))
+        for _ in range(3):
+            self.season(plot2, self.lechuga)
+        self.season(self.plot, self.papa)
+        self.season(self.plot, self.papa)
+        self.season(self.plot, self.maiz)
+        data, _html = self.picker()
+        self.assertEqual(data['frequentBasis'], 'used')
+        self.assertEqual(data['frequent'], [str(self.papa.pk), str(self.maiz.pk)])
+        self.assertNotIn(str(self.lechuga.pk), data['frequent'])
+
+    def test_crop_details_only_from_verified_references_with_complete_source(self):
+        self.reference()
+        self.reference(cultivo=self.maiz, estado=ReferenciaAgronomica.Estado.BORRADOR)  # borrador: no se muestra
+        self.reference(cultivo=self.lechuga, url_fuente='')  # verificada pero sin URL de fuente: no se muestra
+        data, _html = self.picker()
+        self.assertEqual(list(data['details']), [str(self.papa.pk)])
+        window = data['details'][str(self.papa.pk)]['windows'][0]
+        self.assertEqual(window['sowing'], 'sep–nov')
+        self.assertEqual(window['harvest'], 'ene–mar')
+        self.assertEqual(window['cycleDays'], 120)
+        self.assertEqual(window['zone'], 'Zona Central')
+        self.assertEqual(data['details'][str(self.papa.pk)]['type'], 'Tubérculo')
+
+    def test_groups_use_catalog_constants_and_short_filter_names(self):
+        data, _html = self.picker()
+        shorts = [group['short'] for group in data['groups']]
+        for name in ('Cereales', 'Hortalizas', 'Leguminosas', 'Tubérculos', 'Forrajeros'):
+            self.assertIn(name, shorts)
+        self.assertEqual(data['groups'][-1]['name'], 'Otros cultivos')
+
+    def test_dialog_has_two_steps_and_no_hardcoded_crop_names(self):
+        _data, html = self.picker()
+        html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
+        dialog = html[html.index('id="crop-dialog"'):html.index('</dialog>')]
+        for text in ('id="crop-picker"', 'id="crop-select"', 'data-crop-step="2"', '¿Cuándo quieres sembrar?', 'id="crop-sowing"',
+                     'id="crop-harvest"', 'Más opciones de la temporada', 'Guardar cultivo'):
+            self.assertIn(text, dialog)
+        for name in ('Maíz', 'Papa', 'Lechuga', 'Trigo', 'Tomate'):
+            self.assertNotIn(name, dialog)  # los cultivos salen de la base de datos, no de la plantilla
+        self.assertRegex(dialog, r'data-crop-fallback')
+
+    def test_forms_keep_the_real_select_and_load_the_picker(self):
+        for url in (f'/predios/{self.farm.pk}/potreros/nuevo/', f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/'):
+            _data, html = self.picker(url)
+            self.assertIn('name="cultivo"', html)
+            for crop in (self.maiz, self.papa, self.lechuga):
+                self.assertIn(f'<option value="{crop.pk}">{crop.nombre}</option>', html)
+            self.assertNotIn(f'<option value="{self.inactivo.pk}">', html)
+            self.assertIn('js/crop-picker.js', html)
+        _data, html = self.picker(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/')
+        self.assertIn('data-crop-plot="Potrero Norte"', html)
+        self.assertIn('data-crop-area="4,80 ha"', html)
+
+    def test_saving_through_the_form_still_works_with_the_hidden_select(self):
+        response = self.client.post(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/', {
+            'cultivo': self.maiz.pk, 'variedad': '', 'temporada_agricola': '2026-2027', 'estado': 'planned',
+            'fecha_siembra': '', 'fecha_cosecha': '', 'observaciones': '',
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(TemporadaCultivo.objects.filter(potrero=self.plot, cultivo=self.maiz).exists())
+
+    def test_picker_script_contract_accessibility_and_future_facts(self):
+        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'crop-picker.js').read_text(encoding='utf-8')
+        for marker in ('role: \'radiogroup\'', "role: 'radio'", "'aria-checked'", "'aria-pressed'", "'aria-live'", 'Continuar planificación',
+                       'Cambiar cultivo', 'Buscar cultivo...', 'Cultivos frecuentes', 'Cultivos sugeridos', 'Limpiar filtros',
+                       '¿Cuándo quieres sembrar?', 'FACT_FIELDS', 'ArrowRight', 'cropsFromSelect(select)'):
+            self.assertIn(marker, source)
+        for forbidden in ('fetch(', 'XMLHttpRequest', 'Math.random', 'localStorage'):
+            self.assertNotIn(forbidden, source)  # solo presentación: no consulta la red ni inventa datos
+
+    def test_picker_styles_cover_mobile_grid_and_reduced_motion(self):
+        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'crop-picker.css').read_text(encoding='utf-8')
+        mobile = css[css.index('@media (max-width: 640px)'):]
+        self.assertIn('.crop-grid { grid-template-columns: repeat(2, minmax(0, 1fr))', mobile)
+        self.assertIn('overflow-x: auto', css)  # categorías desplazables horizontalmente
+        self.assertIn('prefers-reduced-motion', css)
+        self.assertIn('aria-checked="true"', css)
+
+
+class PrediosSideLayoutTests(TestCase):
+    """/predios/: mapa a la izquierda; Información seleccionada e Historial de potreros apilados a la derecha."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('lateral', email='lateral@example.com', password=PASSWORD)
+        self.client.force_login(self.user)
+        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo lateral', ubicacion='Chocalán', superficie_ha=Decimal('30'))
+        self.north = Potrero.objects.create(predio=self.farm, nombre='Potrero Norte', superficie_ha=Decimal('4.8'))
+        self.south = Potrero.objects.create(predio=self.farm, nombre='Potrero Sur', superficie_ha=Decimal('2'))
+
+    def page(self, url='/predios/'):
+        return re.sub(r'<script.*?</script>', '', self.client.get(url).content.decode(), flags=re.S)
+
+    def test_history_lives_in_the_right_column_under_selected_info(self):
+        html = self.page()
+        workspace = html.index('terrain-workspace')
+        map_card = html.index('class="card map-card"')
+        side = html.index('terrain-side')
+        selected = html.index('id="selected-terrain"')
+        history = html.index('id="potrero-history"')
+        dialog = html.index('id="crop-dialog"')
+        self.assertTrue(workspace < map_card < side < selected < history < dialog)  # mapa primero; historial dentro del lateral
+        self.assertEqual(html.count('class="card potrero-history"'), 1)
+        self.assertEqual(html.count('HISTORIAL DE POTREROS'), 1)
+
+    def test_history_keeps_search_filters_order_pagination_and_actions(self):
+        html = self.page()
+        section = html[html.index('id="potrero-history"'):html.index('id="crop-dialog"')]
+        for text in ('name="q"', 'name="filtro_predio"', 'name="cultivo"', 'name="orden"', 'Filtrar', 'Ver en mapa', 'Ficha e historial', 'Editar',
+                     'Potrero Norte', 'Potrero Sur', 'Paginación del historial de potreros', 'Página 1 de 1', '2 registrados'):
+            self.assertIn(text, section)
+        # Las acciones pasaron a un menú ⋯ (una por potrero) y ya no son botones permanentes del listado.
+        self.assertEqual(section.count('class="row-menu-trigger"'), 2)
+        self.assertNotIn('btn-compact', section)
+        self.assertIn(f'data-select-plot="{self.north.pk}"', section)
+        self.assertIn(f'/predios/{self.farm.pk}/potreros/{self.north.pk}/editar/', section)
+        # Fechas completas, una por línea para que no se corten en el ancho lateral.
+        self.assertRegex(section, r'<small>Creado \d\d/\d\d/\d{4} \d\d:\d\d</small>\s*<small>Actualizado \d\d/\d\d/\d{4} \d\d:\d\d</small>')
+
+    def test_filters_still_work_in_the_side_panel(self):
+        html = self.page('/predios/?q=Sur')
+        section = html[html.index('id="potrero-history"'):html.index('id="crop-dialog"')]
+        self.assertIn('Potrero Sur', section)
+        self.assertNotIn('Potrero Norte', section)
+        self.assertIn('value="Sur"', section)
+        empty = self.page('/predios/?q=inexistente')
+        self.assertIn('No hay potreros que coincidan con esos filtros.', empty)
+
+    def test_layout_styles_two_columns_internal_scroll_and_responsive_stack(self):
+        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'predios.css').read_text(encoding='utf-8')
+        block = css[css.index('/* ---------- /predios/: mapa a la izquierda'):]
+        self.assertIn('.terrain-workspace { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);', block)
+        self.assertIn('.terrain-side .potrero-history-list { max-height:', block)
+        self.assertIn('overflow-y: auto', block)
+        self.assertIn('@media (max-width: 1100px)', block)
+        self.assertIn('.terrain-workspace .map-card { order: -1; }', block)  # móvil/tablet: el mapa primero
+        self.assertIn('@media (min-width: 760px) and (max-width: 1100px)', block)  # tablet ancha: info e historial lado a lado
+        self.assertNotIn('overflow-x: scroll', block)
+
+
+class CalculatorGuidedFlowTests(IntegrationBase):
+    """«Cuánto llevar»: herramienta guiada paso a paso (solo presentación; el cálculo sigue en el servidor)."""
+
+    def page(self, url='/decisiones/?herramienta=llevar'):
+        return self.client.get(url).content.decode()
+
+    def test_steps_status_and_button_hierarchy(self):
+        html = self.page()
+        for step in ('plot', 'crop', 'area', 'dose', 'unit', 'go'):
+            self.assertIn(f'data-step="{step}"', html)
+        llevar_panel = html.split('id="tool-llevar"', 1)[1].split('id="tool-alcanza"', 1)[0]
+        self.assertEqual(llevar_panel.count('class="calc-step"'), 6)
+        for marker in ('id="calc-status"', 'id="calc-stats"', 'class="info-strip calc-strip"', 'id="calc-summary"',
+                       'id="calc-plot-picker"', 'id="calc-crop-picker"', 'id="calc-area-tools"', 'id="calc-submit-hint"',
+                       'Opciones avanzadas', 'Cálculo avanzado de semillas', 'calc-flow.js', 'calc-flow.css'):
+            self.assertIn(marker, html)
+        # Prioridad: «Calcular ahora» es el botón principal; PDF, Reportes y «¿Me alcanza?» son secundarios.
+        self.assertRegex(html, r'<button class="btn-primary-agro calc-submit" type="submit" id="calc-submit">')
+        self.assertRegex(html, r'<button class="btn-secondary-agro btn-sm" type="button" id="calc-pdf">')
+        self.assertIn('Ver en Reportes', html)
+        self.assertIn('id="calc-go-cover"', html)
+        self.assertIn('Ir a «¿Me alcanza?»', html)
+
+    def test_native_form_controls_remain_the_source_of_truth(self):
+        html = self.page()
+        for field in ('calc-plot', 'calc-crop', 'calc-product', 'calc-target', 'calc-area', 'calc-dose', 'calc-unit',
+                      'calc-error', 'calc-result', 'calc-notes', 'adv-seed', 'adv-nutrient', 'calc-advanced'):
+            self.assertIn(f'id="{field}"', html)
+        self.assertIn('data-mode="semillas"', html)
+        self.assertIn('data-mode="insumos"', html)
+        self.assertEqual(self.client.get('/decisiones/?herramienta=llevar&tipo=insumos').status_code, 200)
+
+    def test_visual_crop_data_reaches_the_page(self):
+        response = self.client.get('/decisiones/?herramienta=llevar')
+        self.assertIn('groups', response.context['crop_picker'])
+        html = response.content.decode()
+        self.assertIn('id="agro-crop-picker"', html)
+        self.assertIn('js/crop-picker.js', html)
+
+    def test_incomplete_catalog_notice_is_actionable_without_invented_routes(self):
+        html = self.page()
+        self.assertIn('Catálogo en construcción', html)
+        self.assertIn('El catálogo no tiene insumos registrados', html)
+        self.assertIn('class="catalog-alert"', html)
+        self.assertIn('href="/productos/"', html)
+        self.assertIn('data-calc-jump', html)  # hay cultivos: se puede seguir como simulación
+        self.assertNotIn('Completar catálogo', html)  # solo para administradores
+        self.user.is_staff = True
+        self.user.save()
+        self.assertIn('Completar catálogo', self.page())
+
+    def test_notice_disappears_with_a_complete_catalog_and_changes_without_crops(self):
+        TipoInsumo.objects.create(nombre='Semilla')
+        Insumo.objects.create(nombre='Cualquiera', tipo=TipoInsumo.objects.get(nombre='Semilla'), cultivo=self.maize)
+        self.assertNotIn('Catálogo en construcción', self.page())
+        Insumo.objects.all().delete()
+        Cultivo.objects.all().delete()
+        html = self.page()
+        self.assertIn('El catálogo no tiene cultivos registrados', html)
+        self.assertNotIn('data-calc-jump', html)  # sin cultivos no hay simulación posible
+
+    def test_user_without_plots_gets_actionable_empty_state_hooks(self):
+        loner = User.objects.create_user('sinpotreros', email='sin@example.com', password=PASSWORD)
+        self.client.force_login(loner)
+        response = self.client.get('/decisiones/?herramienta=llevar')
+        self.assertEqual(response.context['farm_data']['plots'], [])
+        html = response.content.decode()
+        self.assertIn('data-plots-url="/predios/"', html)
+        self.assertIn('id="calc-plot-picker"', html)
+
+    def test_presentation_layer_does_not_calculate_or_call_the_server(self):
+        base = Path(__file__).resolve().parent / 'static'
+        flow = (base / 'js' / 'calc-flow.js').read_text(encoding='utf-8')
+        panel = (base / 'js' / 'calc-panel.js').read_text(encoding='utf-8')
+        self.assertNotIn('fetch(', flow)
+        self.assertNotIn('XMLHttpRequest', flow)
+        self.assertIn('calc:update', flow)
+        self.assertIn("new CustomEvent('calc:update'", panel)
+        self.assertIn('function readiness()', panel)
+        # El cálculo sigue validándose en el servidor.
+        self.assertIn("operation: 'dose'", panel)
+        self.assertIn('calculateUrl', panel)
+        for name in ('calc-flow.js', 'calc-flow.css', 'calc-panel.js', 'calc-panel.css'):
+            self.assertTrue((base / ('js' if name.endswith('.js') else 'css') / name).exists(), name)
+
+    def test_tool_selector_keeps_four_tools_and_catalog_strip_stays(self):
+        html = self.page()
+        for tool in ('llevar', 'alcanza', 'cosecha', 'ficha'):
+            self.assertIn(f'data-tool="{tool}"', html)
+        self.assertEqual(html.count('class="tool-ico tone-'), 4)
+        # La tira muestra solo lo que tiene datos: con cultivos pero sin insumos no aparecen métricas en cero.
+        self.assertIn('Cultivos del catálogo', html)
+        for label in ('Semillas registradas', 'Fertilizantes en catálogo', 'Otros insumos registrados'):
+            self.assertNotIn(label, html)
+        TipoInsumo.objects.create(nombre='Fertilizante')
+        Insumo.objects.create(nombre='Abono de prueba', tipo=TipoInsumo.objects.get(nombre='Fertilizante'))
+        self.assertIn('Fertilizantes en catálogo', self.page())
+
+
+
+class ToolFlowDesignTests(IntegrationBase):
+    """«¿Me alcanza?», «Cosecha» y «Ficha de insumo» usan el mismo diseño guiado que «Cuánto llevar» (solo presentación)."""
+
+    def page(self, tool):
+        return self.client.get(f'/decisiones/?herramienta={tool}').content.decode()
+
+    def static_source(self, kind, name):
+        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+
+    def test_cover_and_yield_have_guided_steps_and_flow_hooks(self):
+        html = self.page('alcanza')
+        for marker in ('id="cover-form"', 'data-flow="cover"', 'data-picker="plot"', 'data-picker="crop"',
+                       'data-flow-status', 'data-flow-strip', 'data-flow-summary', 'data-flow-summary-body',
+                       'data-flow-hint', 'data-flow-submit', 'data-flow-area-tools',
+                       'tool-flow.js', 'tool-flow.css', 'Comprobar disponibilidad'):
+            self.assertIn(marker, html)
+        self.assertIn('data-flow="yield"', html)
+        self.assertIn('id="yield-form"', html)
+        self.assertIn('Estimar cosecha', html)
+        self.assertIn('data-result-for="cover-form"', html)
+        self.assertIn('data-result-for="yield-form"', html)
+
+    def test_native_controls_and_field_names_are_preserved(self):
+        html = self.page('alcanza')
+        for name in ('plot', 'crop', 'product', 'stock', 'unit', 'dose', 'area', 'rate', 'source', 'variety'):
+            self.assertRegex(html, rf'name="{name}"')
+
+    def test_ficha_keeps_its_containers_for_the_rail(self):
+        html = self.page('ficha')
+        for marker in ('id="ficha-steps"', 'id="ficha-context"', 'id="ficha-sheet"', 'id="ficha-status"', 'id="ficha-hint"',
+                       'Paso 1 de 4'):
+            self.assertIn(marker, html)
+
+    def test_flow_layer_is_presentation_only(self):
+        js = self.static_source('js', 'tool-flow.js')
+        self.assertNotIn('fetch(', js)
+        self.assertNotIn('XMLHttpRequest', js)
+        self.assertIn('AgroToolFlow', js)
+        css = self.static_source('css', 'tool-flow.css')
+        self.assertTrue(css.strip())
+
+    def test_all_four_tools_still_render_for_user_without_plots(self):
+        empty = get_user_model().objects.create_user('sin_potreros', 'sp@example.com', 'Clave12345!')
+        client = Client()
+        client.force_login(empty)
+        for tool in ('llevar', 'alcanza', 'cosecha', 'ficha'):
+            response = client.get(f'/decisiones/?herramienta={tool}')
+            self.assertEqual(response.status_code, 200, tool)
+            self.assertIn('data-tool="alcanza"', response.content.decode())
+
+    def test_deep_link_parameters_still_accepted(self):
+        for query in ('herramienta=alcanza&plot=1&crop=1&insumo=1', 'herramienta=ficha&crop=1&insumo=1', 'herramienta=cosecha&plot=1'):
+            self.assertEqual(self.client.get('/decisiones/?' + query).status_code, 200, query)
+
+
+class GuidedJourneyTests(IntegrationBase):
+    """Ruta de trabajo, zona por defecto (Melipilla) y coherencia entre secciones (solo presentación y datos existentes)."""
+
+    def journey(self, url='/'):
+        return self.client.get(url).context['journey']
+
+    def assign(self, **fields):
+        for name, value in fields.items():
+            setattr(self.plot, name, value)
+        self.plot.save()
+
+    def test_new_user_is_guided_to_register_the_first_farm(self):
+        newcomer = User.objects.create_user('nuevo', email='nuevo@example.com', password=PASSWORD)
+        self.client.force_login(newcomer)
+        journey = self.journey()
+        self.assertEqual([step['state'] for step in journey['steps']], ['current', 'todo', 'todo', 'todo', 'todo', 'todo'])
+        self.assertEqual(journey['next']['cta'], 'Registrar predio')
+        self.assertEqual(journey['next']['url'], '/predios/nuevo/')
+
+    def test_journey_follows_the_data_step_by_step(self):
+        # Predio con potrero pero sin cultivo → siguiente paso: asignar cultivo a ese potrero.
+        journey = self.journey()
+        self.assertEqual([step['state'] for step in journey['steps']][:3], ['done', 'done', 'current'])
+        self.assertEqual(journey['next']['title'], 'Selecciona qué quieres plantar')
+        self.assertIn('Potrero listo', journey['next']['status'])
+        self.assertEqual(journey['next']['cta'], 'Asignar cultivo')
+        self.assertEqual(journey['next']['url'], f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/editar/')
+        # Con cultivo pero sin fecha de siembra → definir siembra.
+        self.assign(cultivo=self.maize)
+        journey = self.journey()
+        self.assertEqual(journey['steps'][3]['state'], 'current')
+        self.assertEqual(journey['next']['title'], 'Planifica la siembra')
+        self.assertEqual(journey['next']['cta'], 'Continuar planificación')
+        self.assertEqual('Cultivo seleccionado', journey['next']['status'])
+        # Con siembra → ya puede usar el Centro de decisiones, con el potrero y el cultivo precargados.
+        self.assign(fecha_siembra=_date(2026, 10, 10))
+        journey = self.journey()
+        self.assertEqual(journey['steps'][4]['state'], 'current')
+        self.assertEqual(journey['next']['status'], 'Ya puedes utilizar las herramientas agrícolas')
+        self.assertEqual([item['label'] for item in journey['next']['actions']], ['Calcular semillas', 'Calcular insumos', 'Ver si me alcanza', 'Consultar ficha de producto'])
+        self.assertEqual(journey['next']['url'], f'/decisiones/?tipo=semillas&potrero={self.plot.pk}')
+        self.assertEqual(journey['next']['actions'][1]['url'], f'/decisiones/?tipo=insumos&potrero={self.plot.pk}')
+        self.assertEqual(journey['next']['actions'][2]['url'], f'/decisiones/?herramienta=alcanza&potrero={self.plot.pk}')
+        # Con un cálculo guardado → seguimiento y reportes.
+        CalculoAgricola.objects.create(usuario=self.user, potrero=self.plot, operacion='dose',
+                                       entrada={'area_ha': 4, 'crop': 'Maíz prueba'}, resultado={'amount': 100, 'unit': 'kg', 'dose': 25, 'dose_unit': 'kg/ha'})
+        journey = self.journey()
+        self.assertEqual(journey['steps'][4]['state'], 'done')
+        self.assertEqual(journey['steps'][5]['state'], 'current')
+        self.assertEqual(journey['next']['url'], '/reportes/')
+
+    def test_farm_without_plots_asks_to_create_one(self):
+        empty_farm = Predio.objects.create(propietario=self.user, nombre='Parcela vacía', ubicacion='Z', superficie_ha=2)
+        journey = self.journey()
+        self.assertEqual(journey['steps'][1]['state'], 'current')
+        self.assertEqual(journey['next']['title'], '¿Cómo quieres trabajar este terreno?')
+        self.assertEqual('Tu predio ya está registrado', journey['next']['status'])
+        self.assertIn('Parcela vacía', journey['next']['text'])
+        self.assertEqual(journey['next']['url'], f'/predios/{empty_farm.pk}/potreros/nuevo/')
+
+    def test_journey_is_shown_on_main_sections_but_not_on_forms_or_farm_detail(self):
+        for url in ('/', '/predios/', '/calendario/', '/decisiones/', '/reportes/'):
+            html = self.client.get(url).content.decode()
+            self.assertIn('class="journey no-print"', html, url)
+            self.assertIn('Siguiente paso', html, url)
+            self.assertIn('css/journey.css', html, url)
+        for url in (f'/predios/{self.farm.pk}/', '/predios/nuevo/', f'/predios/{self.farm.pk}/potreros/nuevo/'):
+            self.assertNotIn('class="journey no-print"', self.client.get(url).content.decode(), url)
+
+    def test_each_section_explains_what_comes_next(self):
+        self.assertIn('Para calcular necesitas: potrero + cultivo + superficie + dosis', self.client.get('/decisiones/').content.decode())
+        self.assertIn('completa la fecha de siembra', self.client.get('/calendario/').content.decode())
+        self.assertIn('quedan guardados y aparecen aquí', self.client.get('/reportes/').content.decode())
+
+    def test_dashboard_lists_saved_calculations_instead_of_claiming_there_are_none(self):
+        self.assertIn('Aún no has guardado cálculos', self.client.get('/').content.decode())
+        CalculoAgricola.objects.create(usuario=self.user, potrero=self.plot, operacion='yield',
+                                       entrada={'area_ha': 4, 'crop': 'Maíz prueba'}, resultado={'production': 120, 'rate': 30, 'source': 'Registro propio'})
+        html = self.client.get('/').content.decode()
+        self.assertNotIn('Aún no hay historial persistente', html)
+        self.assertIn('120 ton', html)
+        self.assertIn('Lote A', html)
+        self.assertIn('/reportes/?tipo=calculos', html)
+
+    def test_dashboard_calculations_belong_to_the_current_user_only(self):
+        CalculoAgricola.objects.create(usuario=self.other, potrero=self.other_plot, operacion='yield',
+                                       entrada={'area_ha': 1}, resultado={'production': 999, 'rate': 1})
+        self.assertNotIn('999 ton', self.client.get('/').content.decode())
+
+
+class MelipillaDefaultZoneTests(IntegrationBase):
+    def test_default_zone_helpers_are_idempotent_and_carry_no_agronomic_data(self):
+        from .catalog import default_zone, ensure_default_zone
+        self.assertIsNone(default_zone())
+        zone, created = ensure_default_zone()
+        self.assertTrue(created)
+        self.assertEqual(zone.nombre, 'Melipilla')
+        self.assertEqual(ensure_default_zone(), (zone, False))
+        self.assertEqual(default_zone(), zone)
+        self.assertFalse(ReferenciaAgronomica.objects.exists())
+
+    def test_deactivated_melipilla_is_respected(self):
+        from .catalog import ensure_default_zone
+        Zona.objects.create(nombre='Melipilla', activo=False)
+        self.assertEqual(ensure_default_zone(), (None, False))
+        self.assertEqual(Zona.objects.filter(nombre__iexact='Melipilla').count(), 1)
+
+    def test_new_farm_form_lists_melipilla_first_and_preselected(self):
+        from .forms import PredioForm
+        melipilla = Zona.objects.create(nombre='Melipilla')
+        form = PredioForm()
+        self.assertEqual(form['zona'].value(), melipilla.pk)
+        self.assertEqual(form.fields['zona'].label, 'Zona agrícola')
+        self.assertEqual(list(form.fields['zona'].queryset)[0], melipilla)
+        self.assertIn('Por defecto: Melipilla', form.fields['zona'].help_text)
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertRegex(html, rf'<option value="{melipilla.pk}" selected>Melipilla</option>')
+
+    def test_editing_a_farm_keeps_its_own_zone(self):
+        from .forms import PredioForm
+        Zona.objects.create(nombre='Melipilla')
+        self.assertEqual(PredioForm(instance=self.farm)['zona'].value(), self.zone.pk)
+
+    def test_farm_can_still_be_saved_when_the_catalog_has_no_zones(self):
+        Predio.objects.update(zona=None)
+        Zona.objects.all().delete()
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]}}
+        response = self.client.post('/predios/nuevo/', {
+            'nombre': 'Predio local', 'ubicacion': 'Melipilla', 'geojson': json.dumps(feature),
+            'perimetro_aceptado': 'on', 'latitud': '-33.687', 'longitud': '-71.216'})
+        farm = Predio.objects.get(nombre='Predio local')
+        self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
+        self.assertIsNone(farm.zona_id)
+        self.assertFalse(Zona.objects.exists())  # guardar un predio nunca crea zonas por su cuenta
+
+    def test_sowing_calendar_opens_on_melipilla_for_users_without_a_zone(self):
+        melipilla = Zona.objects.create(nombre='Melipilla')
+        self.farm.zona = None
+        self.farm.save(update_fields=['zona'])
+        response = self.client.get('/calendario/')
+        self.assertEqual(response.context['calendar_default_zone'], melipilla.pk)
+
+    def test_base_loader_command_creates_zone_and_crops_without_agronomic_data(self):
+        from django.core.management import call_command
+        from io import StringIO
+        Predio.objects.update(zona=None)
+        Zona.objects.all().delete()
+        out = StringIO()
+        call_command('cargar_cultivos_base', stdout=out)
+        call_command('cargar_cultivos_base', stdout=out)
+        self.assertEqual(Zona.objects.filter(nombre='Melipilla').count(), 1)
+        self.assertTrue(Cultivo.objects.filter(nombre='Papa').exists())
+        self.assertFalse(Cultivo.objects.filter(nombre='Papa', densidad_siembra__isnull=False).exists())
+        self.assertFalse(ReferenciaAgronomica.objects.exists())
+
+    def test_entrypoint_loads_base_crops_and_zone_on_start(self):
+        source = (Path(__file__).resolve().parent.parent / 'docker-entrypoint.sh').read_text(encoding='utf-8')
+        self.assertIn('python manage.py importar_catalogo data --aplicar', source)
+        self.assertLess(source.index('migrate'), source.index('importar_catalogo data --aplicar'))
+        self.assertNotIn('\r', source)  # el script debe tener saltos de línea LF para ejecutarse en Linux
+
+
+class DecisionsContinuityStaticTests(TestCase):
+    """Presentación del Centro de decisiones y de Buscar: sin cultivo heredado de otro potrero y con siguiente paso."""
+
+    def source(self, kind, name):
+        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+
+    def test_plot_without_crop_does_not_inherit_the_previous_crop(self):
+        self.assertIn("else if (!plot.cropId) ui.crop.value = '';", self.source('js', 'calc-panel.js'))
+        self.assertIn("else if (!plot.cropId) cropSelect.value = '';", self.source('js', 'decisiones.js'))
+
+    def test_plot_summary_shows_next_step_and_links_to_the_plot_form(self):
+        for name in ('calc-flow.js', 'tool-flow.js'):
+            js = self.source('js', name)
+            self.assertIn('Siguiente paso: ', js, name)
+            self.assertIn('plot.editUrl', js, name)
+            self.assertIn('Asignar cultivo', js, name)
+
+    def test_search_examples_come_from_the_real_catalog(self):
+        js = self.source('js', 'busqueda.js')
+        self.assertNotIn('gusano', js)
+        self.assertNotIn('catálogo demo', js)
+        self.assertIn('search-examples', js)
+
+
+class FlowStatesTests(IntegrationBase):
+    """Estados del recorrido (sin predio, sin potrero, sin cultivo, planificado) y enlaces directos entre secciones."""
+
+    FEATURE = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [[[-71.2, -33.7], [-71.2, -33.69], [-71.19, -33.69], [-71.19, -33.7], [-71.2, -33.7]]]}}
+
+    def source(self, kind, name):
+        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+
+    def plan(self):
+        self.plot.cultivo = self.maize
+        self.plot.fecha_siembra = _date(2026, 10, 10)
+        self.plot.fecha_cosecha = _date(2027, 3, 30)
+        self.plot.save()
+
+    def test_state_1_without_farm_invites_to_register_one_and_decisions_do_not_pose_as_available(self):
+        newcomer = User.objects.create_user('sinpredio', email='sinpredio@example.com', password=PASSWORD)
+        self.client.force_login(newcomer)
+        response = self.client.get('/')
+        journey = response.context['journey']
+        self.assertEqual(journey['next']['title'], 'Comienza registrando tu predio')
+        self.assertEqual(journey['next']['cta'], 'Registrar predio')
+        html = self.client.get('/decisiones/').content.decode()
+        self.assertIn('Comienza registrando tu predio', html)
+        self.assertIn('data-farm-create-url="/predios/nuevo/"', html)
+        self.assertNotIn('Regístralo en <a', html)
+
+    def test_state_2_farm_without_plots_offers_whole_farm_or_split(self):
+        self.plot.delete()
+        Predio.objects.filter(pk=self.farm.pk).update(geojson=self.FEATURE)
+        journey = self.client.get('/').context['journey']
+        self.assertEqual(journey['next']['status'], 'Tu predio ya está registrado')
+        self.assertEqual([(item['label'], item['post']) for item in journey['next']['actions']], [('Utilizar todo el predio', True), ('Dividir en potreros', False)])
+        html = self.client.get('/').content.decode()
+        self.assertIn(f'action="/predios/{self.farm.pk}/usar-completo/"', html)
+        self.assertIn('Utilizar todo el predio', html)
+        self.assertIn('Dividir en potreros', html)
+        # Con un predio sin perímetro no se puede copiar su geometría: solo se ofrece dividir.
+        Predio.objects.filter(pk=self.farm.pk).update(geojson=None)
+        labels = [item['label'] for item in self.client.get('/').context['journey']['next']['actions']]
+        self.assertEqual(labels, ['Dividir en potreros'])
+        # En el Centro de decisiones el enlace lleva a elegir cómo trabajar el predio.
+        decisions = self.client.get('/decisiones/').content.decode()
+        self.assertIn(f'/predios/{self.farm.pk}/?nuevo=1', decisions)
+
+    def test_state_3_and_4_use_the_requested_wording(self):
+        journey = self.client.get('/').context['journey']
+        self.assertEqual(journey['next']['title'], 'Selecciona qué quieres plantar')
+        self.assertEqual(journey['next']['cta'], 'Asignar cultivo')
+        self.plot.cultivo = self.maize
+        self.plot.save()
+        journey = self.client.get('/').context['journey']
+        self.assertEqual(journey['next']['title'], 'Planifica la siembra')
+        self.assertEqual(journey['next']['cta'], 'Continuar planificación')
+
+    def test_state_5_offers_the_three_tools_with_the_plot_preselected(self):
+        self.plan()
+        html = self.client.get('/').content.decode()
+        self.assertIn('Ya puedes utilizar las herramientas agrícolas', html)
+        for label in ('Calcular semillas', 'Calcular insumos', 'Ver si me alcanza', 'Consultar ficha de producto'):
+            self.assertIn(label, html)
+        self.assertIn(f'/decisiones/?tipo=semillas&amp;potrero={self.plot.pk}', html)
+        self.assertIn(f'/decisiones/?herramienta=alcanza&amp;potrero={self.plot.pk}', html)
+
+    def test_sowing_and_farm_detail_link_each_plot_to_its_next_action(self):
+        calendar = self.client.get('/calendario/').content.decode()
+        detail = self.client.get(f'/predios/{self.farm.pk}/').content.decode()
+        for html in (calendar, detail):
+            self.assertIn('Asignar cultivo', html)
+            self.assertNotIn(f'tipo=semillas&amp;potrero={self.plot.pk}', html)  # aún no se puede calcular
+        self.plot.cultivo = self.maize
+        self.plot.save()
+        self.assertIn('Continuar planificación', self.client.get('/calendario/').content.decode())
+        self.plan()
+        link = f'/decisiones/?tipo=semillas&amp;potrero={self.plot.pk}'
+        calendar = self.client.get('/calendario/').content.decode()
+        detail = self.client.get(f'/predios/{self.farm.pk}/').content.decode()
+        for html in (calendar, detail):
+            self.assertIn(link, html)
+            self.assertIn(f'/decisiones/?tipo=insumos&amp;potrero={self.plot.pk}', html)
+            self.assertIn(f'/decisiones/?herramienta=alcanza&amp;potrero={self.plot.pk}', html)
+        self.assertIn('Cambiar cultivo o fechas', calendar)
+
+    def test_farm_payload_exposes_direct_links_for_the_map_panel(self):
+        self.plan()
+        html = self.client.get('/predios/').content.decode()
+        self.assertIn('seedsUrl', html)
+        self.assertIn('setupUrl', html)
+        js = self.source('js', 'predios-map.js')
+        self.assertIn('plot.seedsUrl', js)
+        self.assertIn("'Calcular semillas'", js)
+
+    def test_breadcrumbs_tell_where_the_user_is(self):
+        detail = self.client.get(f'/predios/{self.farm.pk}/?potrero={self.plot.pk}').content.decode()
+        self.assertIn('class="crumbs"', detail)
+        self.assertRegex(detail, r'Mis predios</a><span aria-hidden="true">›</span><a href="/predios/\d+/">Campo</a>.*Lote A')
+        form = self.client.get(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/editar/').content.decode()
+        self.assertIn('class="crumbs"', form)
+        self.assertIn('Editar potrero', form)
+        self.assertIn('id="ctx-line"', self.client.get('/decisiones/').content.decode())
+
+    def test_decisions_accept_the_public_query_parameters_and_label_the_value_origin(self):
+        self.plan()
+        self.assertEqual(self.client.get(f'/decisiones/?tipo=semillas&potrero={self.plot.pk}').status_code, 200)
+        self.assertEqual(self.client.get(f'/decisiones/?tipo=insumos&potrero={self.plot.pk}').status_code, 200)
+        self.assertEqual(self.client.get(f'/decisiones/?herramienta=alcanza&potrero={self.plot.pk}').status_code, 200)
+        for name in ('calc-panel.js', 'decisiones.js'):
+            self.assertIn("params.set('plot', params.get('potrero'))", self.source('js', name), name)
+        panel = self.source('js', 'calc-panel.js')
+        for text in ('Dato documentado del catálogo', 'Ajustado manualmente', 'Valor ingresado manualmente. Este cálculo corresponde a una simulación.', 'No puede superar las '):
+            self.assertIn(text, panel)
+        self.assertIn('ctx-line', self.source('js', 'decisiones.js'))
+
+    def test_base_catalog_has_the_extra_central_chile_crops_by_name_only(self):
+        from .catalog import ensure_base_crops
+        ensure_base_crops()
+        for name in ('Alcachofa', 'Durazno', 'Frutilla'):
+            crop = Cultivo.objects.get(nombre=name)
+            self.assertIsNone(crop.densidad_siembra)
+            self.assertIsNone(crop.rendimiento_ton_ha)

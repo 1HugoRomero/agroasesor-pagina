@@ -1,7 +1,7 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}Actividades agrícolas · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=2">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=4">{% endblock %}
 {% block content %}
 <div class="page-hero">
     <div>
@@ -10,16 +10,16 @@
         <p class="page-sub">Organiza las labores de tus potreros, controla lo pendiente y registra lo realizado.</p>
     </div>
     <div class="toolbar">
-        <a class="button secondary" href="{% url 'reportes' %}?tipo=cuaderno">Cuaderno de campo</a>
-        <a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>
+        <a class="btn-secondary-agro" href="{% url 'reportes' %}?tipo=cuaderno"><i data-lucide="notebook-pen"></i> Cuaderno de campo</a>
+        {% if activities or request.GET %}<a class="btn-primary-agro" href="{% url 'actividad_create' %}"><i data-lucide="plus"></i> Programar labor</a>{% endif %}
     </div>
 </div>
 
 <div class="kpi-row">
-    <a class="kpi" href="?estado=pendiente"><span>Pendientes</span><strong>{{ activity_stats.pendientes }}</strong><small>por realizar</small></a>
-    <a class="kpi kpi-alert" href="?estado=vencida"><span>Vencidas</span><strong>{{ activity_stats.vencidas }}</strong><small>fecha ya pasada</small></a>
-    <a class="kpi" href="?estado=pendiente&amp;desde={{ today|date:'Y-m-d' }}"><span>Próximos 7 días</span><strong>{{ activity_stats.proximas }}</strong><small>desde hoy</small></a>
-    <a class="kpi kpi-ok" href="?estado=completada"><span>Completadas este mes</span><strong>{{ activity_stats.completadas_mes }}</strong><small>con fecha de realización</small></a>
+    <a class="kpi kpi-pending" href="?estado=pendiente"><i class="kpi-ico" data-lucide="clipboard-list"></i><span>Pendientes</span><strong>{{ activity_stats.pendientes }}</strong><small>por realizar</small></a>
+    <a class="kpi kpi-alert" href="?estado=vencida"><i class="kpi-ico" data-lucide="alert-triangle"></i><span>Vencidas</span><strong>{{ activity_stats.vencidas }}</strong><small>fecha ya pasada</small></a>
+    <a class="kpi kpi-soon" href="?estado=pendiente&amp;desde={{ today|date:'Y-m-d' }}"><i class="kpi-ico" data-lucide="calendar-clock"></i><span>Próximos 7 días</span><strong>{{ activity_stats.proximas }}</strong><small>desde hoy</small></a>
+    <a class="kpi kpi-ok" href="?estado=completada"><i class="kpi-ico" data-lucide="circle-check"></i><span>Completadas este mes</span><strong>{{ activity_stats.completadas_mes }}</strong><small>con fecha de realización</small></a>
 </div>
 
 <div class="activity-layout">
@@ -42,7 +42,7 @@
             <label class="field"><span>Desde</span><input type="date" name="desde" value="{{ activity_filters.desde }}"></label>
             <label class="field"><span>Hasta</span><input type="date" name="hasta" value="{{ activity_filters.hasta }}"></label>
             <input type="hidden" name="vista" value="{{ activity_filters.vista }}">
-            <div class="filter-actions"><button class="button" type="submit">Filtrar</button><a class="button secondary" href="{% url 'actividad_list' %}">Limpiar</a></div>
+            <div class="filter-actions"><button class="btn-primary-agro btn-sm" type="submit">Filtrar</button><a class="btn-secondary-agro btn-sm" href="{% url 'actividad_list' %}">Limpiar</a></div>
         </form>
 
         <section class="card">
@@ -56,9 +56,9 @@
 
             {% if activity_filters.vista == 'calendario' %}
             <div class="month-nav">
-                <a class="button secondary" href="?vista=calendario&amp;mes={{ previous_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">← Anterior</a>
-                <a class="button secondary" href="?vista=calendario{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Hoy</a>
-                <a class="button secondary" href="?vista=calendario&amp;mes={{ next_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Siguiente →</a>
+                <a class="btn-secondary-agro btn-sm" href="?vista=calendario&amp;mes={{ previous_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">← Anterior</a>
+                <a class="btn-secondary-agro btn-sm" href="?vista=calendario{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Hoy</a>
+                <a class="btn-secondary-agro btn-sm" href="?vista=calendario&amp;mes={{ next_month }}{% if activity_filters.potrero %}&amp;potrero={{ activity_filters.potrero }}{% endif %}">Siguiente →</a>
             </div>
             <div class="month-grid" role="grid" aria-label="Calendario mensual de actividades">
                 <div class="month-head">Lun</div><div class="month-head">Mar</div><div class="month-head">Mié</div><div class="month-head">Jue</div><div class="month-head">Vie</div><div class="month-head">Sáb</div><div class="month-head">Dom</div>
@@ -77,11 +77,11 @@
             <div class="activity-table" role="table" aria-label="Actividades">
                 <div class="activity-table-head" role="row"><span>Fecha</span><span>Actividad</span><span>Potrero</span><span>Insumo</span><span>Estado</span><span></span></div>
                 {% for activity in activities %}
-                <article class="activity-table-row{% if activity.vencida %} is-overdue{% endif %}" role="row">
+                <article class="activity-table-row type-{{ activity.tipo }}{% if activity.vencida %} is-overdue{% endif %}" role="row">
                     <time class="date-chip" datetime="{{ activity.fecha_programada|date:'Y-m-d' }}"><strong>{{ activity.fecha_programada|date:"d" }}</strong><span>{{ activity.fecha_programada|date:"M Y" }}</span></time>
                     <div class="cell-main">
                         <a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a>
-                        <small><span class="type-dot type-{{ activity.tipo }}"></span>{{ activity.get_tipo_display }} · prioridad {{ activity.get_prioridad_display|lower }}</small>
+                        <small class="type-line"><span class="type-icon">{% include 'partials/activity_icon.html' with tipo=activity.tipo %}</span>{{ activity.get_tipo_display }} · prioridad {{ activity.get_prioridad_display|lower }}</small>
                     </div>
                     <div class="cell"><strong>{{ activity.potrero.nombre }}</strong><small>{{ activity.potrero.predio.nombre }}{% if activity.temporada %} · {{ activity.temporada.cultivo.nombre }}{% endif %}</small></div>
                     <div class="cell">{% if activity.producto_nombre %}<strong>{{ activity.producto_nombre }}</strong><small>{% if activity.dosis %}{{ activity.dosis|floatformat:"-3" }} {{ activity.unidad_dosis }}{% endif %}</small>{% else %}<small class="muted">—</small>{% endif %}</div>
@@ -96,10 +96,23 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="empty-hero">
-                <h3>{% if request.GET %}No hay actividades con esos filtros{% else %}Aún no hay actividades{% endif %}</h3>
-                <p>{% if not activity_plots %}Primero registra un predio y un potrero.{% else %}Planifica una labor o genera el plan de la temporada a partir de las fechas de tus potreros.{% endif %}</p>
-                {% if activity_plots %}<a class="button" href="{% url 'actividad_create' %}">Planificar actividad</a>{% else %}<a class="button" href="{% url 'predio_create' %}">Registrar predio</a>{% endif %}
+            <div class="empty-state">
+                {% if request.GET %}
+                <span class="empty-state-icon"><i data-lucide="search-x"></i></span>
+                <h3>No hay actividades con esos filtros</h3>
+                <p>Prueba con otro estado, tipo de labor o rango de fechas.</p>
+                <a class="btn-secondary-agro" href="{% url 'actividad_list' %}">Limpiar filtros</a>
+                {% elif not activity_plots %}
+                <span class="empty-state-icon"><i data-lucide="map"></i></span>
+                <h3>No tienes labores</h3>
+                <p>Primero registra un predio y un potrero para poder programar tareas.</p>
+                <a class="btn-primary-agro" href="{% url 'predio_create' %}"><i data-lucide="plus"></i> Registrar primer predio</a>
+                {% else %}
+                <span class="empty-state-icon"><i data-lucide="clipboard-list"></i></span>
+                <h3>No tienes labores</h3>
+                <p>Programa una tarea como riego, fertilización o monitoreo.</p>
+                <a class="btn-primary-agro" href="{% url 'actividad_create' %}"><i data-lucide="plus"></i> Programar primera labor</a>
+                {% endif %}
             </div>
             {% endif %}
             {% endif %}
@@ -120,7 +133,7 @@
                 <label class="check"><input type="checkbox" name="incluir_siembra" checked> Siembra en la fecha registrada</label>
                 <label class="check"><input type="checkbox" name="incluir_monitoreo"> Monitoreo cada <input type="number" name="frecuencia_monitoreo" min="1" max="60" value="14" aria-label="Frecuencia en días"> días hasta la cosecha</label>
                 <label class="check"><input type="checkbox" name="incluir_cosecha" checked> Cosecha en la fecha prevista</label>
-                <button class="button" type="submit">Generar actividades</button>
+                <button class="btn-primary-agro" type="submit">Generar actividades</button>
                 <p class="muted small">No se duplican labores que ya existan el mismo día. Los intervalos son tuyos: ajústalos según tu asesor técnico.</p>
             </form>
             {% else %}
@@ -130,7 +143,7 @@
         <section class="card aside-card">
             <h2>Tipos de labor</h2>
             <ul class="legend-list">
-                {% for value, label in activity_types %}<li><span class="type-dot type-{{ value }}"></span>{{ label }}</li>{% endfor %}
+                {% for value, label in activity_types %}<li class="type-{{ value }}"><span class="type-icon">{% include 'partials/activity_icon.html' with tipo=value %}</span>{{ label }}</li>{% endfor %}
             </ul>
         </section>
     </aside>

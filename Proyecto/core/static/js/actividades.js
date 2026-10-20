@@ -22,6 +22,9 @@
 
   const f = form.elements;
   const inputSection = document.getElementById('input-section');
+  const productFields = document.getElementById('product-fields');
+  const inputState = document.getElementById('input-state');
+  const inputCallout = document.getElementById('input-callout');
   const plotContext = document.getElementById('plot-context');
   const guidanceCard = document.getElementById('guidance');
   const doseSummary = document.getElementById('dose-summary');
@@ -147,7 +150,7 @@
     });
     if ([...f.insumo.options].some((option) => option.value === current)) f.insumo.value = current;
     f.insumo.closest('.field').querySelector('.help')?.remove();
-    const help = el('small', 'help', count ? count + ' producto(s) del catálogo compatibles con la labor y el cultivo.' : 'No hay productos del catálogo para esta labor y cultivo; usa «Otro producto» si corresponde.');
+    const help = el('small', 'help', count ? count + ' producto(s) del catálogo compatibles con la labor y el cultivo.' : (products.length ? 'No hay productos del catálogo para esta labor y cultivo. Escribe el producto en «Otro producto».' : 'El catálogo de productos todavía está vacío. Escribe el producto en «Otro producto».'));
     f.insumo.after(help);
   }
 
@@ -207,8 +210,19 @@
   function syncType(fromUser) {
     const type = selectedType();
     const needsInput = WITH_INPUT.has(type);
-    inputSection.classList.toggle('is-muted', !needsInput);
-    inputSection.querySelectorAll('input, select').forEach((input) => { input.disabled = !needsInput && input.name !== 'superficie_ha' && input.name !== 'objetivo'; });
+    const state = !type ? 'pending' : needsInput ? 'active' : 'na';
+    inputSection.dataset.state = state;
+    // Los campos de producto solo se ven (y se envían) cuando la labor los usa; no se dejan grises.
+    productFields.hidden = !needsInput;
+    productFields.querySelectorAll('input, select').forEach((input) => { input.disabled = !needsInput; });
+    const typeLabel = ((form.querySelector('input[name=tipo]:checked') || {}).nextElementSibling || {}).textContent;
+    const texts = {
+      pending: ['Primero elige el tipo de labor', 'Elige el tipo de labor en el paso 1. Si es siembra, fertilización o control fitosanitario, aquí podrás indicar el producto y la dosis.'],
+      na: ['No necesitas completar esto', 'La labor «' + ((typeLabel || '').trim().toLowerCase() || 'elegida') + '» no usa productos. Si quieres, indica la superficie trabajada y el objetivo; el resto se guarda solo.'],
+      active: ['Completa si aplicaste algo', 'Elige un producto del catálogo o escribe el tuyo en «Otro producto». La cantidad total se calcula sola con la dosis y la superficie.']
+    };
+    inputState.textContent = texts[state][0];
+    inputCallout.textContent = texts[state][1];
     const info = guidance[type];
     if (info && fromUser && (!f.nombre.value || f.nombre.value === suggestedName)) {
       const crop = cropName();

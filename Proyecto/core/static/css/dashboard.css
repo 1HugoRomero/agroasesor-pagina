@@ -439,3 +439,10 @@ body:has(.sidebar-quick-links) .sidebar-guide { margin-top: auto; }
 .dash { margin: 0 !important; }
 .dash-hero { border-radius: 18px; }
 .dash-stats, .dash-desk { margin-left: 0 !important; margin-right: 0 !important; }
+
+.dash-calc-row { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--line); }
+.dash-calc-row:first-of-type { border-top: 0; }
+.dash-calc-row strong { color: var(--green-dark); font-size: 1.05rem; }
+.dash-calc-row span { color: var(--ink); font-size: 0.9rem; }
+.dash-calc-row small { color: var(--muted); font-size: 0.8rem; }
+.dash-calc-origin { color: #8a6d12; }
