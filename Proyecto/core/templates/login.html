@@ -1,0 +1,136 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if mode == 'register' %}Crear cuenta{% else %}Iniciar sesión{% endif %} · AgroAsesor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+<body class="access-body">
+    <main class="access-shell">
+        <section class="access-visual" aria-hidden="true">
+            <div class="access-brand">
+                <span class="access-logo" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8"/><path d="M8 13c0-4 2-8 4-10 2 2 4 6 4 10"/><path d="M7 16h10"/></svg>
+                </span>
+                <div>
+                    <strong>AgroAsesor</strong>
+                    <small>Gestión agrícola inteligente</small>
+                </div>
+            </div>
+            <div class="access-copy">
+                <h2>{{ headline }}</h2>
+                <div class="access-meta">
+                    <span>Melipilla, Chile</span>
+                    <span>Gestión agrícola</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="access-panel">
+            {% if mode == 'register' %}
+            <h1>Crear cuenta</h1>
+            <p class="lead">Regístrate con tus propios datos para comenzar a organizar tus terrenos.</p>
+            {% else %}
+            <h1>Iniciar sesión</h1>
+            <p class="lead">Ingresa con el nombre de usuario o correo electrónico de tu cuenta.</p>
+            {% endif %}
+
+            <form method="post" class="access-form">
+                {% csrf_token %}
+                <input type="hidden" name="mode" value="{{ mode }}">
+
+                {% if mode == 'register' %}
+                {{ registration_form.non_field_errors }}
+                <div class="row-2">
+                    <label class="field" for="{{ registration_form.first_name.id_for_label }}">
+                        <span>{{ registration_form.first_name.label }}</span>
+                        {{ registration_form.first_name }}
+                        {{ registration_form.first_name.errors }}
+                    </label>
+                    <label class="field" for="{{ registration_form.last_name.id_for_label }}">
+                        <span>{{ registration_form.last_name.label }}</span>
+                        {{ registration_form.last_name }}
+                        {{ registration_form.last_name.errors }}
+                    </label>
+                </div>
+                <label class="field" for="{{ registration_form.username.id_for_label }}">
+                    <span>{{ registration_form.username.label }}</span>
+                    {{ registration_form.username }}
+                    {{ registration_form.username.errors }}
+                </label>
+                <label class="field" for="{{ registration_form.email.id_for_label }}">
+                    <span>{{ registration_form.email.label }}</span>
+                    {{ registration_form.email }}
+                    {{ registration_form.email.errors }}
+                </label>
+                <div class="row-2">
+                    <label class="field" for="{{ registration_form.password1.id_for_label }}">
+                        <span>{{ registration_form.password1.label }}</span>
+                        <span class="pass-box">
+                            {{ registration_form.password1 }}
+                            <button class="eye" type="button" data-eye="id_password1" aria-label="Mostrar contraseña"></button>
+                        </span>
+                        <small>{{ registration_form.password1.help_text }}</small>
+                        {{ registration_form.password1.errors }}
+                    </label>
+                    <label class="field" for="{{ registration_form.password2.id_for_label }}">
+                        <span>{{ registration_form.password2.label }}</span>
+                        <span class="pass-box">
+                            {{ registration_form.password2 }}
+                            <button class="eye" type="button" data-eye="id_password2" aria-label="Mostrar contraseña"></button>
+                        </span>
+                        {{ registration_form.password2.errors }}
+                    </label>
+                </div>
+                <div class="policy-consent">
+                    <label for="{{ registration_form.acepta_politicas.id_for_label }}">
+                        {{ registration_form.acepta_politicas }}
+                        <span>He leído y acepto la <a href="{% url 'politica_privacidad' %}" target="_blank" rel="noopener">Política de privacidad, seguridad y cookies</a>.</span>
+                    </label>
+                    {{ registration_form.acepta_politicas.errors }}
+                </div>
+                {% else %}
+                <label class="field" for="username">
+                    <span>Nombre de usuario o correo electrónico</span>
+                    <input id="username" name="username" type="text" required autocomplete="username" placeholder="Tu usuario o correo" value="{{ identifier }}">
+                </label>
+                <label class="field" for="password">
+                    <span>Contraseña</span>
+                    <span class="pass-box">
+                        <input id="password" name="password" type="password" required autocomplete="current-password">
+                        <button class="eye" type="button" data-eye="password" aria-label="Mostrar contraseña"></button>
+                    </span>
+                </label>
+                <a class="forgot" href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
+                {% endif %}
+
+                {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+                <button class="submit" type="submit">{% if mode == 'register' %}Crear cuenta{% else %}Ingresar{% endif %}</button>
+            </form>
+
+            {% if mode == 'register' %}
+            <p class="switch">¿Ya tienes cuenta? <a href="?mode=login">Inicia sesión</a></p>
+            {% else %}
+            <p class="switch">¿No tienes cuenta? <a href="?mode=register">Regístrate aquí</a></p>
+            {% endif %}
+        </section>
+    </main>
+    <script>
+      document.querySelectorAll('[data-eye]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const input = document.getElementById(button.dataset.eye);
+          if (!input) return;
+          const hidden = input.type === 'password';
+          input.type = hidden ? 'text' : 'password';
+          button.classList.toggle('is-open', hidden);
+          button.setAttribute('aria-label', hidden ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        });
+      });
+    </script>
+</body>
+</html>

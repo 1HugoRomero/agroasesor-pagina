@@ -1,0 +1,43 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Privacidad, seguridad y cookies · AgroAsesor</title>
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+<body class="access-body">
+    <main class="access-shell recovery-shell">
+        <section class="access-panel">
+            <h1>Privacidad, seguridad y cookies</h1>
+            <p class="lead">Información sobre los datos de tu cuenta y las tecnologías necesarias para operar AgroAsesor. Versión {{ policy_version }}.</p>
+            <div class="policy-content">
+                <h2>Datos de tu cuenta y del campo</h2>
+                <p>Al crear una cuenta almacenamos tu nombre, apellido si lo ingresas, nombre de usuario y correo electrónico. La contraseña se valida y se guarda usando los mecanismos de hash de Django; no almacenamos la contraseña en texto legible. Los predios, potreros, actividades e historiales que registres quedan asociados a tu cuenta y no se muestran a otros usuarios.</p>
+                <p>Usamos estos datos para autenticarte y proporcionar las funciones de gestión agrícola. No ingreses información personal que no sea necesaria para usar el servicio.</p>
+
+                <h2>Cookies necesarias</h2>
+                <p>AgroAsesor utiliza cookies técnicas propias necesarias para mantener la sesión iniciada y proteger los formularios frente a solicitudes no autorizadas (CSRF). Si bloqueas estas cookies, algunas funciones —como iniciar sesión o enviar formularios— pueden dejar de funcionar. Esta aplicación no instala intencionalmente cookies publicitarias ni de seguimiento.</p>
+
+                <h2>Almacenamiento en tu navegador y servicios externos</h2>
+                <p>La aplicación también puede guardar resultados y preferencias de ciertas herramientas en el almacenamiento local del navegador. Ese almacenamiento no es una cookie y permanece en el dispositivo; borrarlo puede eliminar esos resultados guardados localmente. Los registros de predios y actividades se guardan en el servidor.</p>
+                <p>Algunas pantallas cargan recursos de terceros, como tipografías, librerías o cartografía. Al solicitarlos, esos proveedores pueden recibir datos técnicos de conexión conforme a sus propias políticas de privacidad.</p>
+
+                <h2>Seguridad de la cuenta</h2>
+                <ul>
+                    <li>Elige una contraseña robusta y no la compartas.</li>
+                    <li>Cierra la sesión si utilizas un dispositivo compartido.</li>
+                    <li>En producción, el sitio debe utilizar HTTPS para proteger la conexión.</li>
+                </ul>
+                <p>Aplicamos controles de acceso para que cada cuenta consulte sus propios registros. Ningún sistema conectado a Internet puede garantizar seguridad absoluta.</p>
+
+                <h2>Tu aceptación</h2>
+                <p>Para crear una cuenta debes confirmar que leíste y aceptas esta política. Guardamos la versión aceptada y la fecha de aceptación junto con tu cuenta. Si la política cambia sustancialmente, la aplicación podrá solicitar una nueva aceptación.</p>
+                <p>Para consultas sobre tus datos o la cuenta, contacta al administrador de AgroAsesor.</p>
+            </div>
+            <p class="switch"><a href="{% url 'login' %}?mode=register">Volver al registro</a></p>
+        </section>
+    </main>
+</body>
+</html>

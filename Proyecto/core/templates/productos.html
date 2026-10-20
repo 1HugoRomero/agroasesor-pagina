@@ -1,0 +1,91 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}Catálogo de productos · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/productos.css' %}?v=1">{% endblock %}
+{% block content %}
+<div class="page-hero">
+    <div>
+        <span class="eyebrow">Consultar productos</span>
+        <h1 class="page-title">Catálogo de insumos agrícolas</h1>
+        <p class="page-sub">Semillas, fertilizantes y productos fitosanitarios registrados, con su estado de verificación, dosis documentadas y fuentes técnicas.</p>
+    </div>
+    <div class="toolbar">
+        <a class="button secondary" href="{% url 'decisiones' %}?herramienta=ficha">Consulta guiada por problema</a>
+        {% if request.user.is_staff %}<a class="button" href="{% url 'admin:core_insumo_add' %}">Registrar producto</a>{% endif %}
+    </div>
+</div>
+
+<nav class="category-strip" aria-label="Categorías">
+    <a href="?" class="category-chip{% if not product_filters.categoria %} is-active{% endif %}"><i data-lucide="layers" aria-hidden="true"></i><span>Todos</span><strong>{{ product_total }}</strong></a>
+    {% for key, label, count in product_counts %}
+    <a href="?categoria={{ key }}" class="category-chip cat-{{ key }}{% if product_filters.categoria == key %} is-active{% endif %}"><i data-lucide="{% if key == 'seed' %}sprout{% elif key == 'fertilizer' %}flask-conical{% elif key == 'herbicide' %}leaf{% elif key == 'fungicide' %}microscope{% elif key == 'insecticide' %}bug{% else %}package{% endif %}" aria-hidden="true"></i><span>{{ label }}</span><strong>{{ count }}</strong></a>
+    {% endfor %}
+</nav>
+
+<div class="catalog-layout">
+    <form class="card catalog-filters" method="get" aria-label="Filtros del catálogo">
+        <h2>Filtrar</h2>
+        <label class="field"><span>Buscar</span><input type="search" name="q" value="{{ product_filters.q }}" placeholder="Nombre, ingrediente, fabricante, N° SAG"></label>
+        <label class="field"><span>Categoría</span><select name="categoria"><option value="">Todas</option>{% for key, label, count in product_counts %}<option value="{{ key }}"{% if product_filters.categoria == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Cultivo</span><select name="cultivo"><option value="">Todos</option>{% for crop in product_crops %}<option value="{{ crop.pk }}"{% if product_filters.cultivo == crop.pk|stringformat:'s' %} selected{% endif %}>{{ crop.nombre }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Problema agrícola</span><select name="problema"><option value="">Todos</option>{% for problem in product_problems %}<option value="{{ problem.pk }}"{% if product_filters.problema == problem.pk|stringformat:'s' %} selected{% endif %}>{{ problem.get_tipo_display }} · {{ problem.nombre }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Estado de verificación</span><select name="estado"><option value="">Todos</option>{% for value, label in product_statuses %}<option value="{{ value }}"{% if product_filters.estado == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Ordenar por</span><select name="orden">
+            <option value="nombre"{% if product_filters.orden == 'nombre' %} selected{% endif %}>Nombre</option>
+            <option value="categoria"{% if product_filters.orden == 'categoria' %} selected{% endif %}>Categoría</option>
+            <option value="verificacion"{% if product_filters.orden == 'verificacion' %} selected{% endif %}>Verificados primero</option>
+        </select></label>
+        <label class="check-line"><input type="checkbox" name="solo_calculables" value="1"{% if product_filters.solo_calculables %} checked{% endif %}> Solo con dosis verificada (calculables)</label>
+        <div class="toolbar"><button class="button" type="submit">Aplicar</button><a class="button secondary" href="{% url 'productos' %}">Limpiar</a></div>
+        <p class="muted small">El estado refleja lo registrado por el administrador del catálogo; no es una consulta en línea al SAG. Revisa siempre la etiqueta vigente.</p>
+    </form>
+
+    <section class="catalog-results" aria-live="polite">
+        <div class="results-bar"><p><strong>{{ product_count }}</strong> producto{{ product_count|pluralize }}{% if product_count != product_total %} de {{ product_total }}{% endif %}</p></div>
+        {% if products_page.object_list %}
+        <div class="product-grid">
+            {% for product in products_page %}
+            <article class="product-card cat-{{ product.category }}">
+                <header>
+                    <span class="product-category">{{ product.category_label }}</span>
+                    <span class="badge {% if product.estado_verificacion == 'verified' %}{% elif product.estado_verificacion == 'unverified' %}amber{% else %}red{% endif %}">{{ product.status_label }}</span>
+                </header>
+                <h3><a href="{% url 'producto_detail' product.pk %}">{{ product.nombre }}</a></h3>
+                <p class="product-sub">{{ product.ingrediente_activo|default:product.composicion_nutricional|default:product.variedad_semilla|default:product.fabricante|default:"Sin composición registrada" }}</p>
+                <dl>
+                    <div><dt>Cultivo</dt><dd>{{ product.cultivo.nombre|default:"General" }}</dd></div>
+                    <div><dt>Dosis</dt><dd>{% if product.dosis_hectarea %}{{ product.dosis_hectarea|floatformat:"-3" }} {{ product.unidad_dosis }}{% if not product.dosis_con_fuente %} <small>(sin verificar)</small>{% endif %}{% else %}No documentada{% endif %}</dd></div>
+                    {% if product.is_phyto %}<div><dt>Carencia</dt><dd>{{ product.periodo_carencia|default:"No registrada" }}</dd></div>{% elif product.presentacion_cantidad %}<div><dt>Envase</dt><dd>{{ product.presentacion_cantidad|floatformat:"-2" }} {{ product.presentacion_unidad }}</dd></div>{% endif %}
+                </dl>
+                <footer>
+                    {% if product.calculable %}<span class="calc-ok"><i data-lucide="check-circle" aria-hidden="true"></i> Calculable</span>{% else %}<span class="calc-no"><i data-lucide="alert-circle" aria-hidden="true"></i> Sin dosis verificada</span>{% endif %}
+                    {% if not product.is_current %}<span class="calc-no">No vigente</span>{% endif %}
+                    <a class="button secondary" href="{% url 'producto_detail' product.pk %}">Ver ficha</a>
+                </footer>
+            </article>
+            {% endfor %}
+        </div>
+        {% if products_page.paginator.num_pages > 1 %}
+        <nav class="pager" aria-label="Paginación">
+            {% if products_page.has_previous %}<a class="button secondary" href="?{{ product_query }}&amp;pagina={{ products_page.previous_page_number }}">Anterior</a>{% endif %}
+            <span>Página {{ products_page.number }} de {{ products_page.paginator.num_pages }}</span>
+            {% if products_page.has_next %}<a class="button secondary" href="?{{ product_query }}&amp;pagina={{ products_page.next_page_number }}">Siguiente</a>{% endif %}
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="card empty-hero">
+            <i data-lucide="package-search" aria-hidden="true"></i>
+            {% if product_total %}
+            <h2>No hay productos con esos filtros</h2>
+            <p>Prueba con otra categoría o quita algún filtro.</p>
+            <a class="button secondary" href="{% url 'productos' %}">Ver todo el catálogo</a>
+            {% else %}
+            <h2>El catálogo todavía no tiene productos</h2>
+            <p>AgroAsesor no muestra productos de ejemplo como si fueran reales. Se deben cargar con su ficha técnica, etiqueta y fuente (SAG, fabricante, INIA).</p>
+            {% if request.user.is_staff %}<a class="button" href="{% url 'admin:core_insumo_add' %}">Registrar el primer producto</a>{% else %}<p class="muted">Solicita al administrador que cargue el catálogo.</p>{% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends 'body.html' %}{% load static %}
+{% block title %}Mis predios y potreros · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/predios.css' %}?v=10">{% endblock %}
+{% block content %}
+<div class="page-hero terrain-page-heading">
+    <div>
+        <h1 class="page-title">Mis predios y potreros</h1>
+        <p class="page-sub">Selecciona un predio o potrero para consultar sus datos y ubicación.</p>
+    </div>
+    <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
+</div>
+
+<section class="card farm-picker" aria-labelledby="farm-picker-title">
+    <div class="section-heading">
+        <div><span class="terrain-eyebrow">Tus terrenos</span><h2 id="farm-picker-title">MIS PREDIOS REGISTRADOS</h2></div>
+        <a class="text-link" href="{% url 'predios' %}">Mostrar todos los predios</a>
+    </div>
+    {% if predios_list %}
+    <div class="farm-picker-list" role="group" aria-label="Seleccionar predio">
+        {% for predio in predios_list %}
+        <button type="button" class="farm-picker-item{% if selected_predio_id == predio.pk|stringformat:'s' %} is-selected{% endif %}" data-select-farm="{{ predio.pk }}" aria-pressed="{% if selected_predio_id == predio.pk|stringformat:'s' %}true{% else %}false{% endif %}">
+            <strong>{{ predio.nombre }}</strong>
+            <span>{{ predio.ubicacion|default:'Ubicación no registrada' }}</span>
+            <span class="farm-picker-metrics">{{ predio.superficie_ha|floatformat:2 }} ha · {{ predio.potreros_count }} potreros</span>
+        </button>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="terrain-empty-inline">
+        <p>No tienes predios registrados.</p>
+        <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
+    </div>
+    {% endif %}
+</section>
+
+{% if predios_list %}
+<section class="card farm-plots-picker" id="farm-plots-picker" aria-labelledby="farm-plots-title" {% if not selected_predio %}hidden{% endif %}>
+    <div class="section-heading">
+        <div><span class="terrain-eyebrow">Administración del predio</span><h2 id="farm-plots-title">POTREROS DE ESTE PREDIO</h2></div>
+        <a class="button secondary" id="register-selected-plot" href="{% if selected_predio %}{% url 'potrero_create' selected_predio.pk %}{% else %}#{% endif %}">Registrar primer potrero</a>
+    </div>
+    {% for predio in predios_list %}
+    <div class="farm-plots-group" data-farm-plots="{{ predio.pk }}" {% if selected_predio_id != predio.pk|stringformat:'s' %}hidden{% endif %}>
+        {% if predio.potreros.all %}
+        <div class="farm-plot-picker-list">
+            {% for potrero in predio.potreros.all %}
+            <article class="farm-plot-picker-item" data-plot-card="{{ potrero.pk }}">
+                <div>
+                    <strong>{{ potrero.nombre }}</strong>
+                    <span>{{ potrero.superficie_ha|floatformat:2 }} ha · <span data-plot-crop-label="{{ potrero.pk }}">{{ potrero.cultivo|default:'Sin cultivo asignado' }}{% if potrero.variedad and potrero.cultivo %} · {{ potrero.variedad }}{% endif %}</span></span>
+                    <small>{{ potrero.creado|date:"d/m/Y" }} · <span data-plot-status="{{ potrero.pk }}">{% if potrero.cultivo and potrero.cultivo.activo %}Cultivo activo{% elif potrero.cultivo %}Cultivo inactivo{% else %}Sin cultivo{% endif %}</span></small>
+                </div>
+                <div class="farm-plot-picker-actions">
+                    <button class="button secondary" type="button" data-select-plot="{{ potrero.pk }}" data-farm-id="{{ predio.pk }}">Ver en mapa</button>
+                    <button class="button" type="button" data-assign-crop="{{ potrero.pk }}">{% if potrero.cultivo %}Cambiar cultivo{% else %}Asignar cultivo{% endif %}</button>
+                    <a class="text-link" href="{% url 'predio_detail' predio.pk %}?potrero={{ potrero.pk }}#predio-history">Ficha e historial</a>
+                    <a class="text-link" href="{% url 'potrero_edit' predio.pk potrero.pk %}">Editar</a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="terrain-empty-inline">
+            <p>Este predio todavía no tiene potreros registrados.</p>
+            <a class="button" href="{% url 'potrero_create' predio.pk %}">Registrar primer potrero</a>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+
+<div class="terrain-layout terrain-map-layout">
+    <section class="card map-card">
+        <div class="map-card-heading">
+            <div><span class="terrain-eyebrow">Vista geográfica</span><h2>Mapa de predios y potreros</h2><p>Selecciona los registros desde el listado o directamente en el mapa.</p></div>
+        </div>
+        <div class="map-actions terrain-map-actions">
+            <button class="secondary-action" type="button" id="show-all-farms" {% if not predios_list %}disabled{% endif %}>Mostrar todos los predios</button>
+            <button class="secondary-action" type="button" id="show-selected-farm-plots" {% if not selected_predio %}disabled{% endif %}>Ver potreros del predio</button>
+        </div>
+        <p id="map-status" class="map-status-panel" role="status" aria-live="polite">{% if not predios_list %}No tienes predios registrados.{% elif not farm_data.stats.potreros %}Selecciona un predio para registrar y administrar sus potreros.{% else %}Selecciona un potrero en el listado o directamente en el mapa.{% endif %}</p>
+        <div id="farm-map" class="farm-map" data-initial-farm="{{ selected_predio_id }}" data-initial-plot="{{ selected_potrero_id }}" aria-label="Mapa interactivo de predios y potreros"></div>
+        <ul class="map-legend" aria-label="Leyenda del mapa">
+            <li><span class="map-legend-swatch farm"></span> Perímetro del predio</li>
+            <li><span class="map-legend-swatch plot"></span> Potrero</li>
+            <li><span class="map-legend-swatch plot-crop"></span> Potrero con cultivo asignado</li>
+            <li><span class="map-legend-swatch selected"></span> Selección actual</li>
+        </ul>
+        <p class="map-attribution-note">Los nombres de los potreros aparecen al acercar el mapa. La atribución de la cartografía se indica en el mapa según la vista seleccionada.</p>
+    </section>
+    <section class="terrain-list">
+        <section class="card selected-terrain" id="selected-terrain" aria-live="polite">
+            <h2>Información seleccionada</h2>
+            <p id="selected-terrain-empty">{% if not predios_list %}No tienes predios registrados.{% elif not farm_data.stats.potreros %}Selecciona un predio para registrar y administrar sus potreros.{% else %}Selecciona un predio o potrero en el listado o en el mapa.{% endif %}</p>
+            <div id="selected-terrain-details" hidden></div>
+        </section>
+    </section>
+</div>
+
+<dialog class="crop-dialog" id="crop-dialog" aria-labelledby="crop-dialog-title">
+    <form method="dialog" class="crop-dialog-form" id="crop-form" novalidate>
+        {% csrf_token %}
+        <div class="crop-dialog-head">
+            <div>
+                <span class="terrain-eyebrow">Planificación por temporada</span>
+                <h2 id="crop-dialog-title">Asignar cultivo</h2>
+            </div>
+            <button type="button" class="icon-close" data-close-dialog aria-label="Cerrar">×</button>
+        </div>
+        <dl class="crop-dialog-context">
+            <div><dt>Predio</dt><dd id="crop-farm">—</dd></div>
+            <div><dt>Potrero</dt><dd id="crop-plot">—</dd></div>
+            <div><dt>Superficie</dt><dd id="crop-area">—</dd></div>
+            <div><dt>Cultivo actual</dt><dd id="crop-current">—</dd></div>
+        </dl>
+        <div id="crop-empty-catalog" class="alert" hidden>
+            <strong>No hay cultivos activos en el catálogo.</strong>
+            <p>AgroAsesor no crea cultivos de ejemplo automáticamente.
+            {% if request.user.is_staff %}Regístralos desde la administración del catálogo.{% else %}Solicita al administrador del catálogo que registre los cultivos.{% endif %}</p>
+            {% if request.user.is_staff %}<a class="button secondary" href="{% url 'admin:core_cultivo_add' %}">Registrar cultivo en el catálogo</a>{% endif %}
+        </div>
+        <div class="crop-dialog-grid" id="crop-fields">
+            <label class="field"><span>Cultivo</span><select id="crop-select" required></select></label>
+            <label class="field"><span>Variedad (opcional)</span><input id="crop-variety" maxlength="150" list="crop-variety-options" autocomplete="off"><datalist id="crop-variety-options"></datalist></label>
+            <label class="field"><span>Temporada agrícola</span><select id="crop-season"></select></label>
+            <label class="field"><span>Estado del cultivo</span>
+                <select id="crop-status">
+                    <option value="planned">Planificada</option>
+                    <option value="sown">Sembrada</option>
+                    <option value="harvested">Cosechada</option>
+                    <option value="closed">Cerrada</option>
+                </select>
+            </label>
+            <label class="field"><span>Fecha de siembra (real o planificada)</span><input id="crop-sowing" type="date"></label>
+            <label class="field"><span>Fecha prevista de cosecha</span><input id="crop-harvest" type="date"></label>
+            <label class="field crop-dialog-wide"><span>Observaciones (opcional)</span><textarea id="crop-notes" rows="3" maxlength="2000"></textarea></label>
+            <label class="crop-dialog-wide crop-close-previous"><input type="checkbox" id="crop-close-previous" checked> Cerrar la temporada anterior al registrar esta (sus datos se conservan en el historial)</label>
+        </div>
+        <p class="error" id="crop-error" role="alert"></p>
+        <div class="crop-dialog-actions">
+            <button type="button" class="button secondary" data-close-dialog>Cancelar</button>
+            <button type="submit" class="button" id="crop-save">Guardar cultivo</button>
+        </div>
+    </form>
+</dialog>
+
+<section class="card potrero-history" aria-labelledby="potrero-history-title">
+    <div class="section-heading">
+        <div><span class="terrain-eyebrow">Registros persistidos</span><h2 id="potrero-history-title">HISTORIAL DE POTREROS</h2></div>
+        <span class="map-badge">{{ potrero_history_page.paginator.count }} registrados</span>
+    </div>
+    <form class="terrain-filter-form" method="get">
+        <label class="field"><span>Buscar potrero</span><input type="search" name="q" value="{{ terrain_filters.q }}" placeholder="Nombre del potrero"></label>
+        <label class="field"><span>Predio</span><select name="filtro_predio"><option value="">Todos</option>{% for predio in predios_list %}<option value="{{ predio.pk }}" {% if terrain_filters.predio == predio.pk|stringformat:'s' %}selected{% endif %}>{{ predio.nombre }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Cultivo</span><select name="cultivo"><option value="">Todos</option>{% for cultivo in crop_options %}<option value="{{ cultivo.pk }}" {% if terrain_filters.cultivo == cultivo.pk|stringformat:'s' %}selected{% endif %}>{{ cultivo.nombre }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Ordenar por</span><select name="orden">
+            <option value="-creado" {% if terrain_filters.orden == '-creado' %}selected{% endif %}>Más recientes</option>
+            <option value="creado" {% if terrain_filters.orden == 'creado' %}selected{% endif %}>Más antiguos</option>
+            <option value="-actualizado" {% if terrain_filters.orden == '-actualizado' %}selected{% endif %}>Modificados recientemente</option>
+            <option value="actualizado" {% if terrain_filters.orden == 'actualizado' %}selected{% endif %}>Modificados hace más tiempo</option>
+            <option value="nombre" {% if terrain_filters.orden == 'nombre' %}selected{% endif %}>Nombre A-Z</option>
+            <option value="-nombre" {% if terrain_filters.orden == '-nombre' %}selected{% endif %}>Nombre Z-A</option>
+        </select></label>
+        <button class="button" type="submit">Filtrar</button>
+    </form>
+    {% if potrero_history_page.object_list %}
+    <div class="potrero-history-list">
+        {% for potrero in potrero_history_page %}
+        <article class="potrero-history-item">
+            <div class="potrero-history-main">
+                <strong>{{ potrero.nombre }}</strong>
+                <span>{{ potrero.predio.nombre }} · {{ potrero.superficie_m2|floatformat:2 }} m² · {{ potrero.superficie_ha|floatformat:4 }} ha</span>
+                <span><span data-plot-crop-label="{{ potrero.pk }}">{{ potrero.cultivo|default:'Sin cultivo asociado' }}</span> · <span data-plot-status="{{ potrero.pk }}">{% if potrero.cultivo and potrero.cultivo.activo %}Cultivo activo{% elif potrero.cultivo %}Cultivo inactivo{% else %}Sin cultivo{% endif %}</span></span>
+                <small>Creado {{ potrero.creado|date:"d/m/Y H:i" }} · Actualizado {{ potrero.actualizado|date:"d/m/Y H:i" }}</small>
+            </div>
+            <div class="potrero-history-actions">
+                <button class="button secondary" type="button" data-select-plot="{{ potrero.pk }}" data-farm-id="{{ potrero.predio_id }}">Ver en mapa</button>
+                <a class="text-link" href="{% url 'predio_detail' potrero.predio_id %}?potrero={{ potrero.pk }}#predio-history">Ficha e historial</a>
+                <a class="text-link" href="{% url 'potrero_edit' potrero.predio_id potrero.pk %}">Editar</a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    <nav class="terrain-pagination" aria-label="Paginación del historial de potreros">
+        {% if potrero_history_page.has_previous %}<a class="button secondary" href="?q={{ terrain_filters.q|urlencode }}&filtro_predio={{ terrain_filters.predio|urlencode }}&cultivo={{ terrain_filters.cultivo|urlencode }}&orden={{ terrain_filters.orden|urlencode }}&pagina={{ potrero_history_page.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Página {{ potrero_history_page.number }} de {{ potrero_history_page.paginator.num_pages }}</span>
+        {% if potrero_history_page.has_next %}<a class="button secondary" href="?q={{ terrain_filters.q|urlencode }}&filtro_predio={{ terrain_filters.predio|urlencode }}&cultivo={{ terrain_filters.cultivo|urlencode }}&orden={{ terrain_filters.orden|urlencode }}&pagina={{ potrero_history_page.next_page_number }}">Siguiente</a>{% endif %}
+    </nav>
+    {% else %}
+    <div class="terrain-empty-inline"><p>{% if terrain_filters.q or terrain_filters.predio or terrain_filters.cultivo %}No hay potreros que coincidan con esos filtros.{% else %}Todavía no hay potreros registrados.{% endif %}</p></div>
+    {% endif %}
+</section>
+{% endblock %}
+{% block extra_js %}{{ maps_config|json_script:'maps-config' }}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.18.0/dist/leaflet-geoman.min.js"></script><script src="{% static 'js/predios-map.js' %}?v=8"></script>{% endblock %}

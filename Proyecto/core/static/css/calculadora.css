@@ -1,0 +1,9 @@
+.formula-box {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 12px 0;
+    font-size: 1.05rem;
+}
+.formula-line { font-weight: 700; color: var(--green-dark); margin: 0 0 8px; }

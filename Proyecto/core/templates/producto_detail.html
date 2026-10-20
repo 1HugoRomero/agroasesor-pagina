@@ -1,0 +1,143 @@
+{% extends "body.html" %}
+{% load static %}
+{% block title %}{{ product.nombre }} · Ficha técnica · AgroAsesor{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/productos.css' %}?v=1">{% endblock %}
+{% block content %}
+<div class="page-hero no-print">
+    <div>
+        <a class="back-link" href="{% url 'productos' %}">← Catálogo de productos</a>
+        <span class="eyebrow">{{ product.category_label }}</span>
+        <h1 class="page-title">{{ product.nombre }}</h1>
+        <p class="page-sub">{{ product.fabricante|default:"Fabricante no registrado" }}{% if product.cultivo %} · {{ product.cultivo.nombre }}{% endif %}</p>
+    </div>
+    <div class="toolbar">
+        <button class="button secondary" type="button" onclick="window.print()">Imprimir / guardar PDF</button>
+        {% if product.calculable %}<a class="button" href="{{ calc_url }}">Calcular cantidad</a>{% endif %}
+    </div>
+</div>
+
+<div class="sheet-layout">
+    <article class="card sheet">
+        <header class="sheet-head">
+            <div>
+                <p class="print-only">AgroAsesor · Ficha técnica de insumo</p>
+                <h2>{{ product.nombre }}</h2>
+                <p class="muted">{{ product.category_label }}{% if product.formulacion %} · {{ product.formulacion }}{% endif %}{% if product.concentracion %} · {{ product.concentracion }}{% endif %}</p>
+            </div>
+            <div class="sheet-badges">
+                <span class="badge {% if product.estado_verificacion == 'verified' %}{% elif product.estado_verificacion == 'unverified' %}amber{% else %}red{% endif %}">{{ product.status_label }}</span>
+                <span class="badge {% if product.is_current %}{% else %}red{% endif %}">{% if product.is_current %}Vigente{% else %}No vigente{% endif %}</span>
+                {% if product.calculable %}<span class="badge">Dosis verificada</span>{% endif %}
+            </div>
+        </header>
+
+        {% if missing_data %}
+        <div class="sheet-alert" role="note">
+            <strong>Información incompleta para recomendar una aplicación.</strong>
+            <p>Falta: {{ missing_data|join:", " }}. No se habilitan cálculos con dosis no confirmadas.</p>
+        </div>
+        {% endif %}
+
+        <section class="sheet-section">
+            <h3>Identificación</h3>
+            <dl class="sheet-grid">
+                <div><dt>Nombre comercial</dt><dd>{{ product.nombre }}</dd></div>
+                <div><dt>Categoría</dt><dd>{{ product.tipo.nombre }}</dd></div>
+                <div><dt>Fabricante</dt><dd>{{ product.fabricante|default:"—" }}</dd></div>
+                <div><dt>Ingrediente activo / composición</dt><dd>{{ product.ingrediente_activo|default:product.composicion_nutricional|default:"—" }}</dd></div>
+                <div><dt>Concentración</dt><dd>{{ product.concentracion|default:"—" }}</dd></div>
+                <div><dt>Formulación</dt><dd>{{ product.formulacion|default:"—" }}</dd></div>
+                {% if product.is_phyto %}<div><dt>Autorización SAG</dt><dd>{{ product.numero_autorizacion_sag|default:"No registrada" }}</dd></div>{% endif %}
+                <div><dt>Presentación</dt><dd>{% if product.presentacion_cantidad %}{{ product.presentacion_cantidad|floatformat:"-3" }} {{ product.presentacion_unidad }}{% else %}—{% endif %}</dd></div>
+            </dl>
+            {% if product.descripcion %}<p>{{ product.descripcion|linebreaksbr }}</p>{% endif %}
+        </section>
+
+        <section class="sheet-section">
+            <h3>Uso documentado</h3>
+            <dl class="sheet-grid">
+                <div><dt>Cultivo asociado</dt><dd>{{ product.cultivo.nombre|default:"General" }}</dd></div>
+                <div><dt>Zona</dt><dd>{{ product.zona.nombre|default:"Sin restricción registrada" }}</dd></div>
+                <div><dt>Problemas relacionados</dt><dd>{% for problem in product.problemas.all %}{{ problem.get_tipo_display }}: {{ problem.nombre }}{% if not forloop.last %}; {% endif %}{% empty %}—{% endfor %}</dd></div>
+                {% if product.is_phyto %}
+                <div><dt>Cultivos autorizados</dt><dd>{{ product.cultivos_autorizados|join:", "|default:"No registrados" }}</dd></div>
+                <div><dt>Objetivos de control</dt><dd>{{ product.objetivos_control|join:", "|default:"No registrados" }}</dd></div>
+                {% endif %}
+            </dl>
+        </section>
+
+        <section class="sheet-section">
+            <h3>Dosis y aplicación</h3>
+            <dl class="sheet-grid">
+                <div><dt>Dosis{% if product.is_phyto %} de etiqueta{% endif %}</dt><dd>{% if product.dosis_hectarea %}{{ product.dosis_hectarea|floatformat:"-3" }} {{ product.unidad_dosis }} {% if product.dosis_con_fuente %}<small class="ok">verificada</small>{% else %}<small class="warn">sin verificar</small>{% endif %}{% else %}No documentada{% endif %}</dd></div>
+                <div><dt>Dosis máxima</dt><dd>{% if product.dosis_maxima_hectarea %}{{ product.dosis_maxima_hectarea|floatformat:"-3" }} {{ product.unidad_dosis_maxima }}{% else %}—{% endif %}</dd></div>
+                <div><dt>Fuente de la dosis</dt><dd>{{ product.dosis_fuente|default:"—" }}</dd></div>
+                <div class="span-all"><dt>Modo de aplicación (etiqueta)</dt><dd>{{ product.modo_aplicacion|default:"No registrado"|linebreaksbr }}</dd></div>
+                {% if product.category == 'fertilizer' %}
+                <div><dt>N</dt><dd>{{ product.nitrogeno_pct|default_if_none:"—" }}{% if product.nitrogeno_pct is not None %} %{% endif %}</dd></div>
+                <div><dt>P₂O₅</dt><dd>{{ product.fosforo_p2o5_pct|default_if_none:"—" }}{% if product.fosforo_p2o5_pct is not None %} %{% endif %}</dd></div>
+                <div><dt>K₂O</dt><dd>{{ product.potasio_k2o_pct|default_if_none:"—" }}{% if product.potasio_k2o_pct is not None %} %{% endif %}</dd></div>
+                {% endif %}
+                {% if product.category == 'seed' %}
+                <div><dt>Variedad</dt><dd>{{ product.variedad_semilla|default:"—" }}</dd></div>
+                <div><dt>Tipo de semilla</dt><dd>{{ product.tipo_semilla|default:"—" }}</dd></div>
+                <div><dt>Plantas objetivo / m²</dt><dd>{{ product.plantas_objetivo_m2|default_if_none:"—" }}</dd></div>
+                <div><dt>Peso de mil semillas</dt><dd>{% if product.peso_mil_semillas_g %}{{ product.peso_mil_semillas_g|floatformat:"-2" }} g{% else %}—{% endif %}</dd></div>
+                <div><dt>Germinación</dt><dd>{% if product.germinacion_pct %}{{ product.germinacion_pct|floatformat:"-1" }} %{% else %}—{% endif %}</dd></div>
+                <div><dt>Pureza</dt><dd>{% if product.pureza_pct %}{{ product.pureza_pct|floatformat:"-1" }} %{% else %}—{% endif %}</dd></div>
+                {% endif %}
+            </dl>
+        </section>
+
+        {% if product.is_phyto or product.restricciones or product.precauciones_ambientales %}
+        <section class="sheet-section">
+            <h3>Seguridad y medio ambiente</h3>
+            <dl class="sheet-grid">
+                <div><dt>Período de carencia</dt><dd>{{ product.periodo_carencia|default:"No registrado" }}</dd></div>
+                <div><dt>Tiempo de reingreso</dt><dd>{{ product.tiempo_reingreso|default:"No registrado" }}</dd></div>
+                <div class="span-all"><dt>Restricciones</dt><dd>{{ product.restricciones|default:"No registradas"|linebreaksbr }}</dd></div>
+                <div class="span-all"><dt>Precauciones ambientales</dt><dd>{{ product.precauciones_ambientales|default:"No registradas"|linebreaksbr }}</dd></div>
+                <div class="span-all"><dt>Polinizadores</dt><dd>{{ product.advertencia_polinizadores|default:"No registrado"|linebreaksbr }}</dd></div>
+            </dl>
+            {% if product.is_phyto %}<p class="safety-note">Usa el equipo de protección indicado en la etiqueta, respeta carencia y reingreso, y realiza triple lavado de envases. Este resumen no reemplaza la etiqueta autorizada.</p>{% endif %}
+        </section>
+        {% endif %}
+
+        <section class="sheet-section">
+            <h3>Fuentes y vigencia</h3>
+            <dl class="sheet-grid">
+                <div><dt>Fuente técnica</dt><dd>{% if product.fuente_url %}<a href="{{ product.fuente_url }}" target="_blank" rel="noopener noreferrer">{{ product.fuente_nombre|default:"Ver documento" }}</a>{% else %}{{ product.fuente_nombre|default:"No registrada" }}{% endif %}</dd></div>
+                <div><dt>Fecha de verificación</dt><dd>{{ product.fecha_verificacion|date:"d/m/Y"|default:"—" }}</dd></div>
+                <div><dt>Vigencia</dt><dd>{{ product.vigencia_desde|date:"d/m/Y"|default:"Sin inicio" }} – {{ product.vigencia_hasta|date:"d/m/Y"|default:"sin término" }}</dd></div>
+                <div><dt>Etiqueta</dt><dd>{% if product.etiqueta_url %}<a href="{{ product.etiqueta_url }}" target="_blank" rel="noopener noreferrer">Abrir etiqueta</a>{% else %}No vinculada{% endif %}</dd></div>
+                <div><dt>Hoja de seguridad</dt><dd>{% if product.hoja_seguridad_url %}<a href="{{ product.hoja_seguridad_url }}" target="_blank" rel="noopener noreferrer">Abrir HDS</a>{% else %}No vinculada{% endif %}</dd></div>
+            </dl>
+        </section>
+        <p class="muted small sheet-foot">Ficha generada por AgroAsesor el {% now "d/m/Y" %}. Información orientativa; verifica la etiqueta vigente y consulta a un profesional.</p>
+    </article>
+
+    <aside class="sheet-aside no-print">
+        <section class="card">
+            <h2>Acciones</h2>
+            <div class="action-list">
+                {% if product.calculable %}
+                <a class="action-item" href="{{ calc_url }}"><i data-lucide="calculator" aria-hidden="true"></i><span><strong>Calcular cantidad</strong><small>Cuánto llevar para un potrero</small></span></a>
+                {% endif %}
+                <a class="action-item" href="{{ availability_url }}"><i data-lucide="warehouse" aria-hidden="true"></i><span><strong>Consultar disponibilidad</strong><small>¿Me alcanza lo que tengo?</small></span></a>
+                <a class="action-item" href="{{ plan_url }}"><i data-lucide="calendar-plus" aria-hidden="true"></i><span><strong>Planificar aplicación</strong><small>Registrar en el cuaderno de campo</small></span></a>
+                <button class="action-item" type="button" onclick="window.print()"><i data-lucide="printer" aria-hidden="true"></i><span><strong>Imprimir ficha</strong><small>O guardar como PDF</small></span></button>
+            </div>
+        </section>
+        {% if related_products %}
+        <section class="card">
+            <h2>Productos relacionados</h2>
+            <ul class="related-list">
+                {% for item in related_products %}
+                <li><a href="{% url 'producto_detail' item.pk %}">{{ item.nombre }}</a><small>{{ item.category_label }} · {{ item.status_label }}</small></li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

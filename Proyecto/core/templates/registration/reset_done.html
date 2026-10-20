@@ -1,0 +1,19 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Solicitud recibida · AgroAsesor</title>
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+<body class="access-body">
+    <main class="access-shell recovery-shell">
+        <section class="access-panel">
+            <h1>Solicitud recibida</h1>
+            <p class="lead">Si existe una cuenta activa con ese correo, se enviarán instrucciones. En desarrollo local, el correo aparece en la consola del servidor.</p>
+            <p class="switch"><a href="{% url 'login' %}">Volver al inicio de sesión</a></p>
+        </section>
+    </main>
+</body>
+</html>
