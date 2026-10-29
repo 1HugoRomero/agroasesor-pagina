@@ -1,3 +1,4 @@
+import hashlib
 import json
 from decimal import Decimal
 from django import forms
@@ -5,29 +6,82 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from .models import ActividadAgricola, Predio, Potrero, Cultivo, Zona, TemporadaCultivo, Insumo
+from .models import ActividadAgricola, Agricultor, Predio, Potrero, Cultivo, Zona, TemporadaCultivo, Insumo
+from .validators import (
+    formatear_rut, formatear_telefono, normalizar_comuna, normalizar_nombre_completo,
+    normalizar_rut, normalizar_telefono, partir_nombre,
+)
 from django.db import models
 from .catalog import default_zone, grouped_crop_choices
 from .geometry import polygon_area, coordinates_from_geojson
 
 
-class RegistroForm(UserCreationForm):
+class DatosAgricultorMixin(forms.Form):
+    """Datos personales del agricultor que se piden en el registro y se editan en el perfil."""
+
+    nombre_completo = forms.CharField(
+        max_length=150,
+        label='Nombre completo',
+        widget=forms.TextInput(attrs={'autocomplete': 'name', 'placeholder': 'Nombre y apellido'}),
+    )
+    telefono = forms.CharField(
+        max_length=20,
+        label='Teléfono',
+        help_text='Celular o fijo de Chile, por ejemplo +56 9 1234 5678.',
+        widget=forms.TextInput(attrs={'autocomplete': 'tel', 'inputmode': 'tel', 'placeholder': '+56 9 1234 5678'}),
+    )
+    comuna = forms.CharField(
+        max_length=100,
+        label='Comuna',
+        widget=forms.TextInput(attrs={'autocomplete': 'address-level2', 'placeholder': 'Por ejemplo: Melipilla'}),
+    )
+    rut = forms.CharField(
+        max_length=14,
+        required=False,
+        label='RUT (opcional)',
+        help_text='Solo si quieres registrarlo. Ejemplo: 12.345.678-5.',
+        widget=forms.TextInput(attrs={'autocomplete': 'off', 'inputmode': 'text', 'placeholder': '12.345.678-5'}),
+    )
+
+    def clean_nombre_completo(self):
+        return normalizar_nombre_completo(self.cleaned_data.get('nombre_completo'))
+
+    def clean_telefono(self):
+        return normalizar_telefono(self.cleaned_data.get('telefono'))
+
+    def clean_comuna(self):
+        return normalizar_comuna(self.cleaned_data.get('comuna'))
+
+    def _rut_a_excluir(self):
+        return None
+
+    def clean_rut(self):
+        rut = normalizar_rut(self.cleaned_data.get('rut'))
+        if rut:
+            repetidos = Agricultor.objects.filter(rut=rut)
+            excluir = self._rut_a_excluir()
+            if excluir is not None:
+                repetidos = repetidos.exclude(pk=excluir)
+            if repetidos.exists():
+                raise ValidationError('Este RUT ya está registrado en otra cuenta.')
+        return rut
+
+
+def _nombre_de_usuario_desde_correo(correo):
+    """Las cuentas nuevas entran con su correo; el nombre de usuario interno es el mismo correo."""
+    if len(correo) <= 150:
+        return correo
+    return 'u' + hashlib.sha1(correo.encode('utf-8')).hexdigest()
+
+
+class RegistroForm(DatosAgricultorMixin, UserCreationForm):
+    """Registro público: solo crea agricultores (nunca administradores)."""
+
     error_messages = {
         **UserCreationForm.error_messages,
         'password_mismatch': 'Las contraseñas no coinciden.',
     }
 
-    first_name = forms.CharField(
-        max_length=150,
-        label='Nombre',
-        widget=forms.TextInput(attrs={'autocomplete': 'given-name', 'placeholder': 'Tu nombre'}),
-    )
-    last_name = forms.CharField(
-        max_length=150,
-        label='Apellido (opcional)',
-        required=False,
-        widget=forms.TextInput(attrs={'autocomplete': 'family-name', 'placeholder': 'Tu apellido'}),
-    )
     email = forms.EmailField(
         max_length=254,
         label='Correo electrónico',
@@ -40,17 +94,14 @@ class RegistroForm(UserCreationForm):
         },
     )
 
-    class Meta(UserCreationForm.Meta):
+    class Meta:
         model = get_user_model()
-        fields = ('first_name', 'last_name', 'username', 'email')
+        fields = ('email',)
+
+    field_order = ['nombre_completo', 'email', 'telefono', 'comuna', 'rut', 'password1', 'password2', 'acepta_politicas']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['username'].label = 'Nombre de usuario'
-        self.fields['username'].widget.attrs.update({
-            'autocomplete': 'username',
-            'placeholder': 'Elige un nombre de usuario',
-        })
         self.fields['password1'].label = 'Contraseña'
         self.fields['password1'].widget.attrs.update({'autocomplete': 'new-password'})
         self.fields['password2'].label = 'Confirmar contraseña'
@@ -59,16 +110,6 @@ class RegistroForm(UserCreationForm):
             'Usa al menos 8 caracteres; evita las contraseñas comunes, solo numéricas '
             'o que contengan tus datos personales.'
         )
-
-    def clean_username(self):
-        username = self.cleaned_data['username'].strip()
-        users = get_user_model().objects
-        if (
-            users.filter(username__iexact=username).exists()
-            or users.filter(email__iexact=username).exists()
-        ):
-            raise ValidationError('Este nombre de usuario ya está registrado.')
-        return username
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
@@ -79,6 +120,70 @@ class RegistroForm(UserCreationForm):
         ):
             raise ValidationError('Este correo electrónico ya está registrado.')
         return email
+
+    def _post_clean(self):
+        # La clave se compara con los datos personales, así que el usuario debe tenerlos antes de validarla.
+        nombre = self.cleaned_data.get('nombre_completo')
+        correo = self.cleaned_data.get('email')
+        if nombre:
+            self.instance.first_name, self.instance.last_name = partir_nombre(nombre)
+        if correo:
+            self.instance.username = _nombre_de_usuario_desde_correo(correo)
+        super()._post_clean()
+
+    def save(self, commit=True):
+        """Crea el usuario y su ficha de agricultor juntos (el llamador debe envolverlo en una transacción)."""
+        user = super().save(commit=False)
+        user.username = _nombre_de_usuario_desde_correo(user.email)
+        user.first_name, user.last_name = partir_nombre(self.cleaned_data['nombre_completo'])
+        user.is_staff = False
+        user.is_superuser = False
+        if commit:
+            user.save()
+            Agricultor.objects.create(
+                user=user,
+                nombre=self.cleaned_data['nombre_completo'],
+                rut=self.cleaned_data.get('rut') or None,
+                telefono=self.cleaned_data['telefono'],
+                comuna=self.cleaned_data['comuna'],
+            )
+        return user
+
+
+class PerfilForm(DatosAgricultorMixin):
+    """Edición de los datos personales de la cuenta (y alta de la ficha para cuentas antiguas)."""
+
+    field_order = ['nombre_completo', 'telefono', 'comuna', 'rut']
+
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        self.ficha = Agricultor.objects.filter(user=user).first()
+        if self.ficha is not None and 'initial' not in kwargs:
+            kwargs['initial'] = {
+                'nombre_completo': self.ficha.nombre,
+                'telefono': formatear_telefono(self.ficha.telefono),
+                'comuna': self.ficha.comuna,
+                'rut': formatear_rut(self.ficha.rut) if self.ficha.rut else '',
+            }
+        elif self.ficha is None and 'initial' not in kwargs:
+            kwargs['initial'] = {'nombre_completo': user.get_full_name()}
+        super().__init__(*args, **kwargs)
+
+    def _rut_a_excluir(self):
+        return self.ficha.pk if self.ficha is not None else None
+
+    def save(self):
+        datos = self.cleaned_data
+        ficha = self.ficha or Agricultor(user=self.user)
+        ficha.nombre = datos['nombre_completo']
+        ficha.telefono = datos['telefono']
+        ficha.comuna = datos['comuna']
+        ficha.rut = datos.get('rut') or None
+        ficha.save()
+        self.user.first_name, self.user.last_name = partir_nombre(datos['nombre_completo'])
+        self.user.save(update_fields=['first_name', 'last_name'])
+        self.ficha = ficha
+        return ficha
 
 
 class PredioForm(forms.ModelForm):

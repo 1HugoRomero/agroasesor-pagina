@@ -1,7 +1,11 @@
+# Nombre fijo del proyecto Docker (el volumen de datos queda como agroasesor_hugo_agroasesor_data).
+name: agroasesor_hugo
+
 services:
   agroasesor:
     build: .
-    container_name: agroasesor_app
+    image: agroasesor_hugo
+    container_name: agroasesor_hugo
     ports:
       - "8000:8000"
     environment:
@@ -10,8 +14,10 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-cambia-esta-clave-solo-para-desarrollo}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-127.0.0.1,localhost}
       DJANGO_DB_PATH: /data/db.sqlite3
+      DJANGO_BACKUP_DIR: /backups
     volumes:
-      - agroasesor_data:/data   # base de datos SQLite persistente
+      - agroasesor_data:/data   # LA base de datos oficial (SQLite persistente)
+      - ./backups:/backups      # respaldos automáticos y archivos para consolidar (visibles en tu PC)
     restart: unless-stopped
 
 volumes:

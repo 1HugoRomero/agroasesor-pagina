@@ -1,0 +1,1098 @@
+# AgroAsesor API v0.3 · lectura de terreno detrás de la puerta de enlace de Django
+openapi: 3.0.3
+info:
+  title: AgroAsesor API - lectura de terreno y catálogo
+  version: 0.3.0
+  description: 'Servicio interno de AgroAsesor. Los usuarios, contraseñas y sesiones son SOLO de Django: el navegador
+    llama a /api/v1/... en Django, que valida la sesión y reenvía la petición a esta API con cabeceras firmadas
+    (HMAC-SHA256). Esta API lee la base oficial en modo SOLO LECTURA y nunca escribe en ella. Las operaciones de
+    escritura siguen devolviendo 501 hasta su fase.'
+servers:
+- url: http://localhost:5050/api/v1
+paths:
+  /health:
+    get:
+      tags:
+      - Sistema
+      summary: Estado de la API y de la conexión de solo lectura
+      responses:
+        '200':
+          description: 'API activa; base_datos: no_configurada | no_disponible | conectada_solo_lectura'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  servicio:
+                    type: string
+                  version:
+                    type: string
+                  base_datos:
+                    type: string
+  /auth/registro:
+    post:
+      tags:
+      - Auth
+      summary: Registrar usuario (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Iniciar sesion (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Cerrar sesion (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /usuarios/me:
+    get:
+      tags:
+      - Perfil
+      summary: Mi perfil
+      description: Solo lectura. Perfil del usuario autenticado.
+      responses:
+        '200':
+          description: Perfil del usuario autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: &id001
+      - gatewayAuth: []
+    patch:
+      tags:
+      - Usuarios
+      summary: Mi perfil (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /predios:
+    get:
+      tags:
+      - Predios
+      summary: Listar mis predios
+      description: Solo lectura. Predios del usuario con superficie en ha y m².
+      responses:
+        '200':
+          description: Predios del usuario con superficie en ha y m²
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: *id001
+    post:
+      tags:
+      - Predios
+      summary: Listar o crear predios (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /predios/{predio_id}:
+    get:
+      tags:
+      - Predios
+      summary: Detalle de un predio propio
+      description: Solo lectura. Predio del usuario.
+      responses:
+        '200':
+          description: Predio del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: &id002
+      - name: predio_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      security: *id001
+    patch:
+      tags:
+      - Predios
+      summary: Detalle predio (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id002
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+    delete:
+      tags:
+      - Predios
+      summary: Detalle predio (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id002
+  /predios/{predio_id}/potreros:
+    get:
+      tags:
+      - Potreros
+      summary: Potreros de un predio propio
+      description: Solo lectura. Potreros con ha, m² y perímetro.
+      responses:
+        '200':
+          description: Potreros con ha, m² y perímetro
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: &id003
+      - name: predio_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      security: *id001
+    post:
+      tags:
+      - Potreros
+      summary: Potreros de predio (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id003
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /potreros/{potrero_id}:
+    get:
+      tags:
+      - Potreros
+      summary: Detalle de un potrero propio
+      description: Solo lectura. Potrero con ha, m² y perímetro.
+      responses:
+        '200':
+          description: Potrero con ha, m² y perímetro
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: &id004
+      - name: potrero_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      security: *id001
+    patch:
+      tags:
+      - Potreros
+      summary: Detalle potrero (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id004
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+    delete:
+      tags:
+      - Potreros
+      summary: Detalle potrero (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id004
+  /potreros/{potrero_id}/confirmar-perimetro:
+    post:
+      tags:
+      - Potreros
+      summary: Confirmar perimetro (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: potrero_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /cultivos:
+    get:
+      tags:
+      - Cultivos
+      summary: Listar cultivos activos
+      description: Solo lectura. Cultivos con estado de verificación de sus datos.
+      responses:
+        '200':
+          description: Cultivos con estado de verificación de sus datos
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: *id001
+  /cultivos/{cultivo_id}:
+    get:
+      tags:
+      - Cultivos
+      summary: Detalle de cultivo
+      description: Solo lectura. Cultivo.
+      responses:
+        '200':
+          description: Cultivo
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: cultivo_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      security: *id001
+  /insumos:
+    get:
+      tags:
+      - Insumos
+      summary: Listar insumos vigentes
+      description: Solo lectura. Insumos con estado de verificación y fuente.
+      responses:
+        '200':
+          description: Insumos con estado de verificación y fuente
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: *id001
+  /insumos/{insumo_id}:
+    get:
+      tags:
+      - Insumos
+      summary: Detalle de insumo
+      description: Solo lectura. Insumo.
+      responses:
+        '200':
+          description: Insumo
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No existe o no pertenece al usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: insumo_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      security: *id001
+  /zonas:
+    get:
+      tags:
+      - Zonas
+      summary: Listar zonas activas
+      description: Solo lectura. Zonas agrícolas.
+      responses:
+        '200':
+          description: Zonas agrícolas
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security: *id001
+  /temporadas:
+    get:
+      tags:
+      - Temporadas
+      summary: Listar o crear temporadas (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Temporadas
+      summary: Listar o crear temporadas (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /temporadas/{temporada_id}:
+    get:
+      tags:
+      - Temporadas
+      summary: Detalle temporada (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: &id005
+      - name: temporada_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    patch:
+      tags:
+      - Temporadas
+      summary: Detalle temporada (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id005
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+    delete:
+      tags:
+      - Temporadas
+      summary: Detalle temporada (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id005
+  /calculos/semillas:
+    post:
+      tags:
+      - Calculos
+      summary: Calcular semillas (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /calculos/fertilizantes:
+    post:
+      tags:
+      - Calculos
+      summary: Calcular fertilizantes (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /calculos/cobertura:
+    post:
+      tags:
+      - Calculos
+      summary: Calcular cobertura (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /predicciones/rendimiento:
+    post:
+      tags:
+      - Predicciones
+      summary: Estimar rendimiento (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /calendario:
+    get:
+      tags:
+      - Calendario
+      summary: Consultar calendario (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /actividades:
+    get:
+      tags:
+      - Actividades
+      summary: Listar o crear actividades (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - Actividades
+      summary: Listar o crear actividades (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+  /actividades/{actividad_id}:
+    get:
+      tags:
+      - Actividades
+      summary: Detalle actividad (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: &id006
+      - name: actividad_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    patch:
+      tags:
+      - Actividades
+      summary: Detalle actividad (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id006
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+    delete:
+      tags:
+      - Actividades
+      summary: Detalle actividad (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters: *id006
+  /reportes/resumen:
+    get:
+      tags:
+      - Reportes
+      summary: Resumen reportes (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /reportes/predios/{predio_id}/historial:
+    get:
+      tags:
+      - Reportes
+      summary: Historial predio (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: predio_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+  /admin/resumen:
+    get:
+      tags:
+      - Admin
+      summary: Resumen administrador (pendiente)
+      description: 'Ruta reservada: devuelve HTTP 501. No se han implementado operaciones ni persistencia.'
+      responses:
+        '501':
+          description: Funcionalidad todavía no implementada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /catalogo/categorias:
+    get:
+      tags:
+      - Catálogo
+      summary: Categorías agrícolas disponibles
+      responses:
+        '200':
+          description: Lista de categorías
+  /catalogo/fuentes:
+    get:
+      tags:
+      - Catálogo
+      summary: Fuentes institucionales y fecha de consulta
+      responses:
+        '200':
+          description: Fuentes SAG, INIA, ODEPA
+  /catalogo/productos:
+    get:
+      tags:
+      - Catálogo
+      summary: Buscar y filtrar insumos agrícolas
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+          maxLength: 100
+      - in: query
+        name: categoria
+        schema:
+          type: string
+      - in: query
+        name: pagina
+        schema:
+          type: integer
+          minimum: 1
+        description: Por defecto 1
+      - in: query
+        name: limite
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Por defecto 20
+      responses:
+        '200':
+          description: Lista paginada con procedencia y advertencias
+        '400':
+          description: Filtro inválido
+  /catalogo/productos/{product_id}:
+    get:
+      tags:
+      - Catálogo
+      summary: Ficha de un insumo y sus fuentes
+      parameters:
+      - in: path
+        name: product_id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Ficha del producto
+        '404':
+          description: No encontrado
+  /catalogo/referencias-siembra:
+    get:
+      tags:
+      - Catálogo
+      summary: Rangos de siembra documentados por INIA
+      responses:
+        '200':
+          description: Referencias contextualizadas
+  /catalogo/calcular-sacos:
+    post:
+      tags:
+      - Catálogo
+      summary: Calcula cantidad de sacos para semilla usando dosis elegida por usuario
+      description: No es un cálculo de plaguicidas ni recomendación agronómica. La dosis debe estar dentro del rango
+        INIA.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - referencia_id
+              - peso_saco_kg
+              - dosis_kg_ha
+              properties:
+                referencia_id:
+                  type: string
+                  example: trigo-invierno
+                superficie_ha:
+                  type: number
+                  exclusiveMinimum: 0
+                  example: 1.5
+                superficie_m2:
+                  type: number
+                  exclusiveMinimum: 0
+                peso_saco_kg:
+                  type: number
+                  exclusiveMinimum: 0
+                  example: 25
+                dosis_kg_ha:
+                  type: number
+                  exclusiveMinimum: 0
+                  example: 180
+                precio_saco_clp:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Precio informado por el usuario, no precio oficial
+              additionalProperties: false
+      responses:
+        '200':
+          description: Cálculo orientativo con fuente
+        '400':
+          description: Datos inválidos
+        '415':
+          description: Se requiere JSON
+  /calculos:
+    get:
+      tags:
+      - Cálculos
+      summary: Historial de cálculos del usuario
+      description: 'Solo lectura. Filtros opcionales: potrero_id, limite (1-200).'
+      security: *id001
+      parameters:
+      - name: potrero_id
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: limite
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      responses:
+        '200':
+          description: Historial
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Sin autenticación válida o firma vencida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Base de datos o clave interna no configuradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /openapi.json:
+    get:
+      tags:
+      - Sistema
+      summary: Esta especificación en JSON
+      responses:
+        '200':
+          description: OpenAPI 3.0.3
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - codigo
+          - mensaje
+          properties:
+            codigo:
+              type: string
+            mensaje:
+              type: string
+            modulo:
+              type: string
+            operacion:
+              type: string
+  securitySchemes:
+    gatewayAuth:
+      type: apiKey
+      in: header
+      name: X-AgroAsesor-Signature
+      description: Firma HMAC-SHA256 generada por Django junto con X-AgroAsesor-User, -Staff y -Timestamp. No es
+        una credencial de navegador.
+tags:
+- name: Perfil
+  description: Lectura desde la base oficial (solo lectura).
+- name: Predios
+  description: Lectura desde la base oficial (solo lectura).
+- name: Potreros
+  description: Lectura desde la base oficial (solo lectura).
+- name: Cultivos
+  description: Lectura desde la base oficial (solo lectura).
+- name: Insumos
+  description: Lectura desde la base oficial (solo lectura).
+- name: Zonas
+  description: Lectura desde la base oficial (solo lectura).
+- name: Cálculos
+  description: Lectura desde la base oficial (solo lectura).
+- name: Catálogo
+  description: Fuentes SAG, INIA, ODEPA y cálculos logísticos de semillas

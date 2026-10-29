@@ -1,0 +1,343 @@
+# AgroAsesor: catálogo con fuentes institucionales, revisado 2026-10-28.
+# Sin marcas, presentaciones ni precios inventados.
+version: 0.2.0
+fecha_consulta: '2026-10-28'
+pais: Chile
+aviso_general: Catálogo informativo. Una ficha SAG publicada no acredita por sí sola autorización vigente. No sustituye
+  etiqueta, asesoría técnica ni verificación del registro actual.
+fuentes:
+- id: sag_plaguicidas
+  organismo: SAG
+  titulo: Listado de plaguicidas autorizados, prohibidos, restringidos y cancelados
+  url: https://www.sag.gob.cl/ambitos-de-accion/listado-de-plaguicidas-autorizados-prohibidos-restringidos-y-cancelados-etiquetas-y-hds
+  actualizacion_publicada: '2026-10-26'
+  tipo: registro_publico
+- id: sag_semillas
+  organismo: SAG
+  titulo: Requisitos para la comercialización de semillas
+  url: https://www.sag.gob.cl/ambitos-de-accion/requisitos-para-la-comercializacion-de-semillas
+  tipo: normativa
+- id: sag_certificacion
+  organismo: SAG
+  titulo: Solicitud de certificación varietal de semillas y plantas
+  url: https://www.sag.gob.cl/tramites/solicitud-de-certificacion-varietal-de-semillas-y-plantas
+  tipo: procedimiento
+- id: sag_fertilizantes
+  organismo: SAG
+  titulo: Exigencias de etiquetado para fertilizantes y bioestimulantes
+  url: https://www.sag.gob.cl/noticias/sag-llama-informarse-sobre-nuevas-exigencias-de-etiquetado-para-fertilizantes-y-bioestimulantes
+  actualizacion_publicada: '2026-06-19'
+  tipo: normativa
+- id: sag_organicos
+  organismo: SAG
+  titulo: Listas de insumos visados para agricultura orgánica
+  url: https://www.sag.gob.cl/ambitos-de-accion/evaluacion-de-insumos-para-usos-en-agricultura-organica/registros
+  actualizacion_publicada: '2026-10-05'
+  tipo: registro_publico
+- id: sag_fungisei
+  organismo: SAG
+  titulo: Etiqueta y HDS FUNGISEI
+  url: https://www.sag.gob.cl/sites/default/files/FUNGISEI%20ET%20y%20HDS%2019-12-2025.pdf
+  actualizacion_publicada: '2025-12-19'
+  tipo: etiqueta_producto
+- id: sag_abamectin
+  organismo: SAG
+  titulo: Etiqueta y HDS ABAMECTIN 84 SC
+  url: https://www.sag.gob.cl/sites/default/files/ABAMECTIN%2084%20SC%20Etiqueta%20y%20HDS%2004-10-2026.pdf
+  actualizacion_publicada: '2026-10-04'
+  tipo: etiqueta_producto
+- id: sag_bird_shield
+  organismo: SAG
+  titulo: Ficha de etiqueta BIRD SHIELD
+  url: https://www.sag.gob.cl/content/bird-shield
+  actualizacion_publicada: '2025-12-02'
+  tipo: etiqueta_producto
+- id: sag_captiva_prime
+  organismo: SAG
+  titulo: Ficha de etiqueta CAPTIVA PRIME
+  url: https://www.sag.gob.cl/content/captiva-prime
+  actualizacion_publicada: '2025-12-03'
+  tipo: etiqueta_producto
+- id: sag_avadex
+  organismo: SAG
+  titulo: Ficha de etiqueta AVADEX 480 EC
+  url: https://www.sag.gob.cl/content/avadex-480-ec
+  tipo: etiqueta_producto
+  actualizacion_publicada: '2026-08-10'
+- id: inia_semillas
+  organismo: INIA
+  titulo: Semillas certificadas INIA
+  url: https://www.inia.cl/semillas/
+  tipo: informacion_institucional
+- id: inia_trigo
+  organismo: INIA
+  titulo: Capítulo técnico sobre siembra de trigo, sección 2.2.3 Dosis de semilla
+  url: https://biblioteca.inia.cl/bitstreams/0cd81922-fbd9-4fe9-9653-8567e65972a5/download
+  tipo: publicacion_tecnica
+- id: inia_arroz
+  organismo: INIA
+  titulo: Capítulo técnico sobre siembra directa de arroz, sección Dosis de semilla
+  url: https://biblioteca.inia.cl/bitstreams/dfab736c-c39a-4331-8964-47e37c358d18/download
+  tipo: publicacion_tecnica
+- id: inia_papa
+  organismo: INIA
+  titulo: Plan Predial, papa primor, boletín 330
+  url: https://planpredial.inia.cl/media/documentos/papa_primor.pdf
+  tipo: publicacion_tecnica
+- id: odepa_insumos
+  organismo: ODEPA
+  titulo: Precios de insumos agropecuarios y fertilizantes
+  url: https://www.odepa.gob.cl/precios/insumos
+  tipo: estadisticas_precios
+categorias:
+- id: semillas
+  nombre: Semillas y material de siembra
+  descripcion: Variedades, lotes, pureza y germinación.
+- id: fertilizantes
+  nombre: Fertilizantes
+  descripcion: Nutrición vegetal, composición y trazabilidad.
+- id: bioestimulantes
+  nombre: Bioestimulantes
+  descripcion: Productos sujetos a exigencias de etiquetado.
+- id: herbicidas
+  nombre: Herbicidas
+  descripcion: Control de malezas según etiqueta autorizada.
+- id: fungicidas
+  nombre: Fungicidas
+  descripcion: Control de enfermedades vegetales.
+- id: insecticidas
+  nombre: Insecticidas y acaricidas
+  descripcion: Control de insectos y ácaros.
+- id: repelentes
+  nombre: Repelentes
+  descripcion: Productos para ahuyentar organismos según etiqueta.
+- id: enmiendas
+  nombre: Enmiendas de suelo
+  descripcion: Materiales para mejorar características del suelo.
+- id: envases
+  nombre: Sacos y envases
+  descripcion: Presentaciones, embalaje y logística.
+productos:
+- id: semilla-trigo
+  nombre: Semilla de trigo
+  categoria: semillas
+  clase: referencia_generica
+  descripcion: Categoría de semillas; la variedad, el lote, la germinación y el tamaño real del saco se comprueban con
+    el proveedor y documentación SAG.
+  fuente_ids:
+  - sag_semillas
+  - sag_certificacion
+  - inia_semillas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+  formato_simulado:
+    tipo: saco
+    cantidad: 25
+    unidad: kg
+    aviso: 'EJEMPLO editable: no corresponde a un envase comercial comprobado.'
+- id: semilla-arroz
+  nombre: Semilla de arroz
+  categoria: semillas
+  clase: referencia_generica
+  descripcion: Semilla para cultivo de arroz; la dosis varía según el sistema de siembra, variedad y calidad de semilla.
+  fuente_ids:
+  - sag_semillas
+  - inia_arroz
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+  formato_simulado:
+    tipo: saco
+    cantidad: 25
+    unidad: kg
+    aviso: EJEMPLO editable, no es una presentación certificada.
+- id: papa-semilla
+  nombre: Papa semilla
+  categoria: semillas
+  clase: referencia_generica
+  descripcion: Material de propagación de papa; el calibre condiciona la cantidad requerida.
+  fuente_ids:
+  - sag_semillas
+  - inia_papa
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+- id: urea
+  nombre: Urea (referencia de fertilizante)
+  categoria: fertilizantes
+  clase: referencia_generica
+  descripcion: Categoría de fertilizante nitrogenado. Sin marca, envase, composición comercial ni dosis verificadas para
+    un lote concreto.
+  fuente_ids:
+  - odepa_insumos
+  - sag_fertilizantes
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+- id: mezcla-npk
+  nombre: Mezcla fertilizante N-P-K (referencia)
+  categoria: fertilizantes
+  clase: referencia_generica
+  descripcion: Tipo de mezcla nutritiva. Las concentraciones y la dosis deben obtenerse del producto real y análisis
+    del suelo.
+  fuente_ids:
+  - sag_fertilizantes
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+- id: bioestimulante
+  nombre: Bioestimulante agrícola (categoría)
+  categoria: bioestimulantes
+  clase: referencia_generica
+  descripcion: Categoría general. La identidad, composición, trazabilidad y usos se comprueban en la etiqueta del producto
+    real.
+  fuente_ids:
+  - sag_fertilizantes
+  - sag_organicos
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: L/kg
+- id: cal-agricola
+  nombre: Cal agrícola (referencia)
+  categoria: enmiendas
+  clase: referencia_generica
+  descripcion: Enmienda del suelo. La necesidad de encalado depende de análisis y diagnóstico técnico.
+  fuente_ids:
+  - odepa_insumos
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: kg
+- id: saco-agricola
+  nombre: Sacos agrícolas (categoría)
+  categoria: envases
+  clase: referencia_generica
+  descripcion: Envases de transporte y cosecha; capacidades y precios se consultan al proveedor.
+  fuente_ids:
+  - inia_papa
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: no_aplica
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  unidad_base: unidad
+- id: fungisei
+  nombre: FUNGISEI
+  categoria: fungicidas
+  clase: producto_con_etiqueta_sag
+  descripcion: Fungicida y bactericida biológico; etiqueta SAG indica Bacillus subtilis cepa IAB/BS03.
+  fuente_ids:
+  - sag_fungisei
+  - sag_plaguicidas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: requiere_cotejo_vigente
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  registro_indicado_en_etiqueta: '20045'
+  fabricante: SEIPASA S.A.
+  advertencias:
+  - Seguir estrictamente la etiqueta y HDS
+  - No calcular aplicaciones sin validar cultivo, enfermedad y vigencia del registro.
+- id: abamectin-84-sc
+  nombre: ABAMECTIN 84 SC
+  categoria: insecticidas
+  clase: producto_con_etiqueta_sag
+  descripcion: Insecticida, acaricida y nematicida. La etiqueta SAG indica abamectina 84 g/L.
+  fuente_ids:
+  - sag_abamectin
+  - sag_plaguicidas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: requiere_cotejo_vigente
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  registro_indicado_en_etiqueta: '1955'
+  fabricante: AGROSPEC S.A.
+  advertencias:
+  - MUY TÓXICO PARA ABEJAS según etiqueta
+  - Requiere comprobación de cultivo, plaga, etiqueta y registro vigente
+  - No se proporcionan dosis automáticas.
+- id: bird-shield
+  nombre: BIRD SHIELD
+  categoria: repelentes
+  clase: producto_con_etiqueta_sag
+  descripcion: Repelente para aves; el SAG publica etiqueta y hoja de datos de seguridad.
+  fuente_ids:
+  - sag_bird_shield
+  - sag_plaguicidas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: requiere_cotejo_vigente
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  advertencias:
+  - Verificar estado vigente en registro SAG antes de uso
+  - Leer etiqueta para cultivo, carencia y seguridad.
+  empresa_publicada_por_sag: UPL CHILE S.A. (empresa indicada por SAG)
+- id: captiva-prime
+  nombre: CAPTIVA PRIME
+  categoria: repelentes
+  clase: producto_con_etiqueta_sag
+  descripcion: Producto identificado por SAG como insecticida, acaricida y repelente.
+  fuente_ids:
+  - sag_captiva_prime
+  - sag_plaguicidas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: requiere_cotejo_vigente
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  advertencias:
+  - Verificar estado vigente y usos autorizados en etiqueta.
+  empresa_publicada_por_sag: GOWAN CHILE SPA (empresa indicada por SAG)
+- id: avadex-480-ec
+  nombre: AVADEX 480 EC
+  categoria: herbicidas
+  clase: producto_con_etiqueta_sag
+  descripcion: Producto incluido en publicaciones de etiquetas SAG. No se infieren cultivos ni dosis.
+  fuente_ids:
+  - sag_avadex
+  - sag_plaguicidas
+  fecha_revision: '2026-10-28'
+  estado_autorizacion: requiere_cotejo_vigente
+  presentaciones_comerciales_verificadas: []
+  precio_clp: null
+  advertencias:
+  - Verificar etiqueta individual y estado vigente en registro SAG.
+  empresa_publicada_por_sag: GOWAN CHILE SpA (empresa indicada por SAG)
+referencias_siembra:
+- id: trigo-invierno
+  cultivo: Trigo
+  sistema: Trigos de invierno o hábito alternativo
+  dosis_min_kg_ha: 160
+  dosis_max_kg_ha: 200
+  fuente_id: inia_trigo
+  estado_verificacion: citada_sin_cotejar
+  nota: Referencia técnica INIA; depende de variedad, tamaño y calidad del grano. No es una prescripción individual.
+- id: trigo-primavera
+  cultivo: Trigo
+  sistema: Trigos de primavera
+  dosis_min_kg_ha: 200
+  dosis_max_kg_ha: 220
+  fuente_id: inia_trigo
+  estado_verificacion: citada_sin_cotejar
+  nota: Referencia técnica INIA; ajustar por variedad, calidad de semilla y objetivo de población.
+- id: arroz-directa
+  cultivo: Arroz
+  sistema: Siembra directa
+  dosis_min_kg_ha: 130
+  dosis_max_kg_ha: 145
+  fuente_id: inia_arroz
+  estado_verificacion: cotejada_con_fuente
+  fecha_consulta: '2026-10-28'
+  nota: Referencia INIA para siembra directa evaluada en Chile; varía por variedad y condiciones edafoclimáticas.

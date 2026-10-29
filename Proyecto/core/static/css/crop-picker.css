@@ -137,3 +137,7 @@
   .crop-card, .crop-quick, .crop-card-check, .crop-sheet, .crop-when, .crop-search, .crop-filter { transition: none; animation: none; }
   .crop-card:hover, .crop-quick:hover { transform: none; }
 }
+
+/* ---------- Responsive: en pantallas muy angostas el selector se encoge en vez de desbordar ---------- */
+.crop-picker, .crop-choose, .crop-toolbar { grid-template-columns: minmax(0, 1fr); }
+.crop-picker > *, .crop-choose > *, .crop-toolbar > * { min-width: 0; }

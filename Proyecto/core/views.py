@@ -20,18 +20,46 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
+from .calc_semillas import semillas_payload
+from .sesion import MENSAJE_VENCIDA
 from .catalog import CATEGORY_LABELS, catalog_payload, category_key, default_zone, ensure_base_crops, CROP_GROUPS, crop_picker_data
 from .seasons import assign_crop, current_season, season_payload, update_current_dates, agricultural_season_for, record_form_crop_change
 from .agronomy import evaluate_harvest_date, evaluate_sowing_date, find_reference
 from .geometry import coordinates_from_geojson
-from .forms import UNIDADES_DOSIS, ActividadAgricolaForm, RegistroForm, PredioForm, PotreroForm, TemporadaCultivoForm
-from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Predio, PredioHistorial, Potrero, Cultivo, Insumo, Zona, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola
+from .forms import UNIDADES_DOSIS, ActividadAgricolaForm, PerfilForm, RegistroForm, PredioForm, PotreroForm, TemporadaCultivoForm
+from .models import AceptacionPoliticas, ActividadAgricola, Agricultor, CalculoAgricola, ConfiguracionAgronomica, Predio, PredioHistorial, Potrero, Cultivo, Insumo, Zona, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola
 
-NAV_GROUPS = [
-    ('El campo', [('dashboard', 'Hoy', 'layout-dashboard'), ('predios', 'Mis predios y potreros', 'map'), ('calendario', 'Siembra', 'calendar-days')]),
-    ('La decisión', [('decisiones', 'Centro de decisiones', 'sprout')]),
-    ('Cierre', [('busqueda', 'Buscar', 'search'), ('reportes', 'Reporte', 'file-text'), ('admin_panel', 'Administración', 'shield-check')]),
-]
+def build_menu(request, current):
+    """Menú lateral (según el diseño): enlaces simples y el grupo «Calculadoras» con sus herramientas."""
+    tool = request.GET.get('herramienta', 'llevar') if current == 'decisiones' else ''
+    kind = request.GET.get('tipo', '')
+    calculators = [
+        {'label':'Semillas', 'icon':'wheat', 'href':reverse('calc_semillas'), 'active':current == 'calc_semillas'},
+        {'label':'Fertilizantes', 'icon':'flask-conical',
+         'href':reverse('decisiones') + '?herramienta=llevar&tipo=insumos',
+         'active':current == 'decisiones' and tool == 'llevar' and kind == 'insumos'},
+        {'label':'¿Me alcanza?', 'icon':'scale', 'href':reverse('decisiones') + '?herramienta=alcanza',
+         'active':current == 'decisiones' and tool == 'alcanza'},
+    ]
+    in_calculators = any(item['active'] for item in calculators)
+    items = [
+        {'label':'Inicio', 'icon':'house', 'href':reverse('dashboard'), 'active':current == 'dashboard'},
+        {'label':'Mis predios', 'icon':'map-pinned', 'href':reverse('predios'), 'active':current == 'predios'},
+        {'label':'Mapa', 'icon':'map', 'href':reverse('predios') + '#mapa', 'active':False},
+        {'label':'Catálogo agrícola', 'icon':'library', 'href':reverse('productos'), 'active':current == 'productos'},
+        {'label':'Calculadoras', 'icon':'calculator', 'children':calculators, 'open':in_calculators,
+         'active':in_calculators},
+        {'label':'Actividades', 'icon':'clipboard-list', 'href':reverse('actividad_list'), 'active':current == 'actividades'},
+        {'label':'Toma de decisiones', 'icon':'lightbulb', 'href':reverse('decisiones'),
+         'active':current == 'decisiones' and not in_calculators},
+        {'label':'Reportes', 'icon':'file-text', 'href':reverse('reportes'), 'active':current == 'reportes'},
+        {'label':'Calendario', 'icon':'calendar-days', 'href':reverse('calendario'), 'active':current == 'calendario'},
+        {'label':'Buscar', 'icon':'search', 'href':reverse('busqueda'), 'active':current == 'busqueda'},
+    ]
+    if request.user.is_staff:
+        items.append({'label':'Administración', 'icon':'shield-check', 'href':reverse('admin_panel'),
+                      'active':current == 'admin_panel'})
+    return items
 
 def map_config():
     return {'tile_url':settings.MAP_TILE_URL, 'attribution':settings.MAP_TILE_ATTRIBUTION}
@@ -385,14 +413,19 @@ def _page(request, template, current, extra=None):
     context = {
         'user': {'name':name, 'email':request.user.email, 'role':'Administrador' if request.user.is_staff else 'Agricultor'},
         'first_name':name.split()[0], 'initials':''.join(p[0] for p in name.split()[:2]).upper(),
-        'nav_groups':NAV_GROUPS, 'current':current, 'query':request.GET.get('q',''),
+        'menu':build_menu(request, current), 'current':current, 'query':request.GET.get('q',''),
         'catalog':catalog_payload(),
         'farm_data':extra.get('farm_data') or farm_payload(request.user),
         'pending_activities':ActividadAgricola.objects.filter(
             usuario=request.user,
             estado=ActividadAgricola.Estado.PENDIENTE,
         ).select_related('potrero', 'potrero__predio').order_by('fecha_programada', 'pk')[:5],
-        'phase_a':current in {'dashboard','predios','calendario','admin_panel','actividades','decisiones','productos','reportes','busqueda'},
+        'phase_a':current in {'dashboard','predios','calendario','admin_panel','actividades','decisiones','productos','reportes','busqueda','perfil','calc_semillas'},
+        # Cuentas creadas antes de pedir teléfono y comuna: se invita a completar el perfil (sin bloquear nada).
+        'perfil_incompleto':(
+            current != 'perfil' and not request.user.is_staff
+            and not Agricultor.objects.filter(user=request.user).exists()
+        ),
     }
     if current in JOURNEY_PAGES:
         context['journey'] = journey_payload(request.user, current)
@@ -424,6 +457,8 @@ def login_view(request):
         return redirect('password_reset')
     mode = 'register' if mode == 'register' else 'login'
     error = ''
+    if request.method == 'GET' and request.GET.get('vencida'):
+        messages.warning(request, MENSAJE_VENCIDA)  # la página detectó que se perdió la sesión (p. ej. cookies borradas)
     identifier = (request.POST.get('username') or request.POST.get('email') or '').strip()
     registration = RegistroForm(
         request.POST if request.method == 'POST' and mode == 'register' else None
@@ -465,6 +500,17 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+@login_required
+def perfil(request):
+    """Datos personales del agricultor: nombre, teléfono, comuna y RUT opcional."""
+    form = PerfilForm(request.POST or None, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, 'Tus datos se guardaron correctamente.')
+        return redirect('perfil')
+    return _page(request, 'perfil.html', 'perfil', {'form':form, 'tiene_ficha':form.ficha is not None})
 
 
 @login_required
@@ -1189,7 +1235,11 @@ def potrero_form(request, predio_pk, pk=None):
             'longitud':instance.longitud,
         }
     form = PotreroForm(request.POST or None, instance=instance)
-    form.fields['superficie_ha'].widget.attrs['max'] = format(available_area, 'f')
+    min_area = Decimal('0.0001')
+    # Sin hectáreas libres no se pone «max»: un máximo menor que el mínimo hace que el navegador rechace todo en silencio.
+    sin_espacio = available_area < min_area
+    if not sin_espacio:
+        form.fields['superficie_ha'].widget.attrs['max'] = format(available_area, 'f')
     form.fields['superficie_ha'].help_text = (
         f'Superficie disponible en este predio: {available_area} ha. '
         'Si dibujas el perímetro, la superficie se calculará automáticamente.'
@@ -1267,6 +1317,7 @@ def potrero_form(request, predio_pk, pk=None):
         'form':form, 'heading':'Editar potrero' if pk else 'Registrar potrero', 'predio':predio,
         'is_potrero':True, 'maps_config':map_config(),
         'potrero_superficie_disponible':available_area,
+        'potrero_sin_espacio':sin_espacio and not instance.pk,
     })
 
 
@@ -1512,6 +1563,23 @@ def calculate(request):
                         'unit':product.presentacion_unidad,
                         'count':math.ceil(amount / product.presentacion_cantidad),
                     }
+                # Saco que la persona elige o escribe (no es un producto del catálogo): sacos, sobrante y costo.
+                if payload.get('bag_kg') not in (None, ''):
+                    if result['unit'].casefold() != 'kg':
+                        raise ValueError('Los sacos solo se calculan cuando la dosis está en kg/ha.')
+                    bag = _decimal_input(payload.get('bag_kg'), 'El tamaño del saco')
+                    if bag > 1000:
+                        raise ValueError('El tamaño del saco no puede superar 1.000 kg.')
+                    bags = math.ceil(amount / bag)
+                    user_bag = {
+                        'size':float(bag), 'unit':'kg', 'count':bags,
+                        'leftover':float(bag * bags - amount), 'source':'ingresado por la persona',
+                    }
+                    if payload.get('bag_price_clp') not in (None, ''):
+                        price = _decimal_input(payload.get('bag_price_clp'), 'El precio por saco', allow_zero=True)
+                        user_bag['price_clp'] = float(price)
+                        user_bag['total_cost_clp'] = float(price * bags)
+                    result['user_bag'] = user_bag
             else:
                 stock = _decimal_input(payload.get('stock'), 'La cantidad disponible', allow_zero=True)
                 needed = area * dose
@@ -1680,7 +1748,7 @@ def calculate(request):
         'crop', 'product_id', 'target', 'dose', 'unit', 'stock',
         'plants_m2', 'thousand_seed_weight_g', 'germination_pct',
         'purity_pct', 'source', 'nutrient', 'need_per_ha', 'need_source',
-        'rate', 'variety', 'calculation_type',
+        'rate', 'variety', 'calculation_type', 'bag_kg', 'bag_price_clp',
     )
     stored_input = {
         'operation':operation,
@@ -1693,6 +1761,9 @@ def calculate(request):
         for value in [payload.get(key)]
         if isinstance(value, (str, int, float, bool))
     })
+    if payload.get('preview') is True:
+        # Vista previa en pantalla: se calcula con la misma lógica pero NO se guarda en el historial.
+        return JsonResponse({'ok':True, 'calculation_id':None, 'preview':True, **result})
     calculation = CalculoAgricola.objects.create(
         usuario=request.user,
         potrero=plot,
@@ -1701,6 +1772,15 @@ def calculate(request):
         resultado=result,
     )
     return JsonResponse({'ok':True, 'calculation_id':calculation.pk, **result})
+
+
+def calc_semillas(request):
+    """Calculadora de semillas: terreno → cultivo y dosis → resultado (usa el mismo cálculo que `calculate`)."""
+    return _page(request, 'calc_semillas.html', 'calc_semillas', {
+        'maps_config': map_config(),
+        'semillas_data': {**semillas_payload(), 'calculateUrl': reverse('calculate'),
+                          'historyUrl': reverse('reportes') + '?tipo=calculos'},
+    })
 
 
 def decisiones(request):
@@ -2334,11 +2414,11 @@ def reportes(request):
 def admin_panel(request):
     if not request.user.is_staff:
         raise PermissionDenied
-    return _page(request, 'admin.html', 'admin_panel', {'metrics':{
-        'Agricultores':get_user_model().objects.filter(is_staff=False).count(), 'Predios':Predio.objects.count(),
-        'Potreros':Potrero.objects.count(), 'Cultivos':Cultivo.objects.count(),
-        'Insumos vigentes':Insumo.objects.filter(vigente=True).count(), 'Zonas':Zona.objects.count(),
-    }, 'base_crops_total':sum(len(names) for _group, names in CROP_GROUPS)})
+    from .estadisticas import resumen_administrador
+    return _page(request, 'admin.html', 'admin_panel', {
+        'stats':resumen_administrador(),
+        'base_crops_total':sum(len(names) for _group, names in CROP_GROUPS),
+    })
 
 
 @login_required

@@ -1,4 +1,4 @@
-{% load static %}
+{% load static agro_assets %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,8 +7,8 @@
     <title>{% if mode == 'register' %}Crear cuenta{% else %}Iniciar sesión{% endif %} · AgroAsesor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+    <link href="{% vendor 'fonts/inter.css' 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap' %}" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}?v=3">
 </head>
 <body class="access-body">
     <main class="access-shell">
@@ -46,27 +46,33 @@
 
                 {% if mode == 'register' %}
                 {{ registration_form.non_field_errors }}
-                <div class="row-2">
-                    <label class="field" for="{{ registration_form.first_name.id_for_label }}">
-                        <span>{{ registration_form.first_name.label }}</span>
-                        {{ registration_form.first_name }}
-                        {{ registration_form.first_name.errors }}
-                    </label>
-                    <label class="field" for="{{ registration_form.last_name.id_for_label }}">
-                        <span>{{ registration_form.last_name.label }}</span>
-                        {{ registration_form.last_name }}
-                        {{ registration_form.last_name.errors }}
-                    </label>
-                </div>
-                <label class="field" for="{{ registration_form.username.id_for_label }}">
-                    <span>{{ registration_form.username.label }}</span>
-                    {{ registration_form.username }}
-                    {{ registration_form.username.errors }}
+                <label class="field" for="{{ registration_form.nombre_completo.id_for_label }}">
+                    <span>{{ registration_form.nombre_completo.label }}</span>
+                    {{ registration_form.nombre_completo }}
+                    {{ registration_form.nombre_completo.errors }}
                 </label>
                 <label class="field" for="{{ registration_form.email.id_for_label }}">
                     <span>{{ registration_form.email.label }}</span>
                     {{ registration_form.email }}
                     {{ registration_form.email.errors }}
+                </label>
+                <div class="row-2">
+                    <label class="field" for="{{ registration_form.telefono.id_for_label }}">
+                        <span>{{ registration_form.telefono.label }}</span>
+                        {{ registration_form.telefono }}
+                        {{ registration_form.telefono.errors }}
+                    </label>
+                    <label class="field" for="{{ registration_form.comuna.id_for_label }}">
+                        <span>{{ registration_form.comuna.label }}</span>
+                        {{ registration_form.comuna }}
+                        {{ registration_form.comuna.errors }}
+                    </label>
+                </div>
+                <label class="field" for="{{ registration_form.rut.id_for_label }}">
+                    <span>{{ registration_form.rut.label }}</span>
+                    {{ registration_form.rut }}
+                    <small class="pass-help">{{ registration_form.rut.help_text }}</small>
+                    {{ registration_form.rut.errors }}
                 </label>
                 <div class="row-2">
                     <label class="field" for="{{ registration_form.password1.id_for_label }}">
@@ -75,7 +81,6 @@
                             {{ registration_form.password1 }}
                             <button class="eye" type="button" data-eye="id_password1" aria-label="Mostrar contraseña"></button>
                         </span>
-                        <small>{{ registration_form.password1.help_text }}</small>
                         {{ registration_form.password1.errors }}
                     </label>
                     <label class="field" for="{{ registration_form.password2.id_for_label }}">
@@ -87,6 +92,7 @@
                         {{ registration_form.password2.errors }}
                     </label>
                 </div>
+                <small class="pass-help">{{ registration_form.password1.help_text }}</small>
                 <div class="policy-consent">
                     <label for="{{ registration_form.acepta_politicas.id_for_label }}">
                         {{ registration_form.acepta_politicas }}
@@ -109,6 +115,7 @@
                 <a class="forgot" href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
                 {% endif %}
 
+                {% for message in messages %}<p class="aviso" role="status">{{ message }}</p>{% endfor %}
                 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
                 <button class="submit" type="submit">{% if mode == 'register' %}Crear cuenta{% else %}Ingresar{% endif %}</button>
             </form>

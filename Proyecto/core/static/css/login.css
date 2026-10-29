@@ -8,7 +8,7 @@
     padding: 28px;
 
     /* ✅ Imagen aquí, no en body */
-    background-image: url('https://c.pxhere.com/photos/3c/d2/pure_cigar_tobacco_bless_you_smoker_plant_nature_growth-709332.jpg!d');
+    background-image: url('../img/login-campo.jpg');
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -144,6 +144,7 @@
     color: #171717;
     outline: none;
 }
+.field input { height: 46px; }
 .field input::placeholder { color: #b0b0b0; }
 .field small {
     color: #6b7280;
@@ -166,7 +167,15 @@
     box-shadow: 0 0 0 3px rgba(230, 122, 34, 0.12);
 }
 
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.row-2 > .field { align-content: start; }
+.pass-help {
+    display: block;
+    margin: -6px 0 14px;
+    color: #6b7280;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
 .policy-consent { margin: 2px 0 12px; }
 .policy-consent label {
     display: flex;
@@ -283,4 +292,13 @@
     .access-copy h2 { max-width: none; }
     .access-panel { padding: 28px 22px 32px; }
     .row-2 { grid-template-columns: 1fr; }
+}
+.aviso {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff7e0;
+    border: 1px solid #ecd48a;
+    color: #5c4a10;
+    font-size: 0.92rem;
 }

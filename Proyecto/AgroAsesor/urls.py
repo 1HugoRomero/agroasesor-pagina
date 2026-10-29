@@ -2,13 +2,16 @@ from django.contrib import admin
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from core import views
+from core.api_gateway import api_v1
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/<path:ruta>', api_v1, name='api_v1'),
     path('hola-django/', views.index, name='pagina_inicial'),
     path('login/', views.login_view, name='login'),
     path('politicas/privacidad-y-cookies/', views.politica_privacidad, name='politica_privacidad'),
     path('logout/', views.logout_view, name='logout'),
+    path('cuenta/perfil/', views.perfil, name='perfil'),
     path('entrar-admin/', views.enter_as_admin, name='enter_as_admin'),
     path('', views.dashboard, name='dashboard'),
     path('predios/', views.predios, name='predios'),
@@ -28,6 +31,7 @@ urlpatterns = [
     path('cuenta/restablecer/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='registration/access_form.html'), name='password_reset_confirm'),
     path('cuenta/restablecida/', auth_views.PasswordResetCompleteView.as_view(template_name='registration/reset_complete.html'), name='password_reset_complete'),
     path('decisiones/', views.decisiones, name='decisiones'),
+    path('calculadoras/semillas/', views.calc_semillas, name='calc_semillas'),
     path('calculos/ejecutar/', views.calculate, name='calculate'),
     path('productos/', views.productos, name='productos'),
     path('productos/<int:pk>/', views.producto_detail, name='producto_detail'),

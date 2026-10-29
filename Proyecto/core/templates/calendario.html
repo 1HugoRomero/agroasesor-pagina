@@ -1,5 +1,5 @@
 {% extends "body.html" %}
-{% load static %}
+{% load static agro_assets %}
 {% block title %}Calendario de siembra · AgroAsesor{% endblock %}
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/agro-panels.css' %}?v=1">
@@ -285,7 +285,7 @@
 {% endblock %}
 {% block extra_js %}
 <script src="{% static 'js/siembra-registro.js' %}?v=2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}"></script>
 <script src="{% static 'js/agro-pdf.js' %}?v=1"></script>
 <script src="{% static 'js/calendario.js' %}?v=5"></script>
 {% endblock %}

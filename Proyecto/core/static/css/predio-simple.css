@@ -1,0 +1,195 @@
+/* Registrar / editar predio: una pantalla, una tarea, un siguiente paso.
+   Solo se carga en la pantalla del predio; no cambia ningún id ni campo del formulario.
+   El JS marca el paso actual en .terrain-layout[data-reg-state]: draw → confirm → data → save (y editing). */
+
+/* Encabezado */
+.terrain-page-heading.is-simple { align-items: flex-start; }
+.terrain-page-heading.is-simple .page-title { margin-top: 0; }
+.step-indicator {
+    display: inline-block;
+    margin: 12px 0 0;
+    padding: 7px 16px;
+    border-radius: 999px;
+    background: var(--green-soft);
+    color: var(--green-dark);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+/* Todo el ancho disponible: al dibujar, el mapa ocupa toda la pantalla; después, mapa a la izquierda y datos a la derecha */
+.terrain-layout.is-simple-layout { grid-template-columns: minmax(0, 1fr); max-width: none; gap: 18px; align-items: start; }
+@media (min-width: 1100px) {
+    .terrain-layout.is-predio-layout:not([data-reg-state="draw"]) { grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr); }
+    .terrain-layout.is-potrero-layout { grid-template-columns: minmax(340px, 1fr) minmax(0, 1.5fr); }
+}
+.is-simple-layout .map-card { order: 0; }
+.is-simple-layout .farm-map { width: 100%; height: clamp(440px, calc(100vh - 330px), 780px); min-height: 440px; }
+@media (max-width: 900px) {
+    .is-simple-layout .farm-map { height: clamp(340px, 58vh, 560px); min-height: 340px; }
+}
+.is-simple-layout .map-card-heading.is-simple h2,
+.is-simple-layout .form-card-heading.is-simple h2 { margin: 0 0 4px; font-size: 1.3rem; }
+.is-simple-layout .form-card-heading.is-simple { margin-bottom: 8px; }
+
+/* Texto de ayuda y estado del mapa: una línea, sin cajas */
+.is-simple-layout .map-hint { margin: 8px 0 4px; color: #435348; font-size: .95rem; line-height: 1.4; }
+
+/* Barra de acciones: solo lo que corresponde al momento */
+.is-simple-layout .map-toolbar { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; margin: 10px 0; }
+.is-simple-layout .tool-group-main { display: flex; flex-wrap: wrap; gap: 10px; }
+.is-simple-layout .map-toolbar button {
+    min-height: 52px;
+    padding: 0 22px;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.is-simple-layout .tool-group-main button { flex: 0 0 auto; min-width: 230px; }
+@media (max-width: 700px) {
+    .is-simple-layout .tool-group-main button { flex: 1 1 100%; min-width: 0; }
+}
+.is-simple-layout .map-toolbar button.map-action-primary { background: var(--green-dark); border-color: var(--green-dark); color: #fff; }
+.is-simple-layout .map-toolbar button:disabled { opacity: .45; }
+
+/* Deshacer y Terminar solo existen mientras se dibuja; el botón Dibujar se esconde mientras tanto */
+.is-simple-layout #draw-perimeter:not(.is-active) ~ #undo-point,
+.is-simple-layout #draw-perimeter:not(.is-active) ~ #finish-perimeter { display: none; }
+.is-simple-layout #draw-perimeter.is-active { display: none; }
+.is-simple-layout:has(#draw-perimeter.is-active) .more-tools { display: none; }
+
+/* En cada paso, solo sus botones */
+.is-predio-layout[data-reg-state="confirm"] .map-toolbar,
+.is-predio-layout[data-reg-state="editing"] .more-tools,
+.is-predio-layout[data-reg-state="data"] #accept-perimeter,
+.is-predio-layout[data-reg-state="data"] #cancel-perimeter,
+.is-predio-layout[data-reg-state="save"] #accept-perimeter,
+.is-predio-layout[data-reg-state="save"] #cancel-perimeter { display: none; }
+
+/* Herramientas secundarias plegadas */
+.more-tools > summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--green-dark);
+    font-size: .98rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.more-tools .tool-group-aux { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
+.more-tools .tool-group-aux button { flex: 1 1 150px; min-height: 48px; }
+
+/* La medida en metros solo se muestra al medir una línea */
+.is-simple-layout:not(:has(#measure-line.is-active)):not(:has(#clear-measurement:not([hidden]))) #live-perimeter { display: none; }
+
+/* La tarjeta de datos aparece cuando ya hay algo que hacer en ella */
+.is-predio-layout[data-reg-state="draw"] .terrain-form-card { display: none; }
+.is-simple-layout .terrain-form-card #terrain-form { display: flex; flex-direction: column; }
+.is-simple-layout .map-form-summary { order: -1; }
+
+/* Confirmación grande y simple */
+.is-simple-layout .perimeter-confirmation { margin: 0 0 18px; }
+.confirm-lead { margin: 0; color: var(--green-dark); font-size: 1.05rem; font-weight: 700; }
+.confirm-big { margin: 2px 0 16px; color: var(--green-dark); font-size: 2.3rem; font-weight: 800; line-height: 1.1; }
+.is-simple-layout .confirmation-actions { gap: 10px; margin-top: 0; }
+.is-simple-layout .confirmation-actions button { flex: 0 0 auto; width: 100%; min-height: 52px; justify-content: center; font-size: 1.05rem; }
+/* En el paso de confirmar la medida va solo en el panel de confirmación, no repetida abajo */
+.is-predio-layout[data-reg-state="confirm"] .map-form-summary { display: none; }
+.is-simple-layout .map-form-summary {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--green-soft);
+}
+.summary-line { margin: 0; color: var(--green-dark); font-size: 1.15rem; font-weight: 700; }
+.map-form-summary .summary-line strong { display: inline; margin: 0; }
+
+/* Datos técnicos plegados */
+.tech-details { margin-top: 12px; color: var(--muted); font-size: .9rem; }
+.tech-details > summary { min-height: 40px; display: inline-flex; align-items: center; cursor: pointer; color: var(--muted); font-weight: 600; }
+.tech-details dl { display: grid; gap: 6px; margin: 6px 0 0; }
+.tech-details dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.tech-details dt { margin: 0; }
+.tech-details dd { margin: 0; color: var(--ink); font-weight: 600; text-align: right; }
+.tech-details .summary-location { margin: 8px 0 0; }
+
+/* Formulario: primero lo esencial */
+.is-simple-layout .predio-fields .field > span { font-size: 1rem; font-weight: 700; }
+.is-simple-layout .predio-fields input,
+.is-simple-layout .predio-fields select,
+.is-simple-layout .predio-fields textarea { min-height: 52px; font-size: 1.05rem; }
+.is-simple-layout .predio-fields textarea { min-height: 96px; }
+.is-simple-layout .predio-fields small { font-size: .9rem; }
+.more-details { margin: 6px 0 14px; }
+.more-details > summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--green-dark);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.more-details > summary::before { content: "+"; display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 8px; border-radius: 50%; background: var(--green-soft); }
+.more-details[open] > summary::before { content: "–"; }
+.more-details > .field { margin-top: 10px; }
+
+/* Guardar */
+.is-simple-layout .form-submit-row.is-stacked { gap: 10px; }
+.is-simple-layout .terrain-submit { width: 100%; min-height: 56px; justify-content: center; font-size: 1.1rem; }
+.legal-note { color: var(--muted); font-size: .85rem; }
+.legal-note > summary { min-height: 36px; display: inline-flex; align-items: center; cursor: pointer; }
+.legal-note .privacy-note { margin: 4px 0 0; }
+
+@media (max-width: 560px) {
+    .confirm-big { font-size: 2rem; }
+    .is-simple-layout .map-card { padding: 14px; }
+}
+
+
+/* ───────── Potrero: primero qué plantar, después (opcional) dónde queda ───────── */
+.is-potrero-layout .terrain-form-card { order: -1; }
+.is-potrero-layout .map-card { order: 1; }
+.map-card-heading.is-simple small { color: var(--muted); font-size: .85rem; font-weight: 600; }
+.terrain-page-heading.is-simple .terrain-parent { margin: 8px 0 0; color: var(--muted); font-size: .98rem; }
+.terrain-page-heading.is-simple .terrain-parent strong { color: var(--green-dark); }
+.potrero-fields { display: grid; gap: 4px; }
+.potrero-fields .field > span { font-size: 1rem; font-weight: 700; }
+.potrero-fields input:not([type="checkbox"]),
+.potrero-fields select { min-height: 52px; font-size: 1.05rem; }
+.potrero-fields small { color: var(--muted); font-size: .9rem; }
+.potrero-fields .alert { margin: 0 0 12px; }
+.field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .field-pair { grid-template-columns: 1fr; } }
+.more-details > .field { margin-top: 10px; }
+.more-details > .field-pair .field { margin-top: 10px; }
+.more-details.is-advanced > summary { color: var(--muted); font-weight: 600; }
+
+/* Barra del potrero: con contorno dibujado solo se ofrece corregirlo o borrarlo; sin contorno, solo dibujar */
+.is-potrero-layout #toggle-edit[hidden] ~ #clear-perimeter { display: none; }
+.is-potrero-layout .map-toolbar:has(#toggle-edit:not([hidden])) #draw-perimeter { display: none; }
+.potrero-fields .more-details { margin: 0 0 4px; }
+
+/* Selector de cultivos del potrero: sin cajas repetidas */
+.is-potrero-layout .crop-link-plot,
+.is-potrero-layout .crop-link-arrow,
+.is-potrero-layout .crop-question,
+.is-potrero-layout .crop-divider,
+.is-potrero-layout .crop-frequent-head span { display: none; }
+.is-potrero-layout .crop-link { display: block; }
+.is-potrero-layout .crop-link:has(.crop-link-crop:not(.is-set)) { display: none; }
+/* La ficha del cultivo repite lo ya elegido: fuera del flujo de captura */
+.is-potrero-layout .crop-sheet { display: none; }
+/* Lista de cultivos con alto limitado (también en celular) para no alargar la pantalla */
+.is-potrero-layout .crop-grid { max-height: 280px; overflow-y: auto; }
+.terrain-page-heading.is-simple .terrain-parent { display: block; }
+
+/* Predio sin hectáreas libres: un solo aviso claro con los dos caminos posibles */
+.no-space-card { max-width: 640px; }
+.no-space-card h2 { margin: 0 0 8px; font-size: 1.2rem; }
+.no-space-card p { margin: 0 0 16px; color: var(--muted); }
+.no-space-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.no-space-actions .btn-primary-agro, .no-space-actions .btn-secondary-agro { flex: 0 0 auto; }
+/* Atajo bajo «Superficie (ha)» */
+.link-btn { padding: 0; border: 0; background: none; color: var(--green-dark); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.link-btn:hover { color: var(--green); }

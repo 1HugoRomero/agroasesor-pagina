@@ -1,11 +1,11 @@
 {% extends "body.html" %}
-{% load static %}
+{% load static agro_assets %}
 {% block title %}Centro de decisiones · AgroAsesor{% endblock %}
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/agro-panels.css' %}?v=1">
-<link rel="stylesheet" href="{% static 'css/decisiones.css' %}?v=8">
-<link rel="stylesheet" href="{% static 'css/calc-panel.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'css/decisiones.css' %}?v=9">
+<link rel="stylesheet" href="{% static 'css/calc-panel.css' %}?v=5">
 <link rel="stylesheet" href="{% static 'css/calc-flow.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'css/tool-flow.css' %}?v=2">{% endblock %}
+<link rel="stylesheet" href="{% static 'css/tool-flow.css' %}?v=3">{% endblock %}
 {% block content %}
 <section class="decision-center" data-calculate-url="{% url 'calculate' %}" data-staff="{% if request.user.is_staff %}1{% endif %}" data-tool="{{ initial_tool }}">
     <div class="decision-head">
@@ -422,7 +422,7 @@
 </section>
 {% endblock %}
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js" defer></script>
+<script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}" defer></script>
 <script src="{% static 'js/agro-pdf.js' %}?v=1" defer></script>
 <script src="{% static 'js/calc-panel.js' %}?v=7" defer></script>
 <script src="{% static 'js/calc-flow.js' %}?v=4" defer></script>

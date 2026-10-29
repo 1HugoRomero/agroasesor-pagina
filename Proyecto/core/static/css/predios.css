@@ -1000,7 +1000,8 @@ dialog::backdrop { background: rgba(20, 32, 24, 0.45); }
 .terrain-workspace { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); align-items: start; gap: 16px; }
 .terrain-workspace .map-card { min-height: 0; }
 .terrain-workspace .farm-map { height: clamp(420px, 76vh, 720px); min-height: 420px; }
-.terrain-side { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.terrain-side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; min-width: 0; }
+.terrain-side > * { min-width: 0; }
 .terrain-side .selected-terrain { padding: 16px; }
 .terrain-side .potrero-history { margin-bottom: 0; padding: 14px; }
 .terrain-side .section-heading { flex-wrap: wrap; row-gap: 6px; margin-bottom: 10px; }
@@ -1048,3 +1049,13 @@ dialog::backdrop { background: rgba(20, 32, 24, 0.45); }
 .crumbs a:hover { color: var(--green-dark); text-decoration: underline; }
 .crumbs .is-current { color: var(--green-dark); font-weight: 700; }
 .plot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+
+/* ---------- Responsive: en celular las tarjetas de predios se apilan (sin franja cortada) ---------- */
+@media (max-width: 600px) {
+    .farm-picker-list.entity-grid[data-view="cards"] { display: grid; grid-template-columns: minmax(0, 1fr); overflow: visible; }
+    .farm-picker-list.entity-grid[data-view="cards"] > * { min-width: 0; }
+}
+
+/* Lista de potreros del panel «Información seleccionada»: se ajusta a pantallas de 320 px */
+.overview-plots { grid-template-columns: minmax(0, 1fr); }
+.overview-plot { min-width: 0; flex-wrap: wrap; }

@@ -41,6 +41,31 @@
     text: promptText ? promptText.textContent : ''
   };
   const melipillaCenter = [-33.6866, -71.2167];
+
+  // Superficie escrita a mano: avisa en español si se pasa de lo disponible y ofrece usar justo lo que queda.
+  (function setupSurfaceInput() {
+    if (!isPlotForm || !areaInput) return;
+    const fmt = (n) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+    const check = () => {
+      areaInput.setCustomValidity('');
+      if (areaInput.readOnly || areaInput.value === '') return;
+      const max = Number(areaInput.max);
+      if (areaInput.max !== '' && Number.isFinite(max) && Number(areaInput.value) > max) {
+        areaInput.setCustomValidity('En este predio solo quedan ' + fmt(max) + ' ha disponibles.');
+      }
+    };
+    areaInput.addEventListener('input', check);
+    areaInput.addEventListener('change', check);
+    const fill = document.querySelector('[data-fill-available]');
+    if (fill) {
+      fill.addEventListener('click', () => {
+        if (areaInput.readOnly) return;
+        areaInput.value = Number(areaInput.max).toFixed(4);
+        check();
+        areaInput.focus();
+      });
+    }
+  })();
   let map;
   let currentLayer = null;
   let marker = null;
@@ -89,7 +114,7 @@
       tiles.on('tileload', () => {
         if (tiles === activeTiles && status.textContent.startsWith('No se cargaron algunas teselas del mapa.')) {
           setStatus(form
-            ? 'Mapa listo. Elige “Dibujar campo” para medir superficie y perímetro, o “Medir línea” para un tramo.'
+            ? (isPredioForm ? 'Mapa listo. Toca «Dibujar mi campo».' : 'Mapa listo. Toca «Dibujar mi potrero».')
             : 'Mapa listo.');
         }
       });
@@ -539,31 +564,29 @@
       return;
     }
     if (hasSelfIntersection(points)) {
-      areaOutput.textContent = 'El contorno se cruza; ajusta los vértices antes de calcular el área.';
+      areaOutput.textContent = 'Las líneas se cruzan. Mueve las esquinas.';
       areaOutput.classList.add('is-error');
       return;
     }
     const squareMetres = polygonAreaSquareMetres(points);
     const hectares = squareMetres / 10000;
     if (isPlotForm && !polygonInsideParent(points)) {
-      areaOutput.textContent = 'El potrero debe quedar completamente dentro del límite verde del predio.';
+      areaOutput.textContent = 'Tu potrero debe quedar dentro del límite verde.';
       areaOutput.classList.add('is-error');
       return;
     }
     const availableHectares = Number(areaInput?.max);
     if (isPlotForm && Number.isFinite(availableHectares) &&
         Number(hectares.toFixed(4)) > availableHectares) {
-      areaOutput.textContent = 'El perímetro mide ' +
-        hectares.toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha; solo hay ' +
-        availableHectares.toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha disponibles.';
+      areaOutput.textContent = 'Dibujaste ' +
+        hectares.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' ha, pero solo quedan ' +
+        availableHectares.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' ha en este predio.';
       areaOutput.classList.add('is-error');
       return;
     }
     areaOutput.classList.remove('is-error');
-    areaOutput.textContent =
-      squareMetres.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m² · ' +
-      hectares.toLocaleString('es-CL', { maximumFractionDigits: 4 }) +
-      ' ha (estimación; el servidor confirma el valor al guardar)';
+    areaOutput.textContent = (isPlotForm ? 'Tu potrero mide ' : 'Tu campo mide ') +
+      hectares.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' ha';
   }
 
   function setAreaAndGeometry() {
@@ -572,7 +595,7 @@
     if (legacyPerimeterInput) legacyPerimeterInput.value = JSON.stringify(coordinates);
 
     if (coordinates.length < 3) {
-      document.getElementById('live-area').textContent = 'Dibuja un perímetro con al menos tres vértices.';
+      document.getElementById('live-area').textContent = 'Marca al menos tres esquinas.';
       return;
     }
     updateMeasurements(coordinates, true);
@@ -609,14 +632,27 @@
   // Una sola función decide qué se muestra en la columna derecha y qué paso está activo.
   function setRegistrationState(state) {
     if (!isPredioForm) return;
-    const order = ['draw', 'confirm', 'data', 'save'];
-    const active = order.indexOf(state === 'editing' ? 'draw' : state);
-    order.forEach((key, index) => {
-      const step = document.getElementById('step-' + key);
-      if (!step) return;
-      step.classList.toggle('is-current', index === active);
-      step.classList.toggle('is-done', index < active);
-    });
+    // Indicador único «Paso X de 3» (solo al crear un predio; al editar no existe).
+    const stepTexts = {
+      draw: 'Paso 1 de 3 · Dibuja tu campo',
+      editing: 'Paso 1 de 3 · Dibuja tu campo',
+      confirm: 'Paso 2 de 3 · Confirma la medida',
+      data: 'Paso 3 de 3 · Ponle nombre',
+      save: 'Paso 3 de 3 · Ponle nombre'
+    };
+    const stepIndicator = document.getElementById('step-indicator');
+    if (stepIndicator && stepTexts[state]) stepIndicator.textContent = stepTexts[state];
+    // Solo presentación: el CSS usa este estado para mostrar solo lo que corresponde en cada paso.
+    const layoutElement = document.querySelector('.terrain-layout');
+    const previousState = layoutElement ? layoutElement.dataset.regState : '';
+    if (layoutElement) layoutElement.dataset.regState = state;
+    // El ancho del mapa cambia al pasar de un paso a otro: se reajusta y, al confirmar, se vuelve a encuadrar el campo.
+    if (map && previousState !== state) {
+      map.invalidateSize({ animate: false, pan: false });
+      if (state === 'confirm' && currentLayer) {
+        map.fitBounds(layerBounds(currentLayer), { padding: [56, 56], maxZoom: 17 });
+      }
+    }
     if (confirmationPanel) confirmationPanel.hidden = state !== 'confirm';
     // Solo presentación: el estado se refleja en el contenedor del mapa (CSS decide qué botón destaca).
     const mapCard = document.querySelector('.map-card');
@@ -631,9 +667,9 @@
       const formVisible = Boolean(form && !form.hidden);
       registrationPrompt.hidden = state === 'confirm' || state === 'data' || state === 'save' || (state === 'editing' && formVisible);
       if (promptTitle && promptText) {
-        promptTitle.textContent = state === 'editing' ? 'Ajusta el perímetro' : promptDefaults.title;
+        promptTitle.textContent = state === 'editing' ? 'Ajusta tu contorno' : promptDefaults.title;
         promptText.textContent = state === 'editing'
-          ? 'Mueve los vértices en el mapa y pulsa «Aceptar perímetro» para volver a medir.'
+          ? 'Mueve las esquinas en el mapa y toca «Listo» para volver a medir.'
           : promptDefaults.text;
       }
     }
@@ -653,32 +689,32 @@
 
   function showPerimeterConfirmation() {
     if (!currentLayer) {
-      setStatus('Dibuja primero el perímetro del predio.');
+      setStatus('Primero dibuja el contorno de tu predio.');
       return;
     }
     const points = featureCoordinates(featureOf(currentLayer));
     if (points.length < 3 || points.length > 200 || hasSelfIntersection(points)) {
-      setStatus('El perímetro debe tener entre 3 y 200 vértices y no cruzarse a sí mismo.');
+      setStatus('El contorno necesita entre 3 y 200 esquinas y sus líneas no deben cruzarse.');
       return;
     }
     const area = polygonAreaSquareMetres(points);
     if (!Number.isFinite(area) || area < 1) {
-      setStatus('El perímetro debe delimitar una superficie válida de al menos 1 m².');
+      setStatus('El contorno debe encerrar una superficie de al menos 1 m².');
       return;
     }
     if (perimeterAcceptedInput) perimeterAcceptedInput.value = 'on';
     if (confirmArea) {
-      confirmArea.textContent =
-        area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²\n' +
-        (area / 10000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha';
+      confirmArea.textContent = (area / 10000).toLocaleString('es-CL', { maximumFractionDigits: 4 }) + ' ha';
     }
+    const confirmM2 = document.getElementById('confirm-m2');
+    if (confirmM2) confirmM2.textContent = area.toLocaleString('es-CL', { maximumFractionDigits: 2 }) + ' m²';
     if (confirmPerimeter) confirmPerimeter.textContent = formatLength(perimeterMetres(points, true));
     if (confirmVertices) confirmVertices.textContent = String(points.length);
     setRegistrationState('confirm');
     setPerimeterControls(true, true);
     if (currentLayer.pm) currentLayer.pm.disable();
     renderBoundaryVertices();
-    setStatus('Revisa la vista previa y confirma el perímetro para continuar.');
+    setStatus('Revisa la medida y confirma para continuar.');
   }
 
   function editConfirmedPerimeter() {
@@ -689,7 +725,7 @@
     boundaryMarkers.forEach((item) => map.removeLayer(item));
     boundaryMarkers = [];
     currentLayer.pm.enable({ allowSelfIntersection: false });
-    setStatus('Edición activada. Ajusta los vértices y acepta nuevamente el perímetro.');
+    setStatus('Mueve las esquinas en el mapa y toca «Listo».');
   }
 
   function cancelPerimeterChanges() {
@@ -730,7 +766,7 @@
     setRegistrationState('data');
     const nameInput = document.getElementById('id_nombre');
     if (nameInput) nameInput.focus({ preventScroll: true });
-    setStatus('Perímetro confirmado. Completa los datos y guarda el predio.');
+    setStatus('Contorno confirmado. Ponle nombre a tu predio y guárdalo.');
   }
 
   function stopDrawing() {
@@ -756,7 +792,7 @@
         editConfirmedPerimeter();
       } else {
         currentLayer.pm.enable({ allowSelfIntersection: false });
-        setStatus('Edición activada. Ajusta vértices y vuelve a guardar.');
+        setStatus('Mueve las esquinas en el mapa. Cuando termines, guarda el potrero.');
       }
     }
   }
@@ -814,8 +850,12 @@
     document.getElementById('finish-perimeter').hidden = mode !== 'polygon';
     document.getElementById('finish-line').hidden = mode !== 'line';
     setStatus(mode === 'polygon'
-      ? 'Dibujar campo: marca al menos tres vértices alrededor del área que quieres registrar.'
-      : 'Medir línea: marca los puntos del lindero o tramo; necesitas al menos dos.');
+      ? (isPredioForm
+        ? 'Toca cada esquina de tu predio en el mapa. Cuando termines, toca «Terminar».'
+        : 'Toca cada esquina de tu potrero en el mapa. Cuando termines, toca «Terminar».')
+      : (isPredioForm
+        ? 'Toca los dos extremos de la línea que quieres medir.'
+        : 'Medir línea: marca los puntos del lindero o tramo; necesitas al menos dos.'));
   }
 
   function addDrawingPoint(event) {
@@ -852,24 +892,24 @@
 
   function finishDrawing() {
     if (!drawing || drawingMode !== 'polygon' || drawPoints.length < 3) {
-      setStatus('Agrega al menos tres vértices para finalizar el campo.');
+      setStatus('Marca al menos tres esquinas para terminar tu campo.');
       return;
     }
     if (hasSelfIntersection(drawPoints)) {
-      setStatus('El perímetro se cruza a sí mismo. Ajusta los vértices antes de guardar.');
+      setStatus('Las líneas se cruzan. Mueve las esquinas antes de guardar.');
       return;
     }
     if (isPlotForm && !polygonInsideParent(drawPoints)) {
-      setStatus('El potrero debe quedar completamente dentro del límite verde del predio. Ajusta el dibujo o enfoca el predio.');
+      setStatus('Tu potrero debe quedar dentro del límite verde. Mueve las esquinas o toca «Ver el predio».');
       return;
     }
     const drawnAreaHa = polygonAreaSquareMetres(drawPoints) / 10000;
     const availableHectares = Number(areaInput?.max);
     if (isPlotForm && Number.isFinite(availableHectares) &&
         Number(drawnAreaHa.toFixed(4)) > availableHectares) {
-      setStatus('La superficie dibujada supera las ' +
-        availableHectares.toLocaleString('es-CL', { maximumFractionDigits: 4 }) +
-        ' ha disponibles en este predio. Reduce el perímetro o enfoca el predio para revisar el límite.');
+      setStatus('Dibujaste más de las ' +
+        availableHectares.toLocaleString('es-CL', { maximumFractionDigits: 2 }) +
+        ' ha que quedan en este predio. Hazlo más pequeño.');
       return;
     }
     const feature = {
@@ -886,7 +926,7 @@
       setPerimeterControls(true, false);
       showPerimeterConfirmation();
     } else {
-      setStatus('Perímetro dibujado. La superficie se volverá a validar en el servidor al guardar.');
+      setStatus('Listo. Revisa las hectáreas y guarda tu potrero.');
     }
   }
 
@@ -938,7 +978,7 @@
     const perimeterOutput = document.getElementById('live-perimeter');
     if (perimeterOutput) perimeterOutput.textContent = '';
     document.getElementById('toggle-edit').hidden = true;
-    setStatus('Perímetro quitado. Puedes indicar una ubicación y superficie manuales.');
+    setStatus('Contorno borrado. Escribe las hectáreas o dibuja de nuevo.');
   }
 
   function cancelDrawing() {
@@ -1320,11 +1360,11 @@
         L.PM.setOptIn(true);
       }
       if (isPlotForm && parentFarm?.geojson) {
-        setStatus('Límite verde punteado: predio seleccionado. Dibuja el potrero completamente dentro de ese contorno.');
+        setStatus('Opcional: dibuja tu potrero dentro del límite verde, o escribe las hectáreas.');
       } else if (isPlotForm) {
-        setStatus('Este predio no tiene un perímetro registrado. La superficie disponible se valida al dibujar y guardar.');
+        setStatus('Opcional: dibuja tu potrero en el mapa, o escribe las hectáreas.');
       } else {
-        setStatus('Elige “Dibujar campo” para medir área y perímetro o “Medir línea” para un lindero.');
+        setStatus('Toca «Dibujar mi campo» y marca las esquinas de tu predio.');
       }
     }
 
@@ -1332,6 +1372,17 @@
       map.fitBounds(layerBounds(parentFarmLayer), { padding: [42, 42], maxZoom: 18 });
     } else if (viewBounds.isValid()) map.fitBounds(viewBounds, { padding: [24, 24], maxZoom: 17 });
     window.setTimeout(() => map.invalidateSize(), 0);
+    // Si el contenedor cambia de tamaño (barra de desplazamiento, giro del celular, otro paso), el mapa se reajusta solo.
+    if (window.ResizeObserver) {
+      let resizeFrame = null;
+      new ResizeObserver(() => {
+        if (resizeFrame) return;
+        resizeFrame = window.requestAnimationFrame(() => {
+          resizeFrame = null;
+          map.invalidateSize({ animate: false, pan: false });
+        });
+      }).observe(mapElement);
+    }
     if (!form) selectInitialTerrain();
   }
 

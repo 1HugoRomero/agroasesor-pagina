@@ -25,10 +25,11 @@ class AuthenticationTests(TestCase):
     def registration_data(self, **values):
         return {
             'mode':'register',
-            'first_name':'María',
-            'last_name':'Soto',
-            'username':'maria.soto',
+            'nombre_completo':'maría soto',
             'email':'maria@example.com',
+            'telefono':'+56 9 1234 5678',
+            'comuna':'melipilla',
+            'rut':'',
             'password1':PASSWORD,
             'password2':PASSWORD,
             'acepta_politicas':'on',
@@ -39,9 +40,11 @@ class AuthenticationTests(TestCase):
         response = self.client.post('/login/', self.registration_data())
         self.assertRedirects(response, '/')
         user = User.objects.get(email='maria@example.com')
-        self.assertEqual(user.username, 'maria.soto')
+        self.assertEqual(user.username, 'maria@example.com')
         self.assertEqual(user.first_name, 'María')
         self.assertEqual(user.last_name, 'Soto')
+        ficha = user.agricultor
+        self.assertEqual((ficha.nombre, ficha.telefono, ficha.comuna, ficha.rut), ('María Soto', '+56912345678', 'Melipilla', None))
         self.assertTrue(user.check_password(PASSWORD))
         self.assertNotEqual(user.password, PASSWORD)
         self.assertFalse(user.is_staff)
@@ -80,17 +83,8 @@ class AuthenticationTests(TestCase):
         self.assertContains(mismatch, 'Las contraseñas no coinciden.')
         self.assertFalse(User.objects.filter(email='maria@example.com').exists())
 
-    def test_registration_rejects_duplicate_username_and_email_case_insensitively(self):
-        duplicate_username = self.registration_data(
-            username='FARMER@example.com',
-            email='new@example.com',
-        )
-        self.assertContains(
-            self.client.post('/login/', duplicate_username),
-            'Este nombre de usuario ya está registrado.',
-        )
+    def test_registration_rejects_duplicate_email_case_insensitively(self):
         duplicate_email = self.registration_data(
-            username='another',
             email='FARMER@example.com',
         )
         self.assertContains(
@@ -111,11 +105,11 @@ class AuthenticationTests(TestCase):
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertEqual(self.client.get('/predios/').status_code, 302)
 
-    def test_registered_user_can_log_out_and_sign_back_in_with_username_or_email(self):
+    def test_registered_user_can_log_out_and_sign_back_in_with_email_in_any_case(self):
         self.client.post('/login/', self.registration_data())
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertRedirects(
-            self.client.post('/login/', {'username':'maria.soto','password':PASSWORD}),
+            self.client.post('/login/', {'username':'maria@example.com','password':PASSWORD}),
             '/',
         )
         self.assertRedirects(self.client.post('/logout/'), '/login/')
@@ -132,7 +126,7 @@ class AuthenticationTests(TestCase):
             superficie_ha=5,
         )
         self.client.post('/login/', self.registration_data())
-        registered_user = User.objects.get(username='maria.soto')
+        registered_user = User.objects.get(username='maria@example.com')
         empty_farms = self.client.get('/predios/')
         self.assertEqual(empty_farms.status_code, 200)
         self.assertEqual(empty_farms.context['predios_list'].count(), 0)
@@ -157,7 +151,7 @@ class AuthenticationTests(TestCase):
 
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertRedirects(
-            self.client.post('/login/', {'username':'maria.soto','password':PASSWORD}),
+            self.client.post('/login/', {'username':'maria@example.com','password':PASSWORD}),
             '/',
         )
         owned_farms = self.client.get('/predios/')
@@ -185,14 +179,19 @@ class AuthenticationTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.get('/panel-admin/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['metrics']['Predios'], 0)
+        self.assertEqual(response.context['stats']['predios'], 0)
         self.assertContains(response, '/admin/')
 
     def test_csrf_required_for_login_registration_and_logout(self):
         client = Client(enforce_csrf_checks=True)
-        self.assertEqual(client.post('/login/', self.registration_data()).status_code, 403)
+        usuarios = get_user_model().objects.count()
+        respuesta = client.post('/login/', self.registration_data())
+        self.assertEqual((respuesta.status_code, respuesta['Location']), (302, '/login/'))
+        self.assertEqual(get_user_model().objects.count(), usuarios)  # no se registró a nadie
+        self.assertNotIn('_auth_user_id', client.session)
         client.force_login(self.user)
-        self.assertEqual(client.post('/logout/').status_code, 403)
+        self.assertEqual(client.post('/logout/').status_code, 302)
+        self.assertIn('_auth_user_id', client.session)  # sin token, el cierre de sesión NO se ejecutó
 
     @override_settings(MAILERS={'default':{'BACKEND':'django.core.mail.backends.locmem.EmailBackend'}})
     def test_reset_requires_verified_single_use_token(self):
@@ -299,35 +298,25 @@ class TerrainTests(TestCase):
         self.user.save()
         self.assertContains(self.client.get('/calendario/'), 'cal-notice')
 
-    def test_sidebar_quick_links_are_clear_and_all_work(self):
+    def test_sidebar_menu_follows_design_and_all_links_work(self):
         import re as regex
         page = self.client.get('/calendario/')
         html = page.content.decode()
-        block = html[html.index('id="sidebar-quick-links"'):]
-        block = block[:block.index('</nav>')]
-        links = regex.findall(r'href="([^"]+)"[^>]*>.*?<span>([^<]+)</span>', block)
-        labels = [label for _, label in links]
-        self.assertEqual(labels, ['Registrar predio', 'Calcular semillas', 'Calcular insumos', 'Consultar productos'])
-        self.assertEqual(len(set(href for href, _ in links)), len(links))
-        for href, label in links:
+        aside = html[html.index('<aside'):html.index('</aside>')]
+        self.assertNotIn('id="sidebar-quick-links"', html)  # el diseño nuevo no tiene «Accesos rápidos»
+        nav = html[html.index('aria-label="Principal"'):html.index('</nav>', html.index('aria-label="Principal"'))]
+        etiquetas = regex.findall(r'<span>([^<]+)</span>', nav)
+        self.assertEqual(etiquetas, [
+            'Inicio', 'Mis predios', 'Mapa', 'Catálogo agrícola', 'Calculadoras', 'Semillas', 'Fertilizantes',
+            '¿Me alcanza?', 'Actividades', 'Toma de decisiones', 'Reportes', 'Calendario', 'Buscar',
+        ])
+        for href in regex.findall(r'href="([^"#]+)', nav):
             response = self.client.get(href.replace('&amp;', '&'))
-            self.assertEqual(response.status_code, 200, f'{label} ({href}) no abre')
-        nav = html[html.index('aria-label="Principal"'):html.index('id="sidebar-quick-links"')]
-        for label in ('Hoy', 'Mis predios y potreros', 'Siembra', 'Centro de decisiones', 'Reporte'):
-            self.assertIn(f'<span>{label}</span>', nav)
-        # «Labores» y «Programar labor» ya no están en el menú ni en los accesos rápidos (las rutas siguen existiendo).
-        self.assertNotIn('<span>Labores</span>', nav)
-        self.assertNotIn('Programar labor', block)
-        self.assertNotIn('clipboard-list', nav)
-        self.assertNotIn("href=\"/actividades/\"", html[html.index('<aside'):html.index('</aside>')])
-        self.assertNotIn("href=\"/actividades/nueva/\"", html[html.index('<aside'):html.index('</aside>')])
-        self.assertEqual(html[html.index('<aside'):html.index('</aside>')].count('class="nav-link is-active"'), 1)  # solo «Siembra»
+            self.assertEqual(response.status_code, 200, f'{href} no abre')
+        self.assertEqual(aside.count('is-active'), 1)  # solo «Calendario» queda marcado en esta página
+        self.assertIn('<a href="/calendario/" class="nav-link is-active">', aside)
         for url in ('/actividades/', '/actividades/nueva/'):
-            page = self.client.get(url)
-            self.assertEqual(page.status_code, 200)  # la ruta sigue existiendo para los enlaces internos
-            body = page.content.decode()
-            primary = body[body.index('aria-label="Principal"'):body.index('id="sidebar-quick-links"')]
-            self.assertNotIn('is-active', primary)  # el menú ya no apunta a «Labores»; en esas páginas no queda nada marcado
+            self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_crop_selector_is_grouped_and_base_crops_load_safely(self):
         from .catalog import crop_group_name, ensure_base_crops, CROP_GROUPS
@@ -369,22 +358,27 @@ class TerrainTests(TestCase):
     def test_register_forms_explain_predio_and_potrero(self):
         predio_page = self.client.get('/predios/nuevo/')
         self.assertNotContains(predio_page, 'terrain-guide')  # la pantalla de predio ya no repite la guía larga
-        self.assertContains(predio_page, 'Dibujar el contorno')
-        self.assertContains(predio_page, 'id="step-confirm"')
-        self.assertNotContains(predio_page, '1 de 3')
+        self.assertContains(predio_page, 'Dibuja el contorno de tu campo')
+        self.assertContains(predio_page, 'id="step-indicator"')  # un solo indicador simple: «Paso X de 3»
+        self.assertContains(predio_page, 'Paso 1 de 3')
+        self.assertNotContains(predio_page, 'terrain-steps')
+        self.assertNotContains(predio_page, 'id="step-confirm"')
+        for ruido in ('PASOS 1 Y 2', 'PASOS 3 Y 4', 'En vivo', 'Gestión de predios y potreros', 'Volver a mis predios'):
+            self.assertNotContains(predio_page, ruido)
         Cultivo.objects.all().delete()
         potrero_page = self.client.get(self.url)
-        self.assertContains(potrero_page, 'Nombre y cultivo')
-        self.assertContains(potrero_page, 'terrain-guide')
-        self.assertContains(potrero_page, 'Cada lote del predio')
-        self.assertContains(potrero_page, 'Aparecerá en Siembra')
+        self.assertContains(potrero_page, '1 · ¿Qué vas a plantar?')
+        self.assertContains(potrero_page, '2 · ¿Dónde queda?')
+        self.assertContains(potrero_page, 'Agregar más detalles')
+        for ruido in ('terrain-guide', 'Cada lote del predio', 'Aparecerá en Siembra', 'Nombre y cultivo'):
+            self.assertNotContains(potrero_page, ruido)
         self.assertNotContains(potrero_page, 'id="step-confirm"')
         self.assertContains(potrero_page, 'Aún no hay cultivos para elegir')
 
     def test_perimeter_confirmation_lives_in_right_column_without_duplicate_actions(self):
         html = self.client.get('/predios/nuevo/').content.decode()
-        for element_id in ('perimeter-confirmation', 'confirm-and-continue', 'return-to-edit', 'confirm-area',
-                           'confirm-perimeter', 'confirm-vertices', 'step-draw', 'step-confirm', 'step-data', 'step-save'):
+        for element_id in ('perimeter-confirmation', 'confirm-and-continue', 'return-to-edit', 'confirm-area', 'confirm-m2',
+                           'confirm-perimeter', 'confirm-vertices', 'step-indicator'):
             self.assertEqual(html.count(f'id="{element_id}"'), 1, element_id)
         self.assertEqual(html.count('Confirmar y continuar'), 1)
         self.assertEqual(html.count('Volver a editar'), 1)
@@ -392,8 +386,10 @@ class TerrainTests(TestCase):
         self.assertGreater(html.index('id="perimeter-confirmation"'), form_card)
         self.assertLess(html.index('id="registration-prompt"'), html.index('id="perimeter-confirmation"'))
         self.assertLess(html.index('id="perimeter-confirmation"'), html.index('id="terrain-form"'))
-        self.assertContains(self.client.get('/predios/nuevo/'), 'Perímetro listo')
-        self.assertContains(self.client.get('/predios/nuevo/'), 'Primero delimita el predio')
+        self.assertContains(self.client.get('/predios/nuevo/'), 'Tu predio mide')
+        self.assertContains(self.client.get('/predios/nuevo/'), 'Primero dibuja tu campo')
+        # Vértices, perímetro y m² existen, pero plegados bajo «Ver detalles técnicos».
+        self.assertEqual(html.count('Ver detalles técnicos'), 2)
 
     def test_predio_panel_separates_user_data_from_calculated_measurement(self):
         Zona.objects.create(nombre='Zona panel')
@@ -402,12 +398,18 @@ class TerrainTests(TestCase):
         self.assertIn('Ej: Camino a Bollenar, parcela 12', html)
         self.assertIn('Selecciona una zona', html)
         self.assertIn('Notas del predio (opcional)', html)
+        self.assertIn('Agregar más detalles', html)
+        # La referencia de ubicación es obligatoria: queda visible, nunca dentro del bloque plegado.
+        self.assertLess(html.index('Referencia de ubicación'), html.index('Agregar más detalles'))
+        self.assertLess(html.index('Agregar más detalles'), html.index('Notas del predio (opcional)'))
         for hidden in ('superficie_ha', 'latitud', 'longitud'):
             self.assertIn(f'type="hidden" name="{hidden}"', html)
         for gone in ('Superficie total (ha)', 'Fecha de creación', 'Se asignará automáticamente', 'Observaciones (opcional)', 'Descripción (opcional)'):
             self.assertNotIn(gone, html)
-        self.assertIn('Medición confirmada', html)
-        self.assertIn('Ver coordenadas', html)
+        self.assertIn('Tu predio mide', html)
+        self.assertIn('Ver detalles técnicos', html)
+        self.assertNotIn('Medición confirmada', html)
+        self.assertNotIn('Equivalente:', html)
         self.assertEqual(html.count('Guardar predio'), 1)
         for element_id in ('map-summary-m2', 'map-summary-vertices', 'map-summary-lat', 'map-summary-lng'):
             self.assertEqual(html.count(f'id="{element_id}"'), 1)
@@ -815,8 +817,8 @@ class TerrainTests(TestCase):
     def test_map_uses_leaflet_and_keeps_manual_registration(self):
         response = self.client.get(self.url)
         self.assertContains(response,'leaflet-geoman')
-        self.assertContains(response,'Dibujar campo')
-        self.assertContains(response,'Medir línea')
+        self.assertContains(response,'Dibujar mi potrero')
+        self.assertContains(response,'Medir una línea')
         self.assertRedirects(self.client.post(self.url,self.plot_data()),f'/predios/{self.predio.pk}/')
         predio_form = self.client.get('/predios/nuevo/')
         self.assertContains(predio_form, 'id="map-form-summary"')
@@ -852,7 +854,7 @@ class TerrainTests(TestCase):
         self.assertContains(listing, 'Información seleccionada')
         self.assertContains(listing, 'selected-terrain-details')
         self.assertNotContains(listing, 'turf.min.js')
-        self.assertContains(form, 'Cancelar trazo')
+        self.assertContains(form, 'id="cancel-drawing"')
         self.assertContains(form, 'finish-line')
         self.assertContains(form, 'clear-measurement')
         self.assertContains(form, 'live-perimeter')
@@ -889,9 +891,38 @@ class TerrainTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['potrero_superficie_disponible'], Decimal('8'))
         self.assertEqual(response.context['form'].fields['superficie_ha'].widget.attrs['max'], '8.0000')
-        self.assertContains(response, 'Enfocar predio')
-        self.assertContains(response, 'límite verde punteado')
-        self.assertContains(response, 'Dibuja el potrero completamente dentro de ese límite')
+        self.assertContains(response, 'Ver el predio')
+        self.assertContains(response, 'dentro del límite verde')
+
+    def test_potrero_surface_offers_remaining_area_shortcut_and_no_silent_block(self):
+        Potrero.objects.create(predio=self.predio, nombre='Existente', superficie_ha=Decimal('2'))
+        page = self.client.get(self.url)
+        self.assertContains(page, 'data-fill-available')
+        self.assertContains(page, 'Usar lo que queda (8,00 ha)')
+        self.assertContains(page, 'id="terrain-form"')
+        self.assertNotContains(page, 'no-space-card')
+
+    def test_potrero_form_explains_when_predio_has_no_free_surface(self):
+        Potrero.objects.create(predio=self.predio, nombre='Todo', superficie_ha=self.predio.superficie_ha)
+        page = self.client.get(self.url)
+        self.assertEqual(page.status_code, 200)
+        self.assertTrue(page.context['potrero_sin_espacio'])
+        self.assertContains(page, 'Este predio ya no tiene superficie libre')
+        self.assertContains(page, f'/predios/{self.predio.pk}/editar/')
+        self.assertNotContains(page, 'id="terrain-form"')
+        self.assertNotContains(page, 'data-fill-available')
+        # Con un potrero existente, editarlo sigue mostrando su formulario completo sin un «max» imposible.
+        existing = self.predio.potreros.get()
+        edit = self.client.get(f'/predios/{self.predio.pk}/potreros/{existing.pk}/editar/')
+        self.assertContains(edit, 'id="terrain-form"')
+        self.assertNotContains(edit, 'no-space-card')
+
+    def test_icons_script_loads_async_so_menus_work_before_it_arrives(self):
+        html = self.client.get('/predios/').content.decode()
+        icons = html.index('unpkg.com/lucide')
+        self.assertIn('async src="https://unpkg.com/lucide', html)
+        self.assertLess(html.index('js/row-menu.js'), icons)
+        self.assertLess(html.index('js/layout.js'), icons)
 
     def test_potrero_overlap_with_same_farm_is_rejected(self):
         first = [[-71.215,-33.686],[-71.214,-33.686],[-71.214,-33.685],[-71.215,-33.685]]
@@ -912,24 +943,10 @@ class TerrainTests(TestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, 'id="sidebar-quick-links"')
-                quick_links = response.content.decode().split(
-                    'id="sidebar-quick-links"', 1
-                )[1].split('</nav>', 1)[0]
-                # Los accesos rápidos son acciones distintas; predios, decisiones y reporte
-                # ya están en el menú principal y no se repiten. Labores ya no aparece en el sidebar.
-                self.assertEqual(quick_links.count('<a '), 4)
-                self.assertNotIn('href="/actividades/nueva/"', quick_links)
-                for href in (
-                    '/predios/nuevo/',
-                    '/decisiones/?herramienta=llevar&amp;tipo=semillas',
-                    '/decisiones/?herramienta=llevar&amp;tipo=insumos', '/productos/',
-                ):
-                    self.assertIn(f'href="{href}"', quick_links)
                 main_nav = response.content.decode().split('aria-label="Principal"', 1)[1].split('</nav>', 1)[0]
-                for href in ('/', '/predios/', '/calendario/', '/decisiones/', '/busqueda/', '/reportes/'):
+                for href in ('/', '/predios/', '/calendario/', '/decisiones/', '/busqueda/', '/reportes/', '/actividades/',
+                             '/productos/', '/calculadoras/semillas/'):
                     self.assertIn(f'href="{href}"', main_nav)
-                self.assertNotIn('href="/actividades/"', main_nav)
 
     def test_decision_center_tools_and_single_sidebar_link(self):
         response = self.client.get('/decisiones/')
@@ -937,8 +954,8 @@ class TerrainTests(TestCase):
         self.assertContains(response, 'Calcula, planifica y optimiza los recursos de tus predios')
         for text in ('Cuánto llevar', '¿Me alcanza?', 'Cosecha', 'Ficha de insumo'):
             self.assertContains(response, text)
-        decision_group = next(items for label, items in response.context['nav_groups'] if label == 'La decisión')
-        self.assertEqual([(name, title) for name, title, _icon in decision_group], [('decisiones', 'Centro de decisiones')])
+        enlaces = [item for item in response.context['menu'] if item.get('href') == '/decisiones/']
+        self.assertEqual([item['label'] for item in enlaces], ['Toma de decisiones'])  # un solo enlace al centro de decisiones
 
     def test_legacy_calculator_routes_redirect_to_integrated_tools(self):
         expected = {
@@ -955,8 +972,10 @@ class TerrainTests(TestCase):
     def test_csrf_required_to_save_terrain(self):
         client=Client(enforce_csrf_checks=True)
         client.force_login(self.user)
-        self.assertEqual(client.post(self.url,self.plot_data()).status_code,403)
-        self.assertEqual(client.post('/predios/nuevo/', {}).status_code,403)
+        potreros, predios = Potrero.objects.count(), Predio.objects.count()
+        self.assertEqual(client.post(self.url,self.plot_data()).status_code,302)
+        self.assertEqual(client.post('/predios/nuevo/', {}).status_code,302)
+        self.assertEqual((Potrero.objects.count(), Predio.objects.count()), (potreros, predios))  # no se guardó nada
 
 
 class GeometryTests(TestCase):
@@ -1377,8 +1396,8 @@ class ActividadAgricolaTests(TestCase):
         self.assertContains(response, 'Mis predios')
         self.assertContains(response, 'Potreros activos')
         self.assertContains(response, 'Distribución de superficie')
-        self.assertContains(response, 'sidebar-quick-links')
-        self.assertContains(response, 'Calcular insumos')
+        self.assertContains(response, 'Calculadoras')
+        self.assertContains(response, 'Fertilizantes')
         self.assertNotContains(response, '<nav class="card quick-links"')
         self.assertContains(response, f'/predios/{self.predio.pk}/')
         self.assertContains(response, f'/predios/{self.predio.pk}/potreros/{self.potrero.pk}/editar/')
@@ -1582,7 +1601,10 @@ class ActividadAgricolaTests(TestCase):
             f'/actividades/{activity.pk}/estado/',
             {'estado':'completada'},
         )
-        self.assertEqual(response.status_code, 403)
+        # Sin token CSRF nada se ejecuta: se vuelve a la página con un aviso (no la pantalla de error de Django).
+        self.assertEqual(response.status_code, 302)
+        activity.refresh_from_db()
+        self.assertEqual(activity.estado, ActividadAgricola.Estado.PENDIENTE)
 
 
 class AgronomicCalendarTests(TestCase):
@@ -2596,16 +2618,35 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
     def test_map_tools_grouped_and_help_accordion_is_closed_with_five_steps(self):
         html = self.client.get('/predios/nuevo/').content.decode()
         self.assertIn('map-toolbar is-predio', html)
-        for button in ('draw-perimeter', 'measure-line', 'undo-point', 'finish-perimeter', 'edit-perimeter', 'locate-me', 'center-map'):
-            self.assertIn(f'id="{button}"', html)
-        self.assertIn('¿Cómo delimito mi predio?', html)
-        self.assertNotIn('<details class="map-help" open', html)
-        self.assertEqual(html[html.index('<details class="map-help"'):].split('</details>')[0].count('<li>'), 5)
+        for button in ('draw-perimeter', 'measure-line', 'undo-point', 'finish-perimeter', 'edit-perimeter', 'locate-me', 'center-map',
+                       'accept-perimeter', 'cancel-perimeter', 'cancel-drawing', 'finish-line', 'clear-measurement'):
+            self.assertEqual(html.count(f'id="{button}"'), 1, button)  # el JS del mapa los necesita: no se eliminan
+        # Un solo botón principal al empezar; las herramientas secundarias van plegadas.
+        self.assertIn('Dibujar mi campo', html)
+        self.assertIn('<details class="more-tools">', html)
+        self.assertNotIn('<details class="more-tools" open', html)
+        # Una sola ayuda corta (la línea de estado); sin acordeones de «¿Cómo…?».
+        self.assertNotIn('¿Cómo delimito mi predio?', html)
+        self.assertNotIn('map-help', html)
         self.assertNotIn('map-privacy-note', html)
-        self.assertIn('id="map-confirmed-line"', html)
+        self.assertNotIn('id="map-confirmed-line"', html)  # la medida no se repite bajo el mapa
         self.assertNotIn('id="confirm-location"', html)
-        order = [html.index(x) for x in ('Nombre del predio', 'Referencia de ubicación', 'Zona', 'Notas del predio (opcional)', 'Medición confirmada', 'Guardar predio')]
+        self.assertNotIn('<details class="more-details" open', html)
+        order = [html.index(x) for x in ('Nombre del predio', 'Referencia de ubicación', 'Notas del predio (opcional)', 'id="map-form-summary"', 'Guardar predio')]
         self.assertEqual(order, sorted(order))
+
+    def test_predio_hides_zone_when_there_is_only_one_and_shows_it_when_there_are_several(self):
+        # Hay una sola zona (preseleccionada): el campo sigue en el formulario, pero oculto.
+        Zona.objects.all().delete()
+        Zona.objects.create(nombre='Melipilla')
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertIn('class="zone-fixed" hidden', html)
+        self.assertNotIn('<span>Zona', html)
+        # Con varias zonas se vuelve a mostrar para elegir.
+        Zona.objects.create(nombre='Maule')
+        html = self.client.get('/predios/nuevo/').content.decode()
+        self.assertNotIn('zone-fixed', html)
+        self.assertIn('<span>Zona', html)
 
     def sur_feature(self):
         ring = [[-71.300, -33.800], [-71.296, -33.800], [-71.296, -33.796], [-71.300, -33.796]]
@@ -2710,9 +2751,9 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
     def test_case_b_split_shows_reference_and_accepts_several_potreros(self):
         farm, _ = self.create_predio()
         page = self.client.get(f'/predios/{farm.pk}/potreros/nuevo/')
-        self.assertContains(page, 'Estás creando potreros dentro de tu predio')
-        self.assertContains(page, 'Predio A')
-        self.assertContains(page, 'No necesitas volver a marcar todo el predio')
+        self.assertContains(page, 'Predio: <strong>Predio A</strong>')
+        self.assertNotContains(page, 'Estás creando potreros dentro de tu predio')
+        self.assertNotContains(page, 'No necesitas volver a marcar todo el predio')
         west = [[-71.216, -33.687], [-71.2145, -33.687], [-71.2145, -33.684], [-71.216, -33.684]]
         east = [[-71.2144, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.2144, -33.684]]
         for name, ring in (('Oeste', west), ('Este', east)):

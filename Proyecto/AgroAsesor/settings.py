@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
@@ -44,6 +45,7 @@ MAP_TILE_ATTRIBUTION = os.getenv(
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 ).strip()
 LOGIN_URL = 'login'
+CSRF_FAILURE_VIEW = 'core.sesion.fallo_csrf'
 LOGIN_REDIRECT_URL = 'dashboard'
 AUTHENTICATION_BACKENDS = ['core.auth.EmailBackend']
 SESSION_COOKIE_HTTPONLY = True
@@ -71,6 +73,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'core.sesion.SesionVencidaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -104,6 +107,15 @@ DATABASES = {
         'NAME': os.getenv('DJANGO_DB_PATH') or BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Solo existe UNA base oficial: la del volumen de Docker. Si se arranca sin DJANGO_DB_PATH (por ejemplo con
+# «python manage.py runserver» directo) se usaría un db.sqlite3 local distinto; se avisa para no dispersar datos.
+if not os.getenv('DJANGO_DB_PATH') and any(a in sys.argv for a in ('runserver', 'migrate', 'createsuperuser')):
+    print(
+        'AVISO: se está usando el db.sqlite3 LOCAL, que NO es la base oficial del proyecto. '
+        'Para trabajar con la oficial usa «docker compose up -d».',
+        file=sys.stderr,
+    )
 
 
 # Password validation
@@ -161,3 +173,9 @@ MAILERS = {
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'AgroAsesor <noreply@localhost>')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# API Flask (servicio interno de solo lectura detrás de Django). Opcional: sin estas variables, /api/v1/ responde 503
+# y el resto de AgroAsesor funciona igual. La clave debe tener al menos 32 caracteres y NO se guarda en el código.
+AGROASESOR_API_URL = os.getenv('AGROASESOR_API_URL', '').rstrip('/')
+AGROASESOR_INTERNAL_SECRET = os.getenv('AGROASESOR_INTERNAL_SECRET', '')
+AGROASESOR_API_TIMEOUT = float(os.getenv('AGROASESOR_API_TIMEOUT', '10'))

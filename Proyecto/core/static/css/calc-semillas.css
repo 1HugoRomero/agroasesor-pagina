@@ -1,0 +1,109 @@
+/* Calculadora de semillas (diseño de AgroAsesor): terreno → cultivo y dosis → resultados + información técnica. */
+.cs-crumbs { display: flex; gap: 8px; align-items: center; font-size: 0.92rem; color: var(--muted); margin: 2px 0 6px; }
+.cs-crumbs a { color: var(--green); text-decoration: none; }
+.cs-title { margin: 0 0 4px; font-size: 2rem; line-height: 1.15; color: var(--green-dark); }
+.cs-sub { margin: 0 0 16px; color: var(--muted); max-width: 70ch; }
+
+.cs-steps { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 16px; padding: 12px 16px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); }
+.cs-steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; font-size: 0.95rem; position: relative; }
+.cs-steps li + li::before { content: ""; position: absolute; left: -10px; top: 50%; width: 12px; height: 1px; background: var(--line); }
+.cs-steps li span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #e9eee8; color: var(--muted); font-weight: 700; flex: 0 0 30px; }
+.cs-steps li.is-current { color: var(--green-dark); }
+.cs-steps li.is-current span { background: var(--green); color: #fff; }
+.cs-steps li.is-done span { background: var(--green-soft); color: var(--green-dark); }
+.cs-steps li.is-done span::before { content: "✓"; }
+.cs-steps li.is-done span { font-size: 0; }
+.cs-steps li.is-done span::before { font-size: 0.95rem; }
+
+.cs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.cs-info { grid-column: 1 / -1; }
+.cs-info #cs-tabpanel { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); column-gap: 24px; }
+.cs-card { padding: 16px; }
+.cs-card h2 { margin: 0 0 12px; font-size: 1.1rem; }
+.cs-field { display: block; margin: 0 0 12px; }
+.cs-field > span, .cs-field > label > span { display: block; font-size: 0.88rem; color: var(--muted); margin-bottom: 4px; }
+.cs-field small { font-weight: 400; color: var(--muted); }
+.cs-field select, .cs-field input[type=number], .cs-dose input {
+    width: 100%; min-height: 42px; padding: 8px 12px; border: 1px solid #cfd8cd; border-radius: 10px; background: #fff; font: inherit; color: var(--ink);
+}
+.cs-field select:focus, .cs-field input:focus, .cs-dose input:focus { outline: 2px solid var(--green-light); outline-offset: 1px; }
+.cs-dose { display: flex; align-items: center; gap: 8px; }
+.cs-unit { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.cs-slider { width: 100%; accent-color: var(--green); margin-top: 8px; }
+.cs-range { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.85rem; }
+.cs-help { margin: 4px 0 0; font-size: 0.84rem; color: var(--muted); line-height: 1.35; }
+.cs-help.is-warn { color: #8a5a00; background: var(--amber-soft); border-radius: 8px; padding: 6px 8px; }
+.cs-link { display: inline-flex; gap: 6px; align-items: center; color: #2a5f9a; background: #eaf2fb; border-radius: 8px; padding: 6px 10px; text-decoration: none; font-size: 0.9rem; margin-bottom: 12px; }
+
+.cs-map-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #dfe8da; }
+.cs-map { height: 230px; width: 100%; }
+.cs-map svg.cs-fallback { width: 100%; height: 100%; display: block; }
+.cs-map-chip { position: absolute; left: 12px; top: 12px; z-index: 500; background: #fff; border-radius: 10px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); font-size: 0.9rem; }
+.cs-map-chip strong { display: block; }
+.cs-map-btn { position: absolute; right: 10px; bottom: 10px; z-index: 500; display: inline-flex; gap: 6px; align-items: center; border: 0; background: rgba(14, 59, 41, 0.92); color: #fff; padding: 8px 12px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+.cs-note { font-size: 0.85rem; color: var(--muted); margin: 8px 0; min-height: 1.2em; }
+.cs-facts { margin: 8px 0 0; background: #f6f9f4; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.cs-facts div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; padding: 4px 0; font-size: 0.93rem; }
+.cs-facts dt { color: var(--muted); }
+.cs-facts dd { margin: 0; font-weight: 600; }
+
+.cs-refcard { background: #fdf3e7; border-radius: 12px; padding: 12px; margin-bottom: 12px; font-size: 0.92rem; }
+.cs-refcard strong { display: block; margin-bottom: 4px; }
+.cs-refcard p { margin: 2px 0; }
+.cs-badge { display: inline-block; font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--green-soft); color: var(--green-dark); }
+.cs-badge.is-pending { background: var(--amber-soft); color: #7a5a00; }
+
+.cs-hero { border-radius: 14px; padding: 18px; color: #fff; background: linear-gradient(135deg, #0e3b29, #1d6a43); margin-bottom: 12px; }
+.cs-hero span { display: block; opacity: 0.9; }
+.cs-hero strong { display: block; font-size: 2.4rem; line-height: 1.1; margin: 4px 0; }
+.cs-minis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.cs-mini { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fbfcfa; }
+.cs-mini i { color: var(--green); }
+.cs-mini span { display: block; font-size: 0.84rem; color: var(--muted); }
+.cs-mini strong { font-size: 1.5rem; line-height: 1.1; }
+.cs-mini small { display: block; color: var(--muted); }
+.cs-leftover { margin: 0 0 10px; font-size: 0.9rem; color: var(--muted); }
+.cs-cost { background: #eef7ea; border-radius: 12px; padding: 12px; }
+.cs-cost h3 { margin: 0 0 8px; font-size: 1rem; }
+.cs-cost-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.cs-cost-total span { display: block; font-size: 0.85rem; color: var(--muted); }
+.cs-cost-total strong { font-size: 1.5rem; color: var(--green-dark); }
+.cs-origin { font-size: 0.85rem; margin: 10px 0 0; color: var(--muted); }
+.cs-error { margin: 10px 0 0; color: #8d2f22; background: #fbe9e6; border-radius: 8px; padding: 8px 10px; }
+.cs-saved { margin: 10px 0 0; color: var(--green-dark); background: var(--green-soft); border-radius: 8px; padding: 8px 10px; }
+.cs-saved a { color: var(--green-dark); font-weight: 700; }
+.cs-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; margin-top: 14px; }
+.cs-btn-light, .cs-btn-main { min-height: 46px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; display: inline-flex; gap: 8px; justify-content: center; align-items: center; }
+.cs-btn-light { background: #fff; border: 1px solid #1e2a22; color: #1e2a22; }
+.cs-btn-main { background: var(--green-dark); border: 1px solid var(--green-dark); color: #fff; }
+.cs-btn-main:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.cs-info h2 { font-size: 1.05rem; }
+.cs-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.cs-tabs button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+.cs-tabs button.is-active { background: var(--green-dark); color: #fff; border-color: var(--green-dark); font-weight: 700; }
+.cs-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cs-item i { color: var(--green); }
+.cs-item strong { display: block; }
+.cs-item small { display: block; color: var(--muted); }
+.cs-item ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.cs-item li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+.cs-nodata { color: var(--muted); font-size: 0.92rem; padding: 8px 0; }
+.cs-source { background: #eaf2fb; border-radius: 12px; padding: 10px 12px; margin: 12px 0; font-size: 0.9rem; }
+.cs-source a { color: #2a5f9a; font-weight: 700; }
+.cs-warning { display: flex; gap: 8px; background: #fdf3e0; border-radius: 10px; padding: 10px; font-size: 0.85rem; margin: 10px 0 0; }
+.cs-empty { padding: 24px; max-width: 640px; }
+
+@media (min-width: 1560px) {
+    .cs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.05fr); }
+    .cs-info { grid-column: auto; }
+    .cs-info #cs-tabpanel { display: block; }
+}
+@media (max-width: 1100px) { .cs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+    .cs-grid { grid-template-columns: 1fr; }
+    .cs-steps { grid-template-columns: 1fr 1fr; }
+    .cs-steps li + li::before { display: none; }
+    .cs-title { font-size: 1.6rem; }
+    .cs-cost-row, .cs-actions { grid-template-columns: 1fr; }
+}

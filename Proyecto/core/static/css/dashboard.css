@@ -446,3 +446,24 @@ body:has(.sidebar-quick-links) .sidebar-guide { margin-top: auto; }
 .dash-calc-row span { color: var(--ink); font-size: 0.9rem; }
 .dash-calc-row small { color: var(--muted); font-size: 0.8rem; }
 .dash-calc-origin { color: #8a6d12; }
+
+/* ---------- Responsive: tabla de potreros ordenada en 3 filas claras cuando la columna es angosta ---------- */
+@media (min-width: 701px) and (max-width: 1400px) {
+    .plot-head { display: none; }
+    .plot-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 6px 12px; }
+    .plot-row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+    .plot-row > :nth-child(2) { grid-column: 2; grid-row: 1; }
+    .plot-row > :nth-child(3) { grid-column: 3; grid-row: 1; justify-self: end; }
+    .plot-row > :nth-child(4) { grid-column: 1; grid-row: 2; }
+    .plot-row > :nth-child(5) { grid-column: 2 / 4; grid-row: 2; justify-self: start; white-space: normal; }
+    .plot-row > :nth-child(6) { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+}
+
+/* Indicadores del inicio: cuando no caben en una fila, se reparten el ancho sin dejar huecos. */
+@media (max-width: 1250px) {
+    .dash-stats { display: flex; flex-wrap: wrap; }
+    .dash-stats > * { flex: 1 1 200px; min-width: 0; }
+}
+@media (max-width: 700px) {
+    .dash-stats > * { flex: 1 1 calc(50% - 9px); }
+}

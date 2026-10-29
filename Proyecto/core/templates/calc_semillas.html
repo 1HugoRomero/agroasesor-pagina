@@ -1,0 +1,113 @@
+{% extends "body.html" %}
+{% load static agro_assets %}
+{% block title %}Calculadora de semillas · AgroAsesor{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% vendor 'leaflet/leaflet.css' 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' %}">
+<link rel="stylesheet" href="{% static 'css/calc-semillas.css' %}?v=1">
+{% endblock %}
+{% block content %}
+<nav class="cs-crumbs" aria-label="Ruta"><a href="{% url 'decisiones' %}">Calculadoras</a><span aria-hidden="true">›</span><span>Semillas</span></nav>
+<h1 class="cs-title">Calculadora de semillas</h1>
+<p class="cs-sub">Estima la cantidad de semilla y los sacos que necesitas para tu superficie, con la referencia técnica y su fuente.</p>
+
+{% if not farm_data.plots %}
+<section class="card cs-empty">
+    <h2>Primero registra un potrero</h2>
+    <p>La calculadora usa la superficie y el perímetro de tus potreros. Dibuja tu predio y tus potreros en el mapa para empezar.</p>
+    <a class="button" href="{% url 'predios' %}">Ir a Mis predios</a>
+</section>
+{% else %}
+<ol class="cs-steps" id="cs-steps" aria-label="Avance del cálculo">
+    <li class="is-current" data-step="1"><span>1</span> Seleccionar terreno</li>
+    <li data-step="2"><span>2</span> Configurar cultivo</li>
+    <li data-step="3"><span>3</span> Ver resultados</li>
+    <li data-step="4"><span>4</span> Recomendaciones</li>
+</ol>
+
+<div class="cs-grid">
+    <section class="card cs-card" aria-labelledby="cs-h1">
+        <h2 id="cs-h1">1. Seleccionar terreno</h2>
+        <label class="cs-field"><span>Predio</span><select id="cs-farm"></select></label>
+        <label class="cs-field"><span>Potrero</span><select id="cs-plot"></select></label>
+        <div class="cs-map-wrap">
+            <div id="cs-map" class="cs-map" role="img" aria-label="Mapa del potrero seleccionado"></div>
+            <div class="cs-map-chip" id="cs-map-chip" hidden></div>
+            <button type="button" class="cs-map-btn" id="cs-change-plot"><i data-lucide="map"></i> Cambiar potrero</button>
+        </div>
+        <p class="cs-note" id="cs-map-note" role="status"></p>
+        <dl class="cs-facts" id="cs-facts"></dl>
+    </section>
+
+    <section class="card cs-card" aria-labelledby="cs-h2">
+        <h2 id="cs-h2">2. Configurar cultivo y semilla</h2>
+        <label class="cs-field"><span>Cultivo</span><select id="cs-crop"></select></label>
+        <label class="cs-field"><span>Referencia técnica</span><select id="cs-ref"></select></label>
+        <a class="cs-link" id="cs-ref-link" href="#" target="_blank" rel="noopener noreferrer" hidden><i data-lucide="external-link"></i> <span>Ver ficha técnica</span></a>
+        <div class="cs-refcard" id="cs-refcard" hidden></div>
+        <div class="cs-field">
+            <label for="cs-dose"><span>Dosis de siembra</span></label>
+            <div class="cs-dose">
+                <input id="cs-dose" type="number" inputmode="decimal" min="0" step="any" aria-describedby="cs-dose-help">
+                <span class="cs-unit" id="cs-dose-unit">kg/ha</span>
+            </div>
+            <input id="cs-slider" class="cs-slider" type="range" aria-label="Ajustar dosis dentro del rango de referencia" hidden>
+            <div class="cs-range" id="cs-range" hidden><span id="cs-range-min"></span><span id="cs-range-max"></span></div>
+            <p class="cs-help" id="cs-dose-help"></p>
+        </div>
+        <label class="cs-field"><span>Tamaño del saco (kg) <small>lo defines tú</small></span>
+            <input id="cs-bag" type="number" inputmode="decimal" min="0" step="any" list="cs-bag-list" placeholder="Ej.: 25">
+            <datalist id="cs-bag-list"><option value="25"><option value="40"><option value="50"></datalist>
+        </label>
+        <p class="cs-help">Es solo el peso del saco que piensas comprar: AgroAsesor no incluye marcas ni presentaciones de productos.</p>
+    </section>
+
+    <section class="card cs-card cs-results" aria-labelledby="cs-h3">
+        <h2 id="cs-h3">3. Resultados del cálculo</h2>
+        <div class="cs-hero" aria-live="polite">
+            <span>Cantidad total de semillas</span>
+            <strong id="cs-total">—</strong>
+            <small id="cs-total-for">Elige un potrero y una dosis.</small>
+        </div>
+        <div class="cs-minis">
+            <div class="cs-mini"><i data-lucide="package"></i><div><span>Sacos necesarios</span><strong id="cs-bags">—</strong><small id="cs-bags-note"></small></div></div>
+            <div class="cs-mini"><i data-lucide="sprout"></i><div><span>Cobertura real</span><strong id="cs-cover">—</strong><small id="cs-cover-note"></small></div></div>
+        </div>
+        <p class="cs-leftover" id="cs-leftover" hidden></p>
+        <div class="cs-cost">
+            <h3>Costo estimado <small>(opcional)</small></h3>
+            <div class="cs-cost-row">
+                <label class="cs-field"><span>Precio por saco (CLP)</span><input id="cs-price" type="number" inputmode="numeric" min="0" step="1" placeholder="Lo escribes tú"></label>
+                <div class="cs-cost-total"><span>Costo total estimado</span><strong id="cs-cost">—</strong></div>
+            </div>
+            <p class="cs-help">El precio lo ingresas tú: AgroAsesor no publica precios de mercado.</p>
+        </div>
+        <p class="cs-origin" id="cs-origin" hidden></p>
+        <p class="cs-error" id="cs-error" role="alert" hidden></p>
+        <p class="cs-saved" id="cs-saved" role="status" hidden></p>
+        <div class="cs-actions">
+            <button type="button" class="cs-btn-light" id="cs-clear">Limpiar</button>
+            <button type="button" class="cs-btn-main" id="cs-save" disabled><i data-lucide="file-text"></i> Guardar en historial</button>
+        </div>
+    </section>
+
+    <aside class="card cs-card cs-info" aria-labelledby="cs-h4">
+        <h2 id="cs-h4">Información técnica y recomendaciones</h2>
+        <div class="cs-tabs" role="tablist" aria-label="Información técnica">
+            <button type="button" role="tab" class="is-active" aria-selected="true" data-tab="siembra">Siembra</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="manejo">Manejo</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="suelo">Suelo</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="rendimiento">Rendimiento</button>
+        </div>
+        <div id="cs-tabpanel" role="tabpanel"></div>
+        <div class="cs-source" id="cs-source" hidden></div>
+        <p class="cs-warning"><i data-lucide="triangle-alert"></i> Estos valores son referencias técnicas generales. Ajústalos según las características de tu predio y consulta a un ingeniero agrónomo.</p>
+    </aside>
+</div>
+{% endif %}
+{{ semillas_data|json_script:'semillas-data' }}
+{{ maps_config|json_script:'maps-config' }}
+{% endblock %}
+{% block extra_js %}
+<script src="{% vendor 'leaflet/leaflet.js' 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js' %}"></script>
+<script src="{% static 'js/calc-semillas.js' %}?v=1"></script>
+{% endblock %}

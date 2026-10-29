@@ -91,3 +91,9 @@
     line-height: 1.4;
 }
 .calc-mini-next a { color: var(--green-dark); font-weight: 700; white-space: nowrap; }
+
+/* ---------- Responsive: la franja de indicadores se reparte todo el ancho (sin celdas grises vacías) ---------- */
+#tool-llevar .info-strip.calc-strip,
+.tool-flow .info-strip.calc-strip { display: flex; flex-wrap: wrap; }
+#tool-llevar .calc-strip .info-chip,
+.tool-flow .calc-strip .info-chip { flex: 1 1 150px; min-width: 0; }

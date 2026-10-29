@@ -398,7 +398,8 @@ class Insumo(models.Model):
 class Agricultor(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='agricultor')
     nombre = models.CharField(max_length=150)
-    rut = models.CharField(max_length=12, unique=True)
+    # Opcional: si se informa, se valida (módulo 11) y es único. NULL permite varias cuentas sin RUT.
+    rut = models.CharField(max_length=12, unique=True, null=True, blank=True)
     telefono = models.CharField(max_length=20)
     comuna = models.CharField(max_length=100)
 
