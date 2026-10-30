@@ -29,7 +29,12 @@
     (rows || []).forEach(function (row) {
       if (!row) return;
       if (row.heading) lines.push(row.heading);
-      else lines.push(row.label ? row.label + ': ' + (row.value == null ? '' : row.value) : String(row.value == null ? row : row.value));
+      else
+        lines.push(
+          row.label
+            ? row.label + ': ' + (row.value == null ? '' : row.value)
+            : String(row.value == null ? row : row.value),
+        );
     });
     lines.push('', note);
     return lines;
@@ -38,9 +43,9 @@
   /* rows: [{ heading }, { label, value }, ...]. options.badge: texto a la derecha de la banda. */
   function download(filename, title, rows, options) {
     const opts = options || {};
-    const note = opts.note
-      || (window.AGRO_MOCK && window.AGRO_MOCK.disclaimer)
-      || 'Información orientativa; no reemplaza la asesoría de un ingeniero agrónomo.';
+    const note =
+      opts.note ||
+      'Esta recomendación es orientativa y no reemplaza la evaluación de un ingeniero agrónomo certificado.';
     const JsPdf = window.jspdf && window.jspdf.jsPDF;
     if (!JsPdf) {
       // Sin la librería (por ejemplo, sin conexión) se abre una vista imprimible.
@@ -83,7 +88,9 @@
         doc.setFont(undefined, 'normal');
         return;
       }
-      const line = row.label ? row.label + ': ' + (row.value == null ? '' : row.value) : String(row.value == null ? row : row.value);
+      const line = row.label
+        ? row.label + ': ' + (row.value == null ? '' : row.value)
+        : String(row.value == null ? row : row.value);
       y = wrap(doc, line, 14, y, 180, 6);
     });
     y += 8;

@@ -94,7 +94,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='estado_verificacion',
-            field=models.CharField(choices=[('unverified', 'Información no verificada'), ('verified', 'Verificado con fuente'), ('restricted', 'Restringido'), ('cancelled', 'Registro cancelado')], default='unverified', max_length=12),
+            field=models.CharField(
+                choices=[
+                    ('unverified', 'Información no verificada'),
+                    ('verified', 'Verificado con fuente'),
+                    ('restricted', 'Restringido'),
+                    ('cancelled', 'Registro cancelado'),
+                ],
+                default='unverified',
+                max_length=12,
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -119,7 +128,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='fosforo_p2o5_pct',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=6, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('100'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=6,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0')),
+                    django.core.validators.MaxValueValidator(Decimal('100')),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -134,7 +152,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='germinacion_pct',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.01')), django.core.validators.MaxValueValidator(Decimal('100'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                max_digits=5,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0.01')),
+                    django.core.validators.MaxValueValidator(Decimal('100')),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -149,7 +176,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='nitrogeno_pct',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=6, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('100'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=6,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0')),
+                    django.core.validators.MaxValueValidator(Decimal('100')),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -169,17 +205,38 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='peso_mil_semillas_g',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=10, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.001'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=10,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal('0.001'))],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
             name='plantas_objetivo_m2',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=12, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.001'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=12,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal('0.001'))],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
             name='potasio_k2o_pct',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=6, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('100'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=6,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0')),
+                    django.core.validators.MaxValueValidator(Decimal('100')),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -189,7 +246,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='presentacion_cantidad',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=12, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.001'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=12,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal('0.001'))],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -199,7 +262,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='pureza_pct',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.01')), django.core.validators.MaxValueValidator(Decimal('100'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                max_digits=5,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(Decimal('0.01')),
+                    django.core.validators.MaxValueValidator(Decimal('100')),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -234,12 +306,26 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='predio',
             name='latitud',
-            field=models.FloatField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(-85), django.core.validators.MaxValueValidator(85)]),
+            field=models.FloatField(
+                blank=True,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-85),
+                    django.core.validators.MaxValueValidator(85),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='predio',
             name='longitud',
-            field=models.FloatField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(-180), django.core.validators.MaxValueValidator(180)]),
+            field=models.FloatField(
+                blank=True,
+                null=True,
+                validators=[
+                    django.core.validators.MinValueValidator(-180),
+                    django.core.validators.MaxValueValidator(180),
+                ],
+            ),
         ),
         migrations.RunPython(copy_plot_perimeters_to_geojson, migrations.RunPython.noop),
     ]

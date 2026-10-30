@@ -17,7 +17,7 @@ services:
       DJANGO_BACKUP_DIR: /backups
     volumes:
       - agroasesor_data:/data   # LA base de datos oficial (SQLite persistente)
-      - ./backups:/backups      # respaldos automáticos y archivos para consolidar (visibles en tu PC)
+      - ./backups:/backups      # respaldos automáticos (visibles en tu PC)
     restart: unless-stopped
 
 volumes:

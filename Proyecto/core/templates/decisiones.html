@@ -1,77 +1,98 @@
 {% extends "body.html" %}
 {% load static agro_assets %}
 {% block title %}Centro de decisiones · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/agro-panels.css' %}?v=1">
-<link rel="stylesheet" href="{% static 'css/decisiones.css' %}?v=9">
-<link rel="stylesheet" href="{% static 'css/calc-panel.css' %}?v=5">
-<link rel="stylesheet" href="{% static 'css/calc-flow.css' %}?v=2">
-<link rel="stylesheet" href="{% static 'css/tool-flow.css' %}?v=3">{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/decisiones.css' %}?v=10">
+{% endblock %}
 {% block content %}
-<section class="decision-center" data-calculate-url="{% url 'calculate' %}" data-staff="{% if request.user.is_staff %}1{% endif %}" data-tool="{{ initial_tool }}">
-    <div class="decision-head">
-        <div class="decision-intro">
-            <span class="decision-eyebrow"><i data-lucide="sprout" aria-hidden="true"></i> La decisión</span>
-            <h1 class="page-title">Centro de decisiones</h1>
-            <p class="page-sub">Calcula, planifica y optimiza los recursos de tus predios con los registros reales de tus potreros y del catálogo.</p>
+    <section class="decision-center"
+             data-calculate-url="{% url 'calculate' %}"
+             data-staff="{% if request.user.is_staff %}1{% endif %}"
+             data-tool="{{ initial_tool }}">
+        <div class="decision-head">
+            <div class="decision-intro">
+                <span class="decision-eyebrow"><i data-lucide="sprout" aria-hidden="true"></i> La decisión</span>
+                <h1 class="page-title">Centro de decisiones</h1>
+                <p class="page-sub">Calcula, planifica y optimiza los recursos de tus predios con los registros reales de tus potreros y del catálogo.</p>
+            </div>
+            {% if catalog.stats.crops or catalog.stats.seeds or catalog.stats.fertilizers or catalog.stats.otherInputs %}
+                <div class="catalog-stats" aria-label="Estado del catálogo">
+                    {% if catalog.stats.crops %}<div class="catalog-stat"><span>Cultivos del catálogo</span><strong>{{ catalog.stats.crops }}</strong></div>{% endif %}
+                    {% if catalog.stats.seeds %}<div class="catalog-stat"><span>Semillas registradas</span><strong>{{ catalog.stats.seeds }}</strong><small>{{ catalog.stats.cropsWithDensity }} cultivo{{ catalog.stats.cropsWithDensity|pluralize }} con densidad general</small></div>{% endif %}
+                    {% if catalog.stats.fertilizers %}<div class="catalog-stat"><span>Fertilizantes en catálogo</span><strong>{{ catalog.stats.fertilizers }}</strong></div>{% endif %}
+                    {% if catalog.stats.otherInputs %}<div class="catalog-stat"><span>Otros insumos registrados</span><strong>{{ catalog.stats.otherInputs }}</strong></div>{% endif %}
+                </div>
+            {% endif %}
+            <p class="catalog-note"><i data-lucide="info" aria-hidden="true"></i> «Registrado en catálogo» no significa «disponible en inventario»: AgroAsesor no lleva existencias físicas. Para saber si te alcanza, ingresa la cantidad que tienes en «¿Me alcanza?».</p>
         </div>
-
-        {% if catalog.stats.crops or catalog.stats.seeds or catalog.stats.fertilizers or catalog.stats.otherInputs %}
-        <div class="catalog-stats" aria-label="Estado del catálogo">
-            {% if catalog.stats.crops %}<div class="catalog-stat"><span>Cultivos del catálogo</span><strong>{{ catalog.stats.crops }}</strong></div>{% endif %}
-            {% if catalog.stats.seeds %}<div class="catalog-stat"><span>Semillas registradas</span><strong>{{ catalog.stats.seeds }}</strong><small>{{ catalog.stats.cropsWithDensity }} cultivo{{ catalog.stats.cropsWithDensity|pluralize }} con densidad general</small></div>{% endif %}
-            {% if catalog.stats.fertilizers %}<div class="catalog-stat"><span>Fertilizantes en catálogo</span><strong>{{ catalog.stats.fertilizers }}</strong></div>{% endif %}
-            {% if catalog.stats.otherInputs %}<div class="catalog-stat"><span>Otros insumos registrados</span><strong>{{ catalog.stats.otherInputs }}</strong></div>{% endif %}
-        </div>
+        {% if not catalog.cultivos or not catalog.insumos %}
+            <div class="catalog-alert" role="status">
+                <span class="catalog-alert-ico" aria-hidden="true"><i data-lucide="triangle-alert"></i></span>
+                <div class="catalog-alert-copy">
+                    <strong>{% if not catalog.cultivos %}Aún no hay cultivos en el catálogo{% else %}Catálogo en construcción{% endif %}</strong>
+                    <p>{% if not catalog.cultivos %}El catálogo no tiene cultivos registrados.{% else %}El catálogo no tiene insumos registrados.{% endif %} AgroAsesor no inventa datos{% if request.user.is_staff %}: cárgalos desde administración{% else %}: pide al administrador que los cargue{% endif %}.{% if catalog.cultivos %} Mientras tanto, los cálculos manuales quedan marcados como simulación.{% endif %}</p>
+                </div>
+                <div class="catalog-alert-actions">
+                    {% if request.user.is_staff %}<a class="btn-secondary-agro btn-sm"
+   href="{% if not catalog.cultivos %}{% url 'admin:core_cultivo_changelist' %}{% else %}{% url 'admin:core_insumo_changelist' %}{% endif %}">Completar catálogo</a>{% endif %}
+                    <a class="btn-ghost-agro btn-sm" href="{% url 'productos' %}">Ver productos</a>
+                    {% if catalog.cultivos %}<a class="btn-ghost-agro btn-sm"
+   href="#calc-form"
+   data-calc-jump>Continuar como simulación</a>{% endif %}
+                </div>
+            </div>
         {% endif %}
-        <p class="catalog-note"><i data-lucide="info" aria-hidden="true"></i> «Registrado en catálogo» no significa «disponible en inventario»: AgroAsesor no lleva existencias físicas. Para saber si te alcanza, ingresa la cantidad que tienes en «¿Me alcanza?».</p>
-    </div>
-
-    {% if not catalog.cultivos or not catalog.insumos %}
-    <div class="catalog-alert" role="status">
-        <span class="catalog-alert-ico" aria-hidden="true"><i data-lucide="triangle-alert"></i></span>
-        <div class="catalog-alert-copy">
-            <strong>{% if not catalog.cultivos %}Aún no hay cultivos en el catálogo{% else %}Catálogo en construcción{% endif %}</strong>
-            <p>{% if not catalog.cultivos %}El catálogo no tiene cultivos registrados.{% else %}El catálogo no tiene insumos registrados.{% endif %} AgroAsesor no inventa datos{% if request.user.is_staff %}: cárgalos desde administración{% else %}: pide al administrador que los cargue{% endif %}.{% if catalog.cultivos %} Mientras tanto, los cálculos manuales quedan marcados como simulación.{% endif %}</p>
-        </div>
-        <div class="catalog-alert-actions">
-            {% if request.user.is_staff %}<a class="btn-secondary-agro btn-sm" href="{% if not catalog.cultivos %}{% url 'admin:core_cultivo_changelist' %}{% else %}{% url 'admin:core_insumo_changelist' %}{% endif %}">Completar catálogo</a>{% endif %}
-            <a class="btn-ghost-agro btn-sm" href="{% url 'productos' %}">Ver productos</a>
-            {% if catalog.cultivos %}<a class="btn-ghost-agro btn-sm" href="#calc-form" data-calc-jump>Continuar como simulación</a>{% endif %}
-        </div>
-    </div>
-    {% endif %}
-    {% if not farm_data.plots %}
-    <p class="decision-empty"><i data-lucide="info" aria-hidden="true"></i>
-        {% if farm_data.predios %}Tu predio ya está registrado. Para calcular, <a href="{{ farm_data.predios.0.setupUrl }}">define cómo vas a trabajarlo</a>: usar todo el predio como un solo potrero o dividirlo en sectores.
+        {% if not farm_data.plots %}
+            <p class="decision-empty">
+                <i data-lucide="info" aria-hidden="true"></i>
+                {% if farm_data.predios %}Tu predio ya está registrado. Para calcular, <a href="{{ farm_data.predios.0.setupUrl }}">define cómo vas a trabajarlo</a>: usar todo el predio como un solo potrero o dividirlo en sectores.
         {% else %}Comienza registrando tu predio: <a href="{% url 'predio_create' %}">Registrar predio</a>. Después defines sus potreros y podrás calcular.{% endif %}</p>
     {% endif %}
-
-    <nav class="ctx-line" id="ctx-line" aria-label="Dónde estás"></nav>
-
+    <nav class="ctx-line" id="ctx-line" aria-label="Dónde estás">
+    </nav>
     <div class="tool-tabs" role="tablist" aria-label="Herramientas">
-        <button type="button" role="tab" data-tool="llevar" aria-controls="tool-llevar"{% if initial_tool == 'llevar' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-green"><i data-lucide="calculator" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Calculadora</span><strong>Cuánto llevar</strong><small>Semillas e insumos para tu potrero</small></span></button>
-        <button type="button" role="tab" data-tool="alcanza" aria-controls="tool-alcanza"{% if initial_tool == 'alcanza' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-blue"><i data-lucide="warehouse" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Cobertura</span><strong>¿Me alcanza?</strong><small>Compara lo que tienes con lo que necesitas</small></span></button>
-        <button type="button" role="tab" data-tool="cosecha" aria-controls="tool-cosecha"{% if initial_tool == 'cosecha' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-amber"><i data-lucide="wheat" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Rendimiento</span><strong>Cosecha</strong><small>Estima tu producción esperada</small></span></button>
-        <button type="button" role="tab" data-tool="ficha" aria-controls="tool-ficha"{% if initial_tool == 'ficha' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-slate"><i data-lucide="package-search" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Catálogo</span><strong>Ficha de insumo</strong><small>Dosis, usos y advertencias</small></span></button>
+        <button type="button"
+                role="tab"
+                data-tool="llevar"
+                aria-controls="tool-llevar"
+                {% if initial_tool == 'llevar' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-green"><i data-lucide="calculator" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Calculadora</span><strong>Cuánto llevar</strong><small>Semillas e insumos para tu potrero</small></span></button>
+        <button type="button"
+                role="tab"
+                data-tool="alcanza"
+                aria-controls="tool-alcanza"
+                {% if initial_tool == 'alcanza' %} class="is-active" aria-selected="true"{% else %} aria-selected="false" tabindex="-1"{% endif %}><span class="tool-ico tone-blue"><i data-lucide="warehouse" aria-hidden="true"></i></span><span class="tool-text"><span class="tool-card-tag">Cobertura</span><strong>¿Me alcanza?</strong><small>Compara lo que tienes con lo que necesitas</small></span></button>
     </div>
-
     <!-- CUÁNTO LLEVAR: herramienta guiada paso a paso (el motor de cálculo vive en calc-panel.js) -->
-    <section class="tool-panel" id="tool-llevar" role="tabpanel"{% if initial_tool != 'llevar' %} hidden{% endif %}>
+    <section class="tool-panel"
+             id="tool-llevar"
+             role="tabpanel"
+             {% if initial_tool != 'llevar' %} hidden{% endif %}>
         <header class="calc-head">
             <div class="calc-head-copy">
-                <span class="calc-eyebrow"><i data-lucide="calculator" aria-hidden="true"></i> Centro de decisiones · Calculadora</span>
+                <span class="calc-eyebrow"><i data-lucide="calculator"
+   aria-hidden="true"></i> Centro de decisiones · Calculadora</span>
                 <h1 class="page-title">Cuánto llevar</h1>
                 <p class="page-sub">¿Cuánta semilla o insumo necesitas para este potrero y este cultivo? Cantidad = superficie × dosis del catálogo.</p>
             </div>
-            <p class="calc-status" id="calc-status" data-state="pending" role="status" aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Completa los pasos para calcular</span></p>
+            <p class="calc-status"
+               id="calc-status"
+               data-state="pending"
+               role="status"
+               aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Completa los pasos para calcular</span></p>
         </header>
-
-        <div class="info-strip calc-strip" id="calc-stats" aria-label="Estado del catálogo"></div>
-
+        <div class="info-strip calc-strip"
+             id="calc-stats"
+             aria-label="Estado del catálogo"></div>
         <div class="calc-layout">
             <div class="calc-main">
-                <div class="mode-cards calc-modes" id="calc-modes" role="group" aria-label="Qué quieres calcular">
-                    <button type="button" data-mode="semillas" class="is-active" aria-pressed="true">
+                <div class="mode-cards calc-modes"
+                     id="calc-modes"
+                     role="group"
+                     aria-label="Qué quieres calcular">
+                    <button type="button"
+                            data-mode="semillas"
+                            class="is-active"
+                            aria-pressed="true">
                         <i data-lucide="sprout" aria-hidden="true"></i>
                         <span><strong>Semillas</strong><small>Kilos según la densidad del cultivo</small></span>
                     </button>
@@ -80,7 +101,6 @@
                         <span><strong>Fertilizante u otro insumo</strong><small>Urea, insecticida, fungicida o herbicida</small></span>
                     </button>
                 </div>
-
                 <form class="card calc-form" id="calc-form" novalidate>
                     <div class="calc-form-head">
                         <h2 id="calc-title">Calcular semillas</h2>
@@ -90,14 +110,21 @@
                         <p class="muted">Ejemplos rápidos con tus potreros (se copian al formulario):</p>
                         <div class="example-row" id="calc-example-row"></div>
                     </div>
-
                     <ol class="calc-steps">
                         <li class="calc-step" data-step="plot">
                             <span class="calc-step-num" aria-hidden="true">1</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un potrero</h3><p>Donde vas a sembrar o aplicar.</p></div>
-                                <div class="calc-picker" id="calc-plot-picker" data-plots-url="{% url 'predios' %}" data-farm-create-url="{% url 'predio_create' %}" hidden></div>
-                                <label class="field calc-native"><span>¿En qué potrero?</span>
+                                <div class="calc-step-head">
+                                    <h3>Selecciona un potrero</h3>
+                                    <p>Donde vas a sembrar o aplicar.</p>
+                                </div>
+                                <div class="calc-picker"
+                                     id="calc-plot-picker"
+                                     data-plots-url="{% url 'predios' %}"
+                                     data-farm-create-url="{% url 'predio_create' %}"
+                                     hidden></div>
+                                <label class="field calc-native">
+                                    <span>¿En qué potrero?</span>
                                     <select id="calc-plot"></select>
                                     <small class="help" id="calc-plot-help"></small>
                                 </label>
@@ -106,9 +133,16 @@
                         <li class="calc-step" data-step="crop">
                             <span class="calc-step-num" aria-hidden="true">2</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un cultivo</h3><p>Del catálogo activo de AgroAsesor.</p></div>
-                                <div class="calc-picker" id="calc-crop-picker" data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_cultivo_changelist' %}{% endif %}" hidden></div>
-                                <label class="field calc-native"><span>Cultivo</span>
+                                <div class="calc-step-head">
+                                    <h3>Selecciona un cultivo</h3>
+                                    <p>Del catálogo activo de AgroAsesor.</p>
+                                </div>
+                                <div class="calc-picker"
+                                     id="calc-crop-picker"
+                                     data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_cultivo_changelist' %}{% endif %}"
+                                     hidden></div>
+                                <label class="field calc-native">
+                                    <span>Cultivo</span>
                                     <select id="calc-crop"></select>
                                     <small class="help" id="calc-crop-help"></small>
                                 </label>
@@ -117,8 +151,12 @@
                         <li class="calc-step" data-step="area">
                             <span class="calc-step-num" aria-hidden="true">3</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Revisa la superficie</h3><p>Puedes calcular solo una parte del potrero.</p></div>
-                                <label class="field"><span>Superficie a calcular (ha)</span>
+                                <div class="calc-step-head">
+                                    <h3>Revisa la superficie</h3>
+                                    <p>Puedes calcular solo una parte del potrero.</p>
+                                </div>
+                                <label class="field">
+                                    <span>Superficie a calcular (ha)</span>
                                     <input id="calc-area" type="number" min="0.0001" step="any" required>
                                     <small class="help">1 hectárea = 10.000 m²</small>
                                 </label>
@@ -128,7 +166,10 @@
                         <li class="calc-step" data-step="dose">
                             <span class="calc-step-num" aria-hidden="true">4</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3 id="calc-dose-title">Revisa la dosis por hectárea</h3><p id="calc-dose-intro">Se copia del catálogo; ajústala si hace falta.</p></div>
+                                <div class="calc-step-head">
+                                    <h3 id="calc-dose-title">Revisa la dosis por hectárea</h3>
+                                    <p id="calc-dose-intro">Se copia del catálogo; ajústala si hace falta.</p>
+                                </div>
                                 <label class="field" id="calc-product-field" hidden>
                                     <span id="calc-product-label">Semilla o variedad del catálogo</span>
                                     <select id="calc-product"></select>
@@ -138,7 +179,8 @@
                                     <span>Objetivo de control autorizado</span>
                                     <select id="calc-target"></select>
                                 </label>
-                                <label class="field"><span id="calc-dose-label">Dosis o densidad por hectárea</span>
+                                <label class="field">
+                                    <span id="calc-dose-label">Dosis o densidad por hectárea</span>
                                     <input id="calc-dose" type="number" min="0.001" step="any" required>
                                     <small class="help" id="calc-dose-help">Kilos de semilla por cada hectárea.</small>
                                     <span class="calc-dose-origin" id="calc-dose-origin" aria-live="polite"></span>
@@ -148,8 +190,12 @@
                         <li class="calc-step" data-step="unit">
                             <span class="calc-step-num" aria-hidden="true">5</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Elige la unidad</h3><p>El resultado se entrega en esa misma unidad (sin «/ha»).</p></div>
-                                <label class="field calc-unit-field"><span>Unidad de la dosis</span>
+                                <div class="calc-step-head">
+                                    <h3>Elige la unidad</h3>
+                                    <p>El resultado se entrega en esa misma unidad (sin «/ha»).</p>
+                                </div>
+                                <label class="field calc-unit-field">
+                                    <span>Unidad de la dosis</span>
                                     <select id="calc-unit"></select>
                                 </label>
                             </div>
@@ -157,50 +203,100 @@
                         <li class="calc-step" data-step="go">
                             <span class="calc-step-num" aria-hidden="true">6</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Calcula</h3><p id="calc-submit-hint" aria-live="polite">Completa los pasos anteriores para calcular.</p></div>
+                                <div class="calc-step-head">
+                                    <h3>Calcula</h3>
+                                    <p id="calc-submit-hint"
+                                       aria-live="polite">Completa los pasos anteriores para calcular.</p>
+                                </div>
                                 <p class="error" id="calc-error" role="alert"></p>
                                 <div class="calc-actions">
-                                    <button class="btn-primary-agro calc-submit" type="submit" id="calc-submit"><i data-lucide="calculator" aria-hidden="true"></i> Calcular ahora</button>
+                                    <button class="btn-primary-agro calc-submit"
+                                            type="submit"
+                                            id="calc-submit"><i data-lucide="calculator" aria-hidden="true"></i> Calcular ahora</button>
                                 </div>
                             </div>
                         </li>
                     </ol>
                 </form>
-
                 <section class="card calc-advanced" id="calc-advanced" hidden>
                     <div class="calc-advanced-head">
-                        <span class="calc-advanced-ico" aria-hidden="true"><i data-lucide="sliders-horizontal"></i></span>
-                        <div><h2>Opciones avanzadas</h2><p>Úsalas solo si tienes los parámetros de una ficha técnica o de un análisis. Se guardan con la fuente que indiques.</p></div>
+                        <span class="calc-advanced-ico"
+                              aria-hidden="true"><i data-lucide="sliders-horizontal"></i></span>
+                        <div>
+                            <h2>Opciones avanzadas</h2>
+                            <p>Úsalas solo si tienes los parámetros de una ficha técnica o de un análisis. Se guardan con la fuente que indiques.</p>
+                        </div>
                     </div>
                     <details id="adv-seed" hidden>
                         <summary><span class="adv-title">Cálculo avanzado de semillas</span><span class="adv-sub">Población, peso de mil semillas, germinación y pureza</span></summary>
                         <p class="help">Fórmula del servidor: kg/ha = plantas/m² × peso de mil semillas (g) ÷ (100 × germinación × pureza). Requiere indicar la fuente de los parámetros.</p>
                         <div class="adv-fields">
-                            <label class="field"><span>Plantas objetivo por m²</span><input id="adv-plants" type="number" min="0.001" step="any"></label>
-                            <label class="field"><span>Peso de mil semillas (g)</span><input id="adv-tsw" type="number" min="0.001" step="any"></label>
-                            <label class="field"><span>Germinación (%)</span><input id="adv-germ" type="number" min="0.01" max="100" step="any"></label>
-                            <label class="field"><span>Pureza (%)</span><input id="adv-purity" type="number" min="0.01" max="100" step="any"></label>
-                            <label class="field adv-wide"><span>Fuente de los parámetros</span><input id="adv-source" maxlength="255" placeholder="Ficha técnica de la semilla, análisis de laboratorio…"></label>
+                            <label class="field">
+                                <span>Plantas objetivo por m²</span><input id="adv-plants"
+       type="number"
+       min="0.001"
+       step="any">
+                            </label>
+                            <label class="field">
+                                <span>Peso de mil semillas (g)</span><input id="adv-tsw"
+       type="number"
+       min="0.001"
+       step="any">
+                            </label>
+                            <label class="field">
+                                <span>Germinación (%)</span><input id="adv-germ"
+       type="number"
+       min="0.01"
+       max="100"
+       step="any">
+                            </label>
+                            <label class="field">
+                                <span>Pureza (%)</span><input id="adv-purity"
+       type="number"
+       min="0.01"
+       max="100"
+       step="any">
+                            </label>
+                            <label class="field adv-wide">
+                                <span>Fuente de los parámetros</span><input id="adv-source"
+       maxlength="255"
+       placeholder="Ficha técnica de la semilla, análisis de laboratorio…">
+                            </label>
                         </div>
                         <p class="error" id="adv-seed-error" role="alert"></p>
-                        <button class="btn-secondary-agro" type="button" id="adv-seed-run">Calcular con parámetros avanzados</button>
+                        <button class="btn-secondary-agro"
+                                type="button"
+                                id="adv-seed-run">Calcular con parámetros avanzados</button>
                     </details>
                     <details id="adv-nutrient" hidden>
                         <summary><span class="adv-title">Cálculo por requerimiento de nutriente</span><span class="adv-sub">Kg de producto según la necesidad del nutriente</span></summary>
                         <p class="help">Calcula los kg de producto a partir de la necesidad del nutriente y la composición verificada del fertilizante. Indica de dónde sale la necesidad (análisis de suelo, recomendación técnica).</p>
                         <div class="adv-fields">
-                            <label class="field"><span>Nutriente</span><select id="adv-nutrient-key"></select></label>
-                            <label class="field"><span>Necesidad del nutriente (kg/ha)</span><input id="adv-need" type="number" min="0.001" step="any"></label>
-                            <label class="field adv-wide"><span>Fuente de la necesidad</span><input id="adv-need-source" maxlength="255"></label>
+                            <label class="field">
+                                <span>Nutriente</span><select id="adv-nutrient-key"></select>
+                            </label>
+                            <label class="field">
+                                <span>Necesidad del nutriente (kg/ha)</span><input id="adv-need"
+       type="number"
+       min="0.001"
+       step="any">
+                            </label>
+                            <label class="field adv-wide">
+                                <span>Fuente de la necesidad</span><input id="adv-need-source" maxlength="255">
+                            </label>
                         </div>
                         <p class="error" id="adv-nutrient-error" role="alert"></p>
-                        <button class="btn-secondary-agro" type="button" id="adv-nutrient-run">Calcular por nutriente</button>
+                        <button class="btn-secondary-agro"
+                                type="button"
+                                id="adv-nutrient-run">Calcular por nutriente</button>
                     </details>
                 </section>
             </div>
-
             <div class="calc-side">
-                <section class="card calc-summary" id="calc-summary" aria-label="Resumen de tu selección" hidden>
+                <section class="card calc-summary"
+                         id="calc-summary"
+                         aria-label="Resumen de tu selección"
+                         hidden>
                     <h2>Tu selección</h2>
                     <div id="calc-plot-summary"></div>
                     <div id="calc-notes" hidden></div>
@@ -208,27 +304,41 @@
                 <section class="card result-panel calc-result-card" aria-label="Resultado">
                     <div id="calc-result" aria-live="polite"></div>
                     <div class="calc-result-actions" id="calc-result-actions">
-                        <button class="btn-secondary-agro btn-sm" type="button" id="calc-pdf"><i data-lucide="file-down" aria-hidden="true"></i> Descargar PDF</button>
-                        <a class="btn-secondary-agro btn-sm" id="calc-go-reports" href="{% url 'reportes' %}?tipo=calculos"><i data-lucide="file-text" aria-hidden="true"></i> Ver en Reportes</a>
-                        <a class="btn-ghost-agro btn-sm" href="{% url 'decisiones' %}?herramienta=alcanza" id="calc-go-cover"><i data-lucide="warehouse" aria-hidden="true"></i> Ir a «¿Me alcanza?»</a>
+                        <button class="btn-secondary-agro btn-sm"
+                                type="button"
+                                id="calc-pdf"><i data-lucide="file-down" aria-hidden="true"></i> Descargar PDF</button>
+                        <a class="btn-secondary-agro btn-sm"
+                           id="calc-go-reports"
+                           href="{% url 'reportes' %}?tipo=calculos"><i data-lucide="file-text" aria-hidden="true"></i> Ver en Reportes</a>
+                        <a class="btn-ghost-agro btn-sm"
+                           href="{% url 'decisiones' %}?herramienta=alcanza"
+                           id="calc-go-cover"><i data-lucide="warehouse" aria-hidden="true"></i> Ir a «¿Me alcanza?»</a>
                     </div>
                 </section>
             </div>
         </div>
     </section>
-
     <!-- SI ALCANZA: misma estructura guiada que «Cuánto llevar» (la presentación vive en tool-flow.js) -->
-    <section class="tool-panel tool-flow" id="tool-alcanza" role="tabpanel"{% if initial_tool != 'alcanza' %} hidden{% endif %}>
+    <section class="tool-panel tool-flow"
+             id="tool-alcanza"
+             role="tabpanel"
+             {% if initial_tool != 'alcanza' %} hidden{% endif %}>
         <header class="calc-head">
             <div class="calc-head-copy">
-                <span class="calc-eyebrow"><i data-lucide="warehouse" aria-hidden="true"></i> Centro de decisiones · Cobertura</span>
+                <span class="calc-eyebrow"><i data-lucide="warehouse"
+   aria-hidden="true"></i> Centro de decisiones · Cobertura</span>
                 <h1 class="page-title">¿Me alcanza?</h1>
                 <p class="page-sub">¿Te alcanza lo que tienes para este potrero? Compara la cantidad que indiques con la que necesitas.</p>
             </div>
-            <p class="calc-status" data-flow-status data-state="pending" role="status" aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Completa los pasos para comprobar</span></p>
+            <p class="calc-status"
+               data-flow-status
+               data-state="pending"
+               role="status"
+               aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Completa los pasos para comprobar</span></p>
         </header>
-        <div class="info-strip calc-strip" data-flow-strip aria-label="Estado del catálogo"></div>
-
+        <div class="info-strip calc-strip"
+             data-flow-strip
+             aria-label="Estado del catálogo"></div>
         <div class="calc-layout">
             <div class="calc-main">
                 <form class="card calc-form" id="cover-form" novalidate data-flow="cover">
@@ -240,44 +350,104 @@
                         <li class="calc-step" data-step="plot">
                             <span class="calc-step-num" aria-hidden="true">1</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un potrero</h3><p>Donde vas a sembrar o aplicar.</p></div>
-                                <div class="calc-picker" data-picker="plot" data-plots-url="{% url 'predios' %}" data-farm-create-url="{% url 'predio_create' %}" hidden></div>
-                                <label class="field calc-native"><span>Potrero</span><select name="plot" data-role="plot" required></select><small class="help" data-role="plot-help"></small></label>
+                                <div class="calc-step-head">
+                                    <h3>Selecciona un potrero</h3>
+                                    <p>Donde vas a sembrar o aplicar.</p>
+                                </div>
+                                <div class="calc-picker"
+                                     data-picker="plot"
+                                     data-plots-url="{% url 'predios' %}"
+                                     data-farm-create-url="{% url 'predio_create' %}"
+                                     hidden></div>
+                                <label class="field calc-native">
+                                    <span>Potrero</span><select name="plot" data-role="plot" required></select>
+                                    <small class="help" data-role="plot-help"></small>
+                                </label>
                             </div>
                         </li>
                         <li class="calc-step" data-step="crop">
                             <span class="calc-step-num" aria-hidden="true">2</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un cultivo</h3><p>Del catálogo activo de AgroAsesor.</p></div>
-                                <div class="calc-picker" data-picker="crop" data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_cultivo_changelist' %}{% endif %}" hidden></div>
-                                <label class="field calc-native"><span>Cultivo</span><select name="crop" data-role="crop" required></select><small class="help" data-role="crop-help"></small></label>
+                                <div class="calc-step-head">
+                                    <h3>Selecciona un cultivo</h3>
+                                    <p>Del catálogo activo de AgroAsesor.</p>
+                                </div>
+                                <div class="calc-picker"
+                                     data-picker="crop"
+                                     data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_cultivo_changelist' %}{% endif %}"
+                                     hidden></div>
+                                <label class="field calc-native">
+                                    <span>Cultivo</span><select name="crop" data-role="crop" required></select>
+                                    <small class="help" data-role="crop-help"></small>
+                                </label>
                             </div>
                         </li>
                         <li class="calc-step" data-step="product">
                             <span class="calc-step-num" aria-hidden="true">3</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Elige el producto</h3><p>Del catálogo del cultivo, o un producto no registrado (simulación).</p></div>
-                                <label class="field"><span>Producto</span><select name="product" data-role="product"></select><small class="help" data-role="product-help"></small></label>
-                                <label class="field" data-role="target-field" hidden><span>Objetivo de control autorizado</span><select name="target" data-role="target"></select></label>
+                                <div class="calc-step-head">
+                                    <h3>Elige el producto</h3>
+                                    <p>Del catálogo del cultivo, o un producto no registrado (simulación).</p>
+                                </div>
+                                <label class="field">
+                                    <span>Producto</span><select name="product" data-role="product"></select>
+                                    <small class="help" data-role="product-help"></small>
+                                </label>
+                                <label class="field" data-role="target-field" hidden>
+                                    <span>Objetivo de control autorizado</span><select name="target" data-role="target"></select>
+                                </label>
                             </div>
                         </li>
                         <li class="calc-step" data-step="stock">
                             <span class="calc-step-num" aria-hidden="true">4</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>¿Cuánto producto tienes?</h3><p>La cantidad que tienes a mano y su unidad.</p></div>
+                                <div class="calc-step-head">
+                                    <h3>¿Cuánto producto tienes?</h3>
+                                    <p>La cantidad que tienes a mano y su unidad.</p>
+                                </div>
                                 <div class="calc-row">
-                                    <label class="field"><span>Cantidad disponible</span><input name="stock" type="number" min="0" step="any" required></label>
-                                    <label class="field"><span>Unidad</span><select name="unit"><option value="kg/ha">kg</option><option value="L/ha">L</option><option value="g/ha">g</option><option value="mL/ha">mL</option><option value="unidades/ha">unidades</option></select></label>
+                                    <label class="field">
+                                        <span>Cantidad disponible</span><input name="stock"
+       type="number"
+       min="0"
+       step="any"
+       required>
+                                    </label>
+                                    <label class="field">
+                                        <span>Unidad</span><select name="unit">
+                                            <option value="kg/ha">kg</option>
+                                            <option value="L/ha">L</option>
+                                            <option value="g/ha">g</option>
+                                            <option value="mL/ha">mL</option>
+                                            <option value="unidades/ha">unidades</option>
+                                        </select>
+                                    </label>
                                 </div>
                             </div>
                         </li>
                         <li class="calc-step" data-step="dose">
                             <span class="calc-step-num" aria-hidden="true">5</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Revisa la dosis y la superficie</h3><p>Dosis o requerimiento por hectárea y superficie a cubrir.</p></div>
+                                <div class="calc-step-head">
+                                    <h3>Revisa la dosis y la superficie</h3>
+                                    <p>Dosis o requerimiento por hectárea y superficie a cubrir.</p>
+                                </div>
                                 <div class="calc-row">
-                                    <label class="field"><span>Dosis o requerimiento por ha</span><input name="dose" type="number" min="0.001" step="any" required><small class="help" data-role="dose-help"></small></label>
-                                    <label class="field"><span>Superficie a cubrir (ha)</span><input name="area" type="number" min="0.0001" step="any" required></label>
+                                    <label class="field">
+                                        <span>Dosis o requerimiento por ha</span><input name="dose"
+       type="number"
+       min="0.001"
+       step="any"
+       required>
+                                        <small class="help" data-role="dose-help"></small>
+                                    </label>
+                                    <label class="field">
+                                        <span>Superficie a cubrir (ha)</span><input name="area"
+       type="number"
+       min="0.0001"
+       step="any"
+       required>
+                                    </label>
                                 </div>
                                 <div class="calc-inline-tools" data-flow-area-tools></div>
                             </div>
@@ -285,7 +455,11 @@
                         <li class="calc-step" data-step="go">
                             <span class="calc-step-num" aria-hidden="true">6</span>
                             <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Comprueba</h3><p data-flow-hint aria-live="polite">Completa los pasos anteriores para comprobar.</p></div>
+                                <div class="calc-step-head">
+                                    <h3>Comprueba</h3>
+                                    <p data-flow-hint
+                                       aria-live="polite">Completa los pasos anteriores para comprobar.</p>
+                                </div>
                                 <p class="error" role="alert" data-role="error"></p>
                                 <div class="calc-actions">
                                     <button class="btn-primary-agro calc-submit" type="submit" data-flow-submit><i data-lucide="warehouse" aria-hidden="true"></i> Comprobar disponibilidad</button>
@@ -296,136 +470,34 @@
                 </form>
             </div>
             <div class="calc-side">
-                <section class="card calc-summary" data-flow-summary aria-label="Resumen de tu selección" hidden>
+                <section class="card calc-summary"
+                         data-flow-summary
+                         aria-label="Resumen de tu selección"
+                         hidden>
                     <h2>Tu selección</h2>
                     <div data-flow-summary-body></div>
                 </section>
-                <section class="card result-panel calc-result-card" data-result-for="cover-form" aria-live="polite" aria-label="Resultado"></section>
-            </div>
-        </div>
-    </section>
-
-    <!-- COSECHA -->
-    <section class="tool-panel tool-flow" id="tool-cosecha" role="tabpanel"{% if initial_tool != 'cosecha' %} hidden{% endif %}>
-        <header class="calc-head">
-            <div class="calc-head-copy">
-                <span class="calc-eyebrow"><i data-lucide="wheat" aria-hidden="true"></i> Centro de decisiones · Rendimiento</span>
-                <h1 class="page-title">Cosecha</h1>
-                <p class="page-sub">¿Cuánto puedes esperar producir? Producción = superficie × rendimiento esperado, siempre indicando de dónde sale el rendimiento.</p>
-            </div>
-            <p class="calc-status" data-flow-status data-state="pending" role="status" aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Completa los pasos para estimar</span></p>
-        </header>
-        <div class="info-strip calc-strip" data-flow-strip aria-label="Estado del catálogo"></div>
-
-        <div class="calc-layout">
-            <div class="calc-main">
-                <form class="card calc-form" id="yield-form" novalidate data-flow="yield">
-                    <div class="calc-form-head">
-                        <h2>Estimación de cosecha</h2>
-                        <p class="calc-hint">Es una estimación, no una predicción: no considera clima de la temporada, suelo, manejo ni pérdidas de cosecha.</p>
-                    </div>
-                    <ol class="calc-steps">
-                        <li class="calc-step" data-step="plot">
-                            <span class="calc-step-num" aria-hidden="true">1</span>
-                            <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un potrero</h3><p>El potrero del que quieres estimar la cosecha.</p></div>
-                                <div class="calc-picker" data-picker="plot" data-plots-url="{% url 'predios' %}" data-farm-create-url="{% url 'predio_create' %}" hidden></div>
-                                <label class="field calc-native"><span>Potrero</span><select name="plot" data-role="plot" required></select><small class="help" data-role="plot-help"></small></label>
-                            </div>
-                        </li>
-                        <li class="calc-step" data-step="crop">
-                            <span class="calc-step-num" aria-hidden="true">2</span>
-                            <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Selecciona un cultivo</h3><p>Del catálogo activo de AgroAsesor.</p></div>
-                                <div class="calc-picker" data-picker="crop" data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_cultivo_changelist' %}{% endif %}" hidden></div>
-                                <label class="field calc-native"><span>Cultivo</span><select name="crop" data-role="crop" required></select><small class="help" data-role="crop-help"></small></label>
-                                <label class="field"><span>Variedad (opcional)</span><input name="variety" maxlength="150" list="yield-varieties"><datalist id="yield-varieties"></datalist></label>
-                            </div>
-                        </li>
-                        <li class="calc-step" data-step="area">
-                            <span class="calc-step-num" aria-hidden="true">3</span>
-                            <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Revisa la superficie</h3><p>Puedes estimar solo una parte del potrero.</p></div>
-                                <label class="field"><span>Superficie (ha)</span><input name="area" type="number" min="0.0001" step="any" required><small class="help">1 hectárea = 10.000 m²</small></label>
-                                <div class="calc-inline-tools" data-flow-area-tools></div>
-                            </div>
-                        </li>
-                        <li class="calc-step" data-step="rate">
-                            <span class="calc-step-num" aria-hidden="true">4</span>
-                            <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Indica el rendimiento esperado</h3><p>Se copia de una referencia verificada cuando existe; si no, ingrésalo y di de dónde sale.</p></div>
-                                <div class="calc-row">
-                                    <label class="field"><span>Rendimiento esperado</span><input name="rate" type="number" min="0.01" step="any" required></label>
-                                    <label class="field"><span>Unidad de rendimiento</span><select name="rate_unit"><option value="ton/ha">ton/ha</option></select></label>
-                                </div>
-                                <p class="calc-inline-help" data-role="rate-help"></p>
-                                <label class="field"><span>Origen del rendimiento</span><input name="source" maxlength="255" placeholder="Registro propio de temporadas anteriores, informe técnico…"><small class="help">Obligatorio cuando no hay una referencia verificada para la zona del potrero.</small></label>
-                            </div>
-                        </li>
-                        <li class="calc-step" data-step="go">
-                            <span class="calc-step-num" aria-hidden="true">5</span>
-                            <div class="calc-step-body">
-                                <div class="calc-step-head"><h3>Estima</h3><p data-flow-hint aria-live="polite">Completa los pasos anteriores para estimar.</p></div>
-                                <p class="error" role="alert" data-role="error"></p>
-                                <div class="calc-actions">
-                                    <button class="btn-primary-agro calc-submit" type="submit" data-flow-submit><i data-lucide="wheat" aria-hidden="true"></i> Estimar cosecha</button>
-                                </div>
-                            </div>
-                        </li>
-                    </ol>
-                </form>
-            </div>
-            <div class="calc-side">
-                <section class="card calc-summary" data-flow-summary aria-label="Resumen de tu selección" hidden>
-                    <h2>Tu selección</h2>
-                    <div data-flow-summary-body></div>
+                <section class="card result-panel calc-result-card"
+                         data-result-for="cover-form"
+                         aria-live="polite"
+                         aria-label="Resultado">
                 </section>
-                <section class="card result-panel calc-result-card" data-result-for="yield-form" aria-live="polite" aria-label="Resultado"></section>
             </div>
         </div>
     </section>
-
-    <!-- FICHA DE INSUMO: los pasos se dibujan desde decisiones.js con los datos reales del catálogo -->
-    <section class="tool-panel tool-flow" id="tool-ficha" role="tabpanel"{% if initial_tool != 'ficha' %} hidden{% endif %}>
-        <header class="calc-head">
-            <div class="calc-head-copy">
-                <span class="calc-eyebrow"><i data-lucide="package-search" aria-hidden="true"></i> Centro de decisiones · Catálogo</span>
-                <h1 class="page-title">Ficha de insumo</h1>
-                <p class="page-sub">Consulta dosis, usos y advertencias de un producto registrado: elige cultivo, problema y tipo de insumo.</p>
-            </div>
-            <p class="calc-status" id="ficha-status" data-flow-status data-state="pending" role="status" aria-live="polite"><span class="calc-status-dot" aria-hidden="true"></span><span class="calc-status-text">Paso 1 de 4 · Cultivo</span></p>
-        </header>
-        <div class="info-strip calc-strip" data-flow-strip aria-label="Estado del catálogo"></div>
-
-        <div class="calc-layout">
-            <div class="calc-main">
-                <div class="card calc-form ficha-flow">
-                    <div class="calc-form-head">
-                        <h2>Consulta la ficha de un insumo</h2>
-                        <p class="calc-hint" id="ficha-hint">Elige un cultivo registrado en el catálogo. Solo se muestran cultivos activos.</p>
-                    </div>
-                    <ol class="calc-steps" id="ficha-steps" aria-label="Pasos de la consulta"></ol>
-                </div>
-            </div>
-            <div class="calc-side">
-                <section class="card calc-summary" id="ficha-context" aria-label="Resumen de tu consulta" aria-live="polite"></section>
-                <section class="card result-panel calc-result-card" id="ficha-sheet" aria-live="polite" aria-label="Ficha del producto"></section>
-            </div>
-        </div>
-    </section>
-
     <div class="decision-next">
         <a class="next-card" href="{% url 'productos' %}"><i data-lucide="package-search" aria-hidden="true"></i><span><strong>Catálogo de productos</strong><small>Fichas técnicas, etiquetas y fuentes</small></span></a>
         <a class="next-card" href="{% url 'actividad_create' %}"><i data-lucide="calendar-plus" aria-hidden="true"></i><span><strong>Planificar la aplicación</strong><small>Llévalo al cuaderno de campo</small></span></a>
         <a class="next-card" href="{% url 'reportes' %}?tipo=calculos"><i data-lucide="file-text" aria-hidden="true"></i><span><strong>Reporte de cálculos</strong><small>Imprime o exporta lo calculado</small></span></a>
     </div>
-</section>
+    </section>
 {% endblock %}
 {% block extra_js %}
-<script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}" defer></script>
-<script src="{% static 'js/agro-pdf.js' %}?v=1" defer></script>
-<script src="{% static 'js/calc-panel.js' %}?v=7" defer></script>
-<script src="{% static 'js/calc-flow.js' %}?v=4" defer></script>
-<script src="{% static 'js/tool-flow.js' %}?v=4" defer></script>
-<script src="{% static 'js/decisiones.js' %}?v=8" defer></script>
+    <script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}"
+            defer></script>
+    <script src="{% static 'js/agro-pdf.js' %}?v=1" defer></script>
+    <script src="{% static 'js/calc-panel.js' %}?v=7" defer></script>
+    <script src="{% static 'js/calc-flow.js' %}?v=4" defer></script>
+    <script src="{% static 'js/tool-flow.js' %}?v=4" defer></script>
+    <script src="{% static 'js/decisiones.js' %}?v=8" defer></script>
 {% endblock %}

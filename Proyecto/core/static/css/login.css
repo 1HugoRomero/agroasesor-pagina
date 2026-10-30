@@ -44,11 +44,13 @@
     .access-shell {
         grid-template-columns: 1fr;
     }
+
     /* Oculta el panel hero (imagen + texto izquierdo) */
-    .access-shell > :first-child {
+    .access-shell> :first-child {
         display: none;
     }
 }
+
 .access-visual {
     position: relative;
     color: #fff;
@@ -130,10 +132,25 @@
     max-width: 42ch;
 }
 
-.access-form { display: grid; gap: 4px; }
-.field { display: grid; gap: 7px; margin-bottom: 14px; }
-.field span { font-size: 0.86rem; font-weight: 600; color: #222; }
-.field input, .field select {
+.access-form {
+    display: grid;
+    gap: 4px;
+}
+
+.field {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 14px;
+}
+
+.field span {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: #222;
+}
+
+.field input,
+.field select {
     width: 100%;
     box-sizing: border-box;
     border: 1px solid #ececec;
@@ -144,31 +161,53 @@
     color: #171717;
     outline: none;
 }
-.field input { height: 46px; }
-.field input::placeholder { color: #b0b0b0; }
+
+.field input {
+    height: 46px;
+}
+
+.field input::placeholder {
+    color: #b0b0b0;
+}
+
 .field small {
     color: #6b7280;
     font-size: 0.78rem;
     font-weight: 400;
     line-height: 1.4;
 }
+
 .field .errorlist,
-.access-form > .errorlist {
+.access-form>.errorlist {
     margin: 0;
     padding-left: 18px;
     color: #b54a3c;
     font-size: 0.82rem;
     line-height: 1.4;
 }
-.access-form > .errorlist { margin-bottom: 8px; }
-.field input:focus, .field select:focus {
+
+.access-form>.errorlist {
+    margin-bottom: 8px;
+}
+
+.field input:focus,
+.field select:focus {
     background: #fff;
     border-color: #e67a22;
     box-shadow: 0 0 0 3px rgba(230, 122, 34, 0.12);
 }
 
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-.row-2 > .field { align-content: start; }
+.row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+}
+
+.row-2>.field {
+    align-content: start;
+}
+
 .pass-help {
     display: block;
     margin: -6px 0 14px;
@@ -176,7 +215,11 @@
     font-size: 0.78rem;
     line-height: 1.4;
 }
-.policy-consent { margin: 2px 0 12px; }
+
+.policy-consent {
+    margin: 2px 0 12px;
+}
+
 .policy-consent label {
     display: flex;
     align-items: flex-start;
@@ -185,21 +228,59 @@
     font-size: 0.85rem;
     line-height: 1.5;
 }
-.policy-consent input { flex: 0 0 auto; margin: 3px 0 0; accent-color: #1f6b3a; }
-.policy-consent a { color: #1f6b3a; font-weight: 700; }
+
+.policy-consent input {
+    flex: 0 0 auto;
+    margin: 3px 0 0;
+    accent-color: #1f6b3a;
+}
+
+.policy-consent a {
+    color: #1f6b3a;
+    font-weight: 700;
+}
+
 .policy-consent .errorlist {
     margin: 6px 0 0 28px;
     padding-left: 16px;
     color: #b54a3c;
     font-size: 0.82rem;
 }
-.policy-content { max-width: 75ch; line-height: 1.65; color: #4b5563; }
-.policy-content h2 { margin: 24px 0 8px; color: #171717; font-size: 1.1rem; }
-.policy-content p, .policy-content ul { margin: 8px 0; }
-.policy-content ul { padding-left: 22px; }
-.policy-content a { color: #1f6b3a; }
-.pass-box { position: relative; display: block; }
-.pass-box input { padding-right: 44px; }
+
+.policy-content {
+    max-width: 75ch;
+    line-height: 1.65;
+    color: #4b5563;
+}
+
+.policy-content h2 {
+    margin: 24px 0 8px;
+    color: #171717;
+    font-size: 1.1rem;
+}
+
+.policy-content p,
+.policy-content ul {
+    margin: 8px 0;
+}
+
+.policy-content ul {
+    padding-left: 22px;
+}
+
+.policy-content a {
+    color: #1f6b3a;
+}
+
+.pass-box {
+    position: relative;
+    display: block;
+}
+
+.pass-box input {
+    padding-right: 44px;
+}
+
 .eye {
     position: absolute;
     right: 10px;
@@ -211,6 +292,7 @@
     background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%23999' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 10s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6Z'/%3E%3Ccircle cx='10' cy='10' r='2.5'/%3E%3C/svg%3E") center / 18px no-repeat;
     cursor: pointer;
 }
+
 .eye.is-open {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%23999' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3l14 14'/%3E%3Cpath d='M1 10s4-6 9-6c1.7 0 3.2.6 4.5 1.5'/%3E%3Cpath d='M19 10s-1.2 1.8-3 3.3'/%3E%3C/svg%3E");
 }
@@ -224,7 +306,10 @@
     text-decoration: none;
     margin: -4px 0 18px;
 }
-.forgot:hover { text-decoration: underline; }
+
+.forgot:hover {
+    text-decoration: underline;
+}
 
 .submit {
     width: 100%;
@@ -238,7 +323,10 @@
     cursor: pointer;
     margin-top: 8px;
 }
-.submit:hover { background: #d36c18; }
+
+.submit:hover {
+    background: #d36c18;
+}
 
 .switch {
     text-align: center;
@@ -246,53 +334,59 @@
     color: #6b7280;
     font-size: 0.92rem;
 }
+
 .switch a {
     color: #1f6b3a;
     font-weight: 700;
     text-decoration: none;
 }
-.switch a:hover { text-decoration: underline; }
-.switch.back { margin-top: 16px; }
-.switch.back a { color: #1f6b3a; font-weight: 600; }
 
-.error, .notice {
+.switch a:hover {
+    text-decoration: underline;
+}
+
+.error,
+.notice {
     margin: 0 0 10px;
     font-size: 0.9rem;
     font-weight: 600;
 }
-.error { color: #b54a3c; }
-.notice { color: #1f6b3a; }
 
-.admin-entry { margin-top: 14px; text-align: center; }
-.admin-entry button {
-    border: 0;
-    background: transparent;
-    color: #1f6b3a;
-    font: inherit;
-    font-weight: 700;
-    cursor: pointer;
-    padding: 0;
+.error {
+    color: #b54a3c;
 }
-.admin-entry button:hover { text-decoration: underline; }
 
-.demo-hint {
-    margin: 10px 0 0;
-    text-align: center;
-    color: #9aa09b;
-    font-size: 0.78rem;
+.notice {
+    color: #1f6b3a;
 }
 
 @media (max-width: 900px) {
-    .access-body { padding: 12px; }
+    .access-body {
+        padding: 12px;
+    }
+
     .access-shell {
         grid-template-columns: 1fr;
         min-height: auto;
     }
-    .access-visual { min-height: 260px; }
-    .access-copy h2 { max-width: none; }
-    .access-panel { padding: 28px 22px 32px; }
-    .row-2 { grid-template-columns: 1fr; }
+
+    .access-visual {
+        min-height: 260px;
+    }
+
+    .access-copy h2 {
+        max-width: none;
+    }
+
+    .access-panel {
+        padding: 28px 22px 32px;
+    }
+
+    .row-2 {
+        grid-template-columns: 1fr;
+    }
 }
+
 .aviso {
     margin: 0 0 12px;
     padding: 10px 12px;

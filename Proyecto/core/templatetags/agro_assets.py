@@ -3,6 +3,7 @@
 Si existe ``core/static/vendor/<archivo>`` (lo crea ``descargar-librerias.ps1``), la página lo usa y deja de
 depender de internet para dibujar íconos, menús y mapas. Si no existe, usa el CDN como hasta ahora.
 """
+
 from django import template
 from django.contrib.staticfiles import finders
 from django.templatetags.static import static

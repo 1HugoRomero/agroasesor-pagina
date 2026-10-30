@@ -1,8 +1,15 @@
 """API pública de catálogo y cálculo orientativo de sacos de semilla."""
+
 from flask import Blueprint, jsonify, request
 from app.services.catalogo import (
-    CatalogoError, cargar_catalogo, fuentes, categorias, productos,
-    producto_por_id, referencias_siembra, calcular_sacos,
+    CatalogoError,
+    cargar_catalogo,
+    fuentes,
+    categorias,
+    productos,
+    producto_por_id,
+    referencias_siembra,
+    calcular_sacos,
 )
 
 bp = Blueprint("catalogo", __name__)
@@ -28,8 +35,14 @@ def listar_fuentes():
 @bp.get("/catalogo/productos")
 def listar_productos():
     try:
-        return jsonify(productos(q=request.args.get("q", ""), categoria=request.args.get("categoria", ""),
-                                pagina=_entero("pagina", 1), limite=_entero("limite", 20)))
+        return jsonify(
+            productos(
+                q=request.args.get("q", ""),
+                categoria=request.args.get("categoria", ""),
+                pagina=_entero("pagina", 1),
+                limite=_entero("limite", 20),
+            )
+        )
     except CatalogoError as exc:
         return jsonify({"error": {"codigo": "VALIDACION_CATALOGO", "mensaje": str(exc)}}), 400
 

@@ -8,8 +8,13 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from .models import ActividadAgricola, Agricultor, Predio, Potrero, Cultivo, Zona, TemporadaCultivo, Insumo
 from .validators import (
-    formatear_rut, formatear_telefono, normalizar_comuna, normalizar_nombre_completo,
-    normalizar_rut, normalizar_telefono, partir_nombre,
+    formatear_rut,
+    formatear_telefono,
+    normalizar_comuna,
+    normalizar_nombre_completo,
+    normalizar_rut,
+    normalizar_telefono,
+    partir_nombre,
 )
 from django.db import models
 from .catalog import default_zone, grouped_crop_choices
@@ -98,7 +103,16 @@ class RegistroForm(DatosAgricultorMixin, UserCreationForm):
         model = get_user_model()
         fields = ('email',)
 
-    field_order = ['nombre_completo', 'email', 'telefono', 'comuna', 'rut', 'password1', 'password2', 'acepta_politicas']
+    field_order = [
+        'nombre_completo',
+        'email',
+        'telefono',
+        'comuna',
+        'rut',
+        'password1',
+        'password2',
+        'acepta_politicas',
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -114,10 +128,7 @@ class RegistroForm(DatosAgricultorMixin, UserCreationForm):
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
         users = get_user_model().objects
-        if (
-            users.filter(email__iexact=email).exists()
-            or users.filter(username__iexact=email).exists()
-        ):
+        if users.filter(email__iexact=email).exists() or users.filter(username__iexact=email).exists():
             raise ValidationError('Este correo electrónico ya está registrado.')
         return email
 
@@ -199,8 +210,15 @@ class PredioForm(forms.ModelForm):
     class Meta:
         model = Predio
         fields = [
-            'nombre', 'descripcion', 'ubicacion', 'observaciones',
-            'superficie_ha', 'zona', 'latitud', 'longitud', 'geojson',
+            'nombre',
+            'descripcion',
+            'ubicacion',
+            'observaciones',
+            'superficie_ha',
+            'zona',
+            'latitud',
+            'longitud',
+            'geojson',
         ]
         labels = {
             'nombre': 'Nombre del predio',
@@ -224,7 +242,9 @@ class PredioForm(forms.ModelForm):
     notas = forms.CharField(
         label='Notas del predio (opcional)',
         required=False,
-        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Ej: Sector destinado a hortalizas, acceso por camino interior.'}),
+        widget=forms.Textarea(
+            attrs={'rows': 3, 'placeholder': 'Ej: Sector destinado a hortalizas, acceso por camino interior.'}
+        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -241,12 +261,17 @@ class PredioForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['superficie_ha'].required = False
         # Melipilla va primero y queda preseleccionada en un predio nuevo: es la zona de trabajo del proyecto.
-        self.fields['zona'].queryset = Zona.objects.filter(activo=True).annotate(
-            _orden=models.Case(
-                models.When(nombre__icontains='melipilla', then=models.Value(0)),
-                default=models.Value(1), output_field=models.IntegerField(),
-            ),
-        ).order_by('_orden', 'nombre')
+        self.fields['zona'].queryset = (
+            Zona.objects.filter(activo=True)
+            .annotate(
+                _orden=models.Case(
+                    models.When(nombre__icontains='melipilla', then=models.Value(0)),
+                    default=models.Value(1),
+                    output_field=models.IntegerField(),
+                ),
+            )
+            .order_by('_orden', 'nombre')
+        )
         self.fields['zona'].label = 'Zona agrícola'
         self.fields['zona'].empty_label = 'Selecciona una zona'
         # La zona es obligatoria solo cuando el catálogo ya tiene zonas: así nunca se bloquea el registro.
@@ -295,15 +320,30 @@ class PredioForm(forms.ModelForm):
 class PotreroForm(forms.ModelForm):
     class Meta:
         model = Potrero
-        fields = ['nombre', 'cultivo', 'variedad', 'fecha_siembra', 'fecha_cosecha', 'superficie_ha', 'latitud', 'longitud', 'perimetro']
-        labels = {'superficie_ha':'Superficie (ha)', 'perimetro':'Perímetro', 'latitud':'Latitud', 'longitud':'Longitud'}
+        fields = [
+            'nombre',
+            'cultivo',
+            'variedad',
+            'fecha_siembra',
+            'fecha_cosecha',
+            'superficie_ha',
+            'latitud',
+            'longitud',
+            'perimetro',
+        ]
+        labels = {
+            'superficie_ha': 'Superficie (ha)',
+            'perimetro': 'Perímetro',
+            'latitud': 'Latitud',
+            'longitud': 'Longitud',
+        }
         widgets = {
             'perimetro': forms.HiddenInput(),
-            'fecha_siembra': forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
-            'fecha_cosecha': forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
-            'superficie_ha': forms.NumberInput(attrs={'min':'0.0001','step':'0.0001'}),
-            'latitud': forms.NumberInput(attrs={'min':-85,'max':85,'step':'any'}),
-            'longitud': forms.NumberInput(attrs={'min':-180,'max':180,'step':'any'}),
+            'fecha_siembra': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'fecha_cosecha': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'superficie_ha': forms.NumberInput(attrs={'min': '0.0001', 'step': '0.0001'}),
+            'latitud': forms.NumberInput(attrs={'min': -85, 'max': 85, 'step': 'any'}),
+            'longitud': forms.NumberInput(attrs={'min': -180, 'max': 180, 'step': 'any'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -333,22 +373,27 @@ class TemporadaCultivoForm(forms.ModelForm):
     class Meta:
         model = TemporadaCultivo
         fields = [
-            'cultivo', 'variedad', 'temporada_agricola', 'fecha_siembra', 'fecha_cosecha',
-            'estado', 'observaciones',
+            'cultivo',
+            'variedad',
+            'temporada_agricola',
+            'fecha_siembra',
+            'fecha_cosecha',
+            'estado',
+            'observaciones',
         ]
         labels = {
-            'cultivo':'Cultivo',
-            'variedad':'Variedad',
-            'temporada_agricola':'Temporada agrícola',
-            'fecha_siembra':'Fecha de siembra',
-            'fecha_cosecha':'Fecha de cosecha',
-            'estado':'Estado de la temporada',
-            'observaciones':'Observaciones',
+            'cultivo': 'Cultivo',
+            'variedad': 'Variedad',
+            'temporada_agricola': 'Temporada agrícola',
+            'fecha_siembra': 'Fecha de siembra',
+            'fecha_cosecha': 'Fecha de cosecha',
+            'estado': 'Estado de la temporada',
+            'observaciones': 'Observaciones',
         }
         widgets = {
-            'fecha_siembra':forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
-            'fecha_cosecha':forms.DateInput(format='%Y-%m-%d', attrs={'type':'date'}),
-            'observaciones':forms.Textarea(attrs={'rows':4}),
+            'fecha_siembra': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'fecha_cosecha': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'observaciones': forms.Textarea(attrs={'rows': 4}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -356,14 +401,20 @@ class TemporadaCultivoForm(forms.ModelForm):
         crops = Cultivo.objects.filter(activo=True).order_by('nombre')
         self.fields['cultivo'].queryset = crops
         self.fields['cultivo'].choices = grouped_crop_choices(crops, 'Selecciona un cultivo')
-        self.fields['temporada_agricola'].widget.attrs.update({'placeholder':'2026-2027', 'pattern':'[0-9]{4}-[0-9]{4}'})
+        self.fields['temporada_agricola'].widget.attrs.update(
+            {'placeholder': '2026-2027', 'pattern': '[0-9]{4}-[0-9]{4}'}
+        )
         self.fields['fecha_siembra'].required = False
         self.fields['fecha_cosecha'].required = False
 
 
 UNIDADES_DOSIS = [
-    ('', 'Unidad'), ('kg/ha', 'kg/ha'), ('g/ha', 'g/ha'), ('L/ha', 'L/ha'),
-    ('mL/ha', 'mL/ha'), ('unidades/ha', 'unidades/ha'),
+    ('', 'Unidad'),
+    ('kg/ha', 'kg/ha'),
+    ('g/ha', 'g/ha'),
+    ('L/ha', 'L/ha'),
+    ('mL/ha', 'mL/ha'),
+    ('unidades/ha', 'unidades/ha'),
 ]
 
 
@@ -373,9 +424,11 @@ class ActividadAgricolaForm(forms.ModelForm):
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self.fields['potrero'].queryset = Potrero.objects.filter(
-            predio__propietario=user
-        ).select_related('predio', 'cultivo').order_by('predio__nombre', 'nombre')
+        self.fields['potrero'].queryset = (
+            Potrero.objects.filter(predio__propietario=user)
+            .select_related('predio', 'cultivo')
+            .order_by('predio__nombre', 'nombre')
+        )
         self.fields['potrero'].empty_label = 'Selecciona un potrero'
         self.fields['potrero'].label_from_instance = lambda plot: f'{plot.predio.nombre} · {plot.nombre}'
         self.fields['temporada'].queryset = TemporadaCultivo.objects.filter(
@@ -387,12 +440,18 @@ class ActividadAgricolaForm(forms.ModelForm):
             f'{season.cultivo.nombre}{" · " + season.variedad if season.variedad else ""} · {season.get_estado_display()}'
         )
         today = timezone.localdate()
-        self.fields['insumo'].queryset = Insumo.objects.filter(vigente=True).exclude(
-            estado_verificacion__in=['restricted', 'cancelled'],
-        ).filter(
-            models.Q(vigencia_desde__isnull=True) | models.Q(vigencia_desde__lte=today),
-            models.Q(vigencia_hasta__isnull=True) | models.Q(vigencia_hasta__gte=today),
-        ).select_related('tipo', 'cultivo').order_by('tipo__nombre', 'nombre')
+        self.fields['insumo'].queryset = (
+            Insumo.objects.filter(vigente=True)
+            .exclude(
+                estado_verificacion__in=['restricted', 'cancelled'],
+            )
+            .filter(
+                models.Q(vigencia_desde__isnull=True) | models.Q(vigencia_desde__lte=today),
+                models.Q(vigencia_hasta__isnull=True) | models.Q(vigencia_hasta__gte=today),
+            )
+            .select_related('tipo', 'cultivo')
+            .order_by('tipo__nombre', 'nombre')
+        )
         self.fields['insumo'].empty_label = 'Sin producto del catálogo'
         self.fields['insumo'].label_from_instance = lambda item: f'{item.tipo.nombre} · {item.nombre}'
         self.fields['prioridad'].required = False
@@ -404,9 +463,23 @@ class ActividadAgricolaForm(forms.ModelForm):
     class Meta:
         model = ActividadAgricola
         fields = [
-            'tipo', 'nombre', 'potrero', 'temporada', 'prioridad', 'fecha_programada', 'estado',
-            'fecha_realizada', 'responsable', 'insumo', 'insumo_otro', 'objetivo', 'dosis',
-            'unidad_dosis', 'superficie_ha', 'condiciones_clima', 'observaciones',
+            'tipo',
+            'nombre',
+            'potrero',
+            'temporada',
+            'prioridad',
+            'fecha_programada',
+            'estado',
+            'fecha_realizada',
+            'responsable',
+            'insumo',
+            'insumo_otro',
+            'objetivo',
+            'dosis',
+            'unidad_dosis',
+            'superficie_ha',
+            'condiciones_clima',
+            'observaciones',
         ]
         labels = {
             'nombre': 'Nombre de la actividad',
@@ -452,13 +525,23 @@ class ActividadAgricolaForm(forms.ModelForm):
         crop = season.cultivo if season else (plot.cultivo if plot else None)
         if product and product.cultivo_id and crop and product.cultivo_id != crop.pk:
             self.add_error('insumo', f'El producto está asociado a {product.cultivo.nombre}, no a {crop.nombre}.')
-        if product and data.get('unidad_dosis') and product.unidad_dosis and data['unidad_dosis'] != product.unidad_dosis:
+        if (
+            product
+            and data.get('unidad_dosis')
+            and product.unidad_dosis
+            and data['unidad_dosis'] != product.unidad_dosis
+        ):
             self.add_error('unidad_dosis', f'La unidad registrada del producto es {product.unidad_dosis}.')
         if (
-            product and product.dosis_maxima_hectarea is not None and data.get('dosis')
+            product
+            and product.dosis_maxima_hectarea is not None
+            and data.get('dosis')
             and data['dosis'] > product.dosis_maxima_hectarea
         ):
-            self.add_error('dosis', f'Supera la dosis máxima registrada ({product.dosis_maxima_hectarea} {product.unidad_dosis_maxima}).')
+            self.add_error(
+                'dosis',
+                f'Supera la dosis máxima registrada ({product.dosis_maxima_hectarea} {product.unidad_dosis_maxima}).',
+            )
         if not data.get('prioridad'):
             data['prioridad'] = ActividadAgricola.Prioridad.MEDIA
         if data.get('tipo') not in ActividadAgricola.TIPOS_CON_INSUMO:

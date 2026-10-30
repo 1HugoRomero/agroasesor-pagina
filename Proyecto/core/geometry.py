@@ -1,4 +1,5 @@
 """Validación de polígonos GeoJSON y cálculo esférico de superficie."""
+
 import math
 from decimal import Decimal
 from django.core.exceptions import ValidationError
@@ -14,7 +15,10 @@ def polygon_perimeter(coordinates):
     for point in coordinates:
         if not isinstance(point, list) or len(point) != 2:
             raise ValidationError('Cada vértice debe contener longitud y latitud.')
-        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in point):
+        if any(
+            isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            for value in point
+        ):
             raise ValidationError('Las coordenadas deben ser números finitos.')
         longitude, latitude = point
         if not -180 <= longitude <= 180 or not -85 <= latitude <= 85:
@@ -130,7 +134,7 @@ def polygon_area(coordinates):
         raise ValidationError('El perímetro debe ser local y no cruzar el antimeridiano.')
 
     def cross(a, b, c):
-        return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
     def on_segment(a, b, c):
         return min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= c[1] <= max(a[1], b[1])
@@ -140,24 +144,36 @@ def polygon_area(coordinates):
         raise ValidationError('El perímetro no puede ser una línea.')
     for i, (a, b) in enumerate(edges):
         for j in range(i + 1, len(edges)):
-            if j == i + 1 or (i == 0 and j == len(edges)-1):
+            if j == i + 1 or (i == 0 and j == len(edges) - 1):
                 continue
             c, d = edges[j]
-            x, y, z, w = cross(a,b,c), cross(a,b,d), cross(c,d,a), cross(c,d,b)
-            if (x*y < 0 and z*w < 0) or any(abs(v) < 1e-14 and on_segment(*segment) for v, segment in [(x,(a,b,c)),(y,(a,b,d)),(z,(c,d,a)),(w,(c,d,b))]):
+            x, y, z, w = cross(a, b, c), cross(a, b, d), cross(c, d, a), cross(c, d, b)
+            if (x * y < 0 and z * w < 0) or any(
+                abs(v) < 1e-14 and on_segment(*segment)
+                for v, segment in [(x, (a, b, c)), (y, (a, b, d)), (z, (c, d, a)), (w, (c, d, b))]
+            ):
                 raise ValidationError('El perímetro no puede cruzarse ni tocarse a sí mismo.')
     # Área de triángulos esféricos con un vértice común. Misma esfera que computeArea.
-    vectors = [(math.cos(math.radians(lat))*math.cos(math.radians(lng)),
-                math.cos(math.radians(lat))*math.sin(math.radians(lng)),
-                math.sin(math.radians(lat))) for lng, lat in points]
-    dot = lambda a,b: sum(x*y for x,y in zip(a,b))
+    vectors = [
+        (
+            math.cos(math.radians(lat)) * math.cos(math.radians(lng)),
+            math.cos(math.radians(lat)) * math.sin(math.radians(lng)),
+            math.sin(math.radians(lat)),
+        )
+        for lng, lat in points
+    ]
+    dot = lambda a, b: sum(x * y for x, y in zip(a, b))
     origin = vectors[0]
     excess = 0
-    for i in range(1, len(vectors)-1):
-        b, c = vectors[i], vectors[i+1]
-        det = origin[0]*(b[1]*c[2]-b[2]*c[1]) + origin[1]*(b[2]*c[0]-b[0]*c[2]) + origin[2]*(b[0]*c[1]-b[1]*c[0])
-        excess += 2*math.atan2(det, 1+dot(origin,b)+dot(b,c)+dot(c,origin))
-    area = Decimal(str(abs(excess)*EARTH_RADIUS**2)).quantize(Decimal('0.01'))
+    for i in range(1, len(vectors) - 1):
+        b, c = vectors[i], vectors[i + 1]
+        det = (
+            origin[0] * (b[1] * c[2] - b[2] * c[1])
+            + origin[1] * (b[2] * c[0] - b[0] * c[2])
+            + origin[2] * (b[0] * c[1] - b[1] * c[0])
+        )
+        excess += 2 * math.atan2(det, 1 + dot(origin, b) + dot(b, c) + dot(c, origin))
+    area = Decimal(str(abs(excess) * EARTH_RADIUS**2)).quantize(Decimal('0.01'))
     if area < Decimal('1'):
         raise ValidationError('El perímetro debe delimitar al menos 1 m².')
     return area

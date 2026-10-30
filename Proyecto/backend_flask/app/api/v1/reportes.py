@@ -1,4 +1,5 @@
 """Borrador de endpoints de reportes. Sin acceso a datos reales."""
+
 from flask import Blueprint, request
 from app.api.v1.responses import pendiente
 

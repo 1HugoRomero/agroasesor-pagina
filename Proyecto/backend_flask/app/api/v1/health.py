@@ -1,4 +1,5 @@
 """Estado de la API. Es público pero NO expone rutas, claves ni datos: solo si la base está conectada."""
+
 import sqlite3
 from pathlib import Path
 
@@ -34,5 +35,6 @@ def openapi_json():
     """Especificación OpenAPI en JSON (la misma que openapi.yaml)."""
     import yaml
     from pathlib import Path
+
     ruta = Path(current_app.root_path).parent / "openapi.yaml"
     return jsonify(yaml.safe_load(ruta.read_text(encoding="utf-8")))

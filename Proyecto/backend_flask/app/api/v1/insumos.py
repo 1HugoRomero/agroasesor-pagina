@@ -1,4 +1,5 @@
 """Insumos vigentes (lectura) con su estado de verificación y fuente."""
+
 from flask import Blueprint, jsonify, request
 
 from app.security.gateway import requiere_usuario

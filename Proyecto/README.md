@@ -1,172 +1,118 @@
 # AgroAsesor
 
-Django 6.1.1 monolítico, Django Templates, HTML/CSS/JavaScript y SQLite.
-La auditoría, estado de los 22 requisitos y fases siguientes están en [AUDITORIA.md](AUDITORIA.md).
+Página web para que agricultores registren sus predios y potreros en un mapa, planifiquen labores y
+calculen semillas e insumos usando solo datos con fuente verificada.
 
-## Ejecutar localmente (PowerShell, desde esta carpeta)
+- **Django + SQLite**: toda la página (cuentas, predios, mapa, calendario, actividades, calculadoras,
+  reportes y panel de administración).
+- **`backend_flask/`**: API Flask de solo lectura que Django usa por detrás en `/api/v1/`.
+  Ver [backend_flask/README.md](backend_flask/README.md).
 
-Requiere Python 3.12 o superior.
+## Estructura
+
+```text
+Proyecto/
+├── AgroAsesor/          configuración de Django (settings, urls)
+├── core/                la aplicación
+│   ├── models.py        tablas: predios, potreros, temporadas, actividades, catálogo, cálculos
+│   ├── views.py         páginas y respuestas JSON
+│   ├── forms.py         formularios y validaciones
+│   ├── validators.py    RUT, teléfono y otros datos de entrada
+│   ├── agronomy.py      ventanas de siembra/cosecha y evaluación de fechas del calendario
+│   ├── catalog.py       catálogo de cultivos e insumos para las páginas
+│   ├── seasons.py       temporadas de cultivo de cada potrero
+│   ├── geometry.py      área y perímetro de los polígonos del mapa
+│   ├── auth.py          acceso con correo o usuario y manejo de sesión vencida
+│   ├── api_gateway.py   puente firmado hacia la API Flask
+│   ├── estadisticas.py  números del panel de administración
+│   ├── dbutils.py       ruta de la base de datos y respaldos
+│   ├── admin.py         Django Admin
+│   ├── management/      comandos de consola (catálogo, base de datos, administradores)
+│   ├── templates/       HTML
+│   ├── static/          CSS, JS e imágenes
+│   └── tests/           pruebas
+├── data/                CSV del catálogo agrícola real
+├── data_demo/           catálogo ficticio que usan las pruebas
+└── backend_flask/       API Flask
+```
+
+## Ejecutar con Docker (forma oficial)
+
+```powershell
+cd Proyecto
+docker compose up -d --build
+```
+
+Luego abre http://localhost:8000/.
+
+La base de datos oficial es `/data/db.sqlite3`, dentro del volumen `agroasesor_hugo_agroasesor_data`.
+Sobrevive a `docker compose down`, a reconstruir la imagen y a reiniciar el PC. **Nunca** uses
+`docker compose down -v` ni borres ese volumen: se pierde la base. Cada vez que el contenedor arranca
+hace un respaldo en `backups/` (guarda los últimos 20), aplica las migraciones y carga el catálogo de `data/`.
+
+| Para qué | Comando |
+|---|---|
+| Ver qué base se usa y cuánto contiene | `docker exec agroasesor_hugo python manage.py estado_bd` |
+| Hacer un respaldo ahora | `docker exec agroasesor_hugo python manage.py respaldar_bd` |
+| Crear una cuenta de administrador | `docker exec -it agroasesor_hugo python manage.py createsuperuser` |
+| Dar o quitar el rol de administrador | `docker exec agroasesor_hugo python manage.py administradores` |
+
+Para levantar también la API Flask, define `AGROASESOR_INTERNAL_SECRET` en `.env` y usa:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.api.yml up -d --build
+```
+
+## Ejecutar sin Docker (desarrollo)
+
+Requiere Python 3.12 o superior. Desde la carpeta del repositorio:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r Proyecto/requirements.txt
-# Solo si no existe .env: copiar y completar la plantilla, sin sobreescribir el archivo local.
-Copy-Item Proyecto/.env.example Proyecto/.env
+Copy-Item Proyecto/.env.example Proyecto/.env   # solo la primera vez
 .\.venv\Scripts\python.exe Proyecto/manage.py migrate
 .\.venv\Scripts\python.exe Proyecto/manage.py createsuperuser
 .\.venv\Scripts\python.exe Proyecto/manage.py runserver
 ```
 
-En este workspace ya se preparó un entorno virtual en la carpeta padre
-`APLICACION/.venv`; se puede usar `..\.venv\Scripts\python.exe` desde `AgroAsesor`.
-No hay credenciales demo habilitadas. Cualquier persona puede crear una cuenta en
-`/login/?mode=register` con nombre, apellido opcional, nombre de usuario, correo y
-contraseña propia. El usuario y el correo se validan para evitar duplicados y
-Django aplica sus validadores y hash seguros de contraseña. Tras registrarse, la
-sesión se inicia automáticamente; se puede entrar después con el usuario o el
-correo. Cada cuenta empieza sin predios propios y solo accede a terrenos y
-actividades asociados a su usuario.
-El registro requiere aceptar la política de privacidad, seguridad y cookies.
-La versión aceptada y su fecha se guardan en `AceptacionPoliticas`; la política
-describe el uso de cookies técnicas de sesión/CSRF y del almacenamiento local del
-navegador. Revisa y adapta el texto a los responsables y requisitos legales de
-tu despliegue antes de publicar el servicio.
-Para el administrador, crea una cuenta mediante `createsuperuser` y usa `/admin/`.
-Configura un correo en esa cuenta para ingresar también por `/login/`.
+Así se usa un `db.sqlite3` local, que **no** es la base oficial (Django lo avisa al arrancar).
 
-## Variables locales
+## Variables de entorno
 
-El archivo `Proyecto/.env` queda ignorado por Git. Nunca publiques sus secretos.
+Se definen en `Proyecto/.env` (parte copiando `.env.example`). Ese archivo no se sube a Git.
 
-```dotenv
-DJANGO_SECRET_KEY=un-secreto-aleatorio-largo
-DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
-MAP_TILE_URL=https://tile.openstreetmap.de/{z}/{x}/{y}.png
-```
+| Variable | Para qué |
+|---|---|
+| `DJANGO_SECRET_KEY` | clave secreta; obligatoria con `DJANGO_DEBUG=False` |
+| `DJANGO_DEBUG` | `True` en desarrollo, `False` en producción (activa cookies seguras) |
+| `DJANGO_ALLOWED_HOSTS` | dominios permitidos, separados por coma |
+| `MAP_TILE_URL`, `MAP_TILE_ATTRIBUTION` | proveedor de mapas (por defecto OpenStreetMap.de) |
+| `EMAIL_*`, `DEFAULT_FROM_EMAIL` | correo para recuperar la contraseña (en local se imprime en la consola) |
+| `AGROASESOR_API_URL`, `AGROASESOR_INTERNAL_SECRET` | conexión con la API Flask; sin ellas `/api/v1/` responde 503 |
 
-Las variables del sistema tienen prioridad sobre `.env`. Para producción utiliza
-DEBUG=False, un secreto estable, dominios explícitos y HTTPS; las cookies seguras
-se activan con DEBUG=False.
+## Catálogo agrícola
 
-## Cartografía GIS
-
-La pantalla de predios utiliza Leaflet y Leaflet-Geoman Free con teselas raster
-de OpenStreetMap.de para uso interactivo de bajo volumen; no requiere clave.
-Se verificó que el servidor de teselas OSM estándar bloqueaba peticiones de este
-entorno. La atribución visible identifica a OpenStreetMap. Respeta la política
-de uso y atribución del proveedor configurado. Para mayor carga, configura un
-proveedor apropiado mediante `MAP_TILE_URL` y, si corresponde,
-`MAP_TILE_ATTRIBUTION`.
-
-Los vértices heredados se conservan en el campo `perimetro`; la migración aditiva
-`0003` los copia a GeoJSON sin borrar el formato previo. El registro de predios
-guía al usuario por el dibujo, la aceptación expresa del perímetro, la revisión
-de la medición y el formulario. Django vuelve a validar el polígono cerrado,
-rechaza autointersecciones y recalcula la superficie antes de persistir. La ficha
-del predio muestra su geometría, los potreros y el historial versionado de cambios.
-La migración aditiva `0005` añade la fecha de modificación y los eventos de
-historial sin borrar predios existentes. La longitud se deriva del contorno
-guardado. Los potreros se comprueban contra el límite GeoJSON del predio cuando
-este existe y se rechazan superposiciones dentro del mismo predio. Los registros
-anteriores sin geometría se conservan y pueden actualizarse sin descartar
-implícitamente su perímetro.
-La página «Mis predios y potreros» lista todos los predios propios, sincroniza la
-selección del listado con las geometrías Leaflet y ofrece búsqueda, filtros y
-paginación para el registro persistente de potreros. La migración aditiva `0006`
-asocia los eventos nuevos de creación y modificación con su potrero; los eventos
-anteriores no se reconstruyen ni se modifican retroactivamente. En el formulario
-de potreros, el mapa enfoca y destaca el perímetro del predio, muestra la
-superficie aún disponible y alerta antes de guardar si el perímetro dibujado
-queda fuera del predio o supera esa superficie. Django mantiene las validaciones
-del lado del servidor.
-
-## Catálogo y recuperación de cuenta
-
-Registra los cultivos y zonas reales en Django Admin. Solo cultivos activos se
-pueden asociar. Si el catálogo está vacío, se explica en el formulario.
-`seed_catalog` conserva datos de demostración del proyecto original: **no lo
-ejecutes como carga de datos agrícolas oficiales**.
-
-Los productos del catálogo parten en estado **Información no verificada**. El
-formulario de ficha no presenta esos datos como autorización ni habilita su uso
-en cálculos verificados. Un administrador debe registrar fuente, URL, fecha y
-documentación de etiqueta antes de cambiar el estado. No se cargaron dosis ni
-autorizaciones SAG ficticias. La verificación es una declaración de catálogo y
-requiere que el administrador contraste la etiqueta oficial para el cultivo y
-objetivo concretos.
-
-La recuperación de contraseña usa el flujo de Django con token. Localmente el
-correo se imprime en la consola; para enviar mensajes reales configura
-`EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`,
-`EMAIL_HOST_PASSWORD` y `DEFAULT_FROM_EMAIL` en `.env`. Esas variables se traducen
-al ajuste `MAILERS` de Django 6.1. No guardes credenciales SMTP en Git.
-
-## Calendario agronómico referencial
-
-El calendario ya no presenta como recomendaciones las ventanas JavaScript del
-catálogo de demostración. Registra referencias con fuente, variedad y zona en
-Django Admin, y márcalas como verificadas solo después de comprobar el documento
-original. La migración aditiva `0008` crea el catálogo de referencias y la
-configuración del margen; no cambia predios ni registros existentes. El
-calendario muestra ventanas únicamente para referencias verificadas y permite
-evaluar fechas de siembra y cosecha mediante el backend. La cosecha también se
-compara con la duración de ciclo documentada.
-
-El margen inicial es de 15 días y puede ajustarse en **Configuración
-agronómica** dentro del Admin. Si faltan referencias o campos necesarios, el
-sistema informa que los datos son insuficientes en vez de inventar una ventana.
-El resultado es orientativo: no sustituye una evaluación profesional, no
-considera todas las condiciones locales ni garantiza la viabilidad o madurez del
-cultivo. El selector opcional de potrero solo precompleta los datos heredados de
-su cultivo, variedad y fechas.
-
-## Centro de decisiones
-
-En **La decisión**, el acceso **Centro de decisiones** reúne semillas, insumos,
-disponibilidad y cosecha. Las URLs anteriores (`/calculadora/`, `/cobertura/`,
-`/predictor/` y `/asesor/`) siguen activas; las fichas de insumo también se abren
-desde Insumos. Los cálculos de cantidades, disponibilidad y cosecha se validan y ejecutan en
-`/calculos/ejecutar/` mediante POST JSON autenticado y protegido por CSRF. El
-servidor valida el propietario del potrero, la superficie y los parámetros antes
-de devolver el resultado; los resultados mostrados en Reporte todavía se guardan
-localmente en el navegador, no como historial persistente de SQLite.
-Los pasos de configuración permiten ajustar la superficie solo para el cálculo;
-no actualizan el terreno. Las dosis y rendimientos son datos del catálogo, no
-recomendaciones técnicas. Los cálculos guardados siguen disponibles en **Reporte**
-para exportar las categorías PDF que ya admite esa sección (ficha, semillas,
-insumos y disponibilidad).
-
-## Pruebas y límites
+Zonas, cultivos, problemas, insumos y referencias se cargan desde los CSV de `data/` o desde `/admin/`.
+Ningún dato técnico se inventa: completa cada fila solo con valores de una fuente oficial
+(SAG, ODEPA, INIA o la etiqueta del fabricante).
 
 ```powershell
-.\.venv\Scripts\python.exe Proyecto/manage.py check
+python manage.py importar_catalogo --categorias                   # categorías de insumo (una vez)
+python manage.py importar_catalogo data                           # solo valida, no guarda
+python manage.py importar_catalogo data --aplicar                 # guarda
+python manage.py importar_catalogo data --aplicar --actualizar    # además corrige registros existentes
+```
+
+- Separador `;` o `,`, UTF-8, decimales con coma o punto y fechas `AAAA-MM-DD`.
+- Las listas (problemas, cultivos, objetivos de control) van separadas por `|`. Una celda vacía significa «sin dato».
+- El orden de carga es zonas → cultivos → problemas → insumos → usos → calendario y rendimientos.
+- Es seguro repetirlo: no duplica registros ni borra valores guardados.
+
+## Pruebas
+
+```powershell
 .\.venv\Scripts\python.exe Proyecto/manage.py test core
-.\.venv\Scripts\python.exe Proyecto/manage.py makemigrations --check --dry-run
 ```
 
-La Fase A tiene autenticación y terrenos persistentes. Los módulos B–D existentes
-siguen disponibles, pero actividades/historial y calendario aún requieren
-persistencia. Los resultados locales se separan por usuario; no equivalen a
-historial en SQLite.
-
-Las migraciones `0002` y `0003` amplían el esquema de manera aditiva y conservan
-las tablas y perímetros anteriores. El respaldo
-previo está en `Proyecto/backups/db-antes-fase-a-2026-10-02.sqlite3` (ignorado por Git).
-Los archivos SQLite y pyc que ya estaban versionados no fueron borrados: `.gitignore`
-evita nuevas inclusiones, pero no deja de rastrear archivos existentes automáticamente.
-
-## Cargar el catálogo agronómico
-
-El catálogo (zonas, cultivos, referencias, problemas e insumos) parte vacío y no se
-rellena con datos de demostración. Para cargarlo con datos respaldados por fuentes:
-
-```powershell
-.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo --plantilla catalogo.json
-# completar catalogo.json con datos oficiales y luego:
-.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo catalogo.json            # solo valida
-.\.venv\Scripts\python.exe Proyecto/manage.py importar_catalogo catalogo.json --aplicar  # guarda
-```
-
-También puede hacerse desde `/admin/`. El comando `seed_catalog` solo contiene datos
-de demostración y no debe usarse como información agronómica real.
+Las pruebas de la API Flask están en `backend_flask/tests` (ver su README).

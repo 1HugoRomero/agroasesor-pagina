@@ -1,4 +1,5 @@
 """La especificación debe describir EXACTAMENTE las rutas que existen (sin documentar de más ni de menos)."""
+
 import re
 from pathlib import Path
 
@@ -15,7 +16,7 @@ def _operaciones_codigo():
     for regla in app.url_map.iter_rules():
         if not regla.rule.startswith("/api/v1"):
             continue
-        ruta = re.sub(r"<(?:\w+:)?(\w+)>", r"{\1}", regla.rule[len("/api/v1"):])
+        ruta = re.sub(r"<(?:\w+:)?(\w+)>", r"{\1}", regla.rule[len("/api/v1") :])
         for m in regla.methods - {"HEAD", "OPTIONS"}:
             ops.add((ruta, m.lower()))
     return ops

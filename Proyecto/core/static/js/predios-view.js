@@ -7,11 +7,20 @@
   if (!list || !buttons.length) return;
 
   function read() {
-    try { var value = window.localStorage.getItem(KEY); return value === 'list' ? 'list' : 'cards'; } catch (error) { return 'cards'; }
+    try {
+      var value = window.localStorage.getItem(KEY);
+      return value === 'list' ? 'list' : 'cards';
+    } catch (error) {
+      return 'cards';
+    }
   }
 
   function write(mode) {
-    try { window.localStorage.setItem(KEY, mode); } catch (error) { /* sin almacenamiento: la vista no se recuerda */ }
+    try {
+      window.localStorage.setItem(KEY, mode);
+    } catch (error) {
+      /* sin almacenamiento: la vista no se recuerda */
+    }
   }
 
   function apply(mode) {
@@ -37,7 +46,9 @@
       if (!map) return;
       map.scrollIntoView({ behavior: 'smooth', block: 'start' });
       map.classList.add('is-focused');
-      window.setTimeout(function () { map.classList.remove('is-focused'); }, 1400);
+      window.setTimeout(function () {
+        map.classList.remove('is-focused');
+      }, 1400);
     });
   }
 

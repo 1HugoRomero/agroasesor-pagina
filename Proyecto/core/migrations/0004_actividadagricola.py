@@ -18,18 +18,56 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('nombre', models.CharField(max_length=180)),
-                ('tipo', models.CharField(choices=[('preparacion', 'Preparación'), ('siembra', 'Siembra'), ('fertilizacion', 'Fertilización'), ('riego', 'Riego'), ('monitoreo', 'Monitoreo'), ('control_fitosanitario', 'Control fitosanitario'), ('cosecha', 'Cosecha'), ('otra', 'Otra')], max_length=32)),
+                (
+                    'tipo',
+                    models.CharField(
+                        choices=[
+                            ('preparacion', 'Preparación'),
+                            ('siembra', 'Siembra'),
+                            ('fertilizacion', 'Fertilización'),
+                            ('riego', 'Riego'),
+                            ('monitoreo', 'Monitoreo'),
+                            ('control_fitosanitario', 'Control fitosanitario'),
+                            ('cosecha', 'Cosecha'),
+                            ('otra', 'Otra'),
+                        ],
+                        max_length=32,
+                    ),
+                ),
                 ('fecha_programada', models.DateField()),
-                ('estado', models.CharField(choices=[('pendiente', 'Pendiente'), ('completada', 'Completada'), ('cancelada', 'Cancelada')], default='pendiente', max_length=12)),
+                (
+                    'estado',
+                    models.CharField(
+                        choices=[('pendiente', 'Pendiente'), ('completada', 'Completada'), ('cancelada', 'Cancelada')],
+                        default='pendiente',
+                        max_length=12,
+                    ),
+                ),
                 ('observaciones', models.TextField(blank=True)),
                 ('creado', models.DateTimeField(auto_now_add=True)),
                 ('actualizado', models.DateTimeField(auto_now=True)),
-                ('potrero', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='actividades', to='core.potrero')),
-                ('usuario', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='actividades_agricolas', to=settings.AUTH_USER_MODEL)),
+                (
+                    'potrero',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='actividades', to='core.potrero'
+                    ),
+                ),
+                (
+                    'usuario',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='actividades_agricolas',
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
                 'ordering': ['fecha_programada', 'pk'],
-                'indexes': [models.Index(fields=['usuario', 'estado', 'fecha_programada'], name='actividad_usuario_estado_fecha')],
+                'indexes': [
+                    models.Index(
+                        fields=['usuario', 'estado', 'fecha_programada'], name='actividad_usuario_estado_fecha'
+                    )
+                ],
             },
         ),
     ]

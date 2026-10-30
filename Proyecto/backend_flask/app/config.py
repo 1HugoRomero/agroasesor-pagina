@@ -1,4 +1,5 @@
 """Configuración de la API. Nada sensible está escrito aquí: todo llega por variables de entorno."""
+
 import os
 
 

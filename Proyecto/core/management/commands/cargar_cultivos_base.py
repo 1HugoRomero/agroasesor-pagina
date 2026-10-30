@@ -7,6 +7,7 @@ Es seguro repetirlo: solo crea los que faltan y nunca modifica ni borra los exis
 rendimientos, densidades, dosis ni ventanas de siembra; esos datos deben registrarse con su fuente
 desde el administrador.
 """
+
 from django.core.management.base import BaseCommand
 
 from core.catalog import ensure_base_crops, ensure_default_zone

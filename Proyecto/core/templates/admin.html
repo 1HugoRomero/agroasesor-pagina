@@ -1,44 +1,40 @@
-{% extends 'body.html' %}
+{% extends "body.html" %}
 {% load static %}
 {% block title %}Administración · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/panel-admin.css' %}?v=1">{% endblock %}
 {% block content %}
-<div class="page-hero"><div><h1 class="page-title">Administración</h1><p>Resumen de lo que los agricultores han registrado en AgroAsesor. Las cifras salen directamente de la base de datos.</p></div><a class="button" href="{% url 'admin:index' %}">Abrir Django Admin</a></div>
-
-<section class="adm-section" aria-labelledby="adm-uso">
-  <h2 id="adm-uso" class="adm-title">Uso del sistema</h2>
-  <div class="adm-grid">
-    <article class="adm-stat"><span>Agricultores</span><strong>{{ stats.agricultores }}</strong><small>Cuentas de agricultor registradas</small></article>
-    <article class="adm-stat"><span>Predios</span><strong>{{ stats.predios }}</strong><small>Campos registrados</small></article>
-    <article class="adm-stat"><span>Potreros</span><strong>{{ stats.potreros }}</strong><small>{{ stats.potreros_con_cultivo }} con cultivo asignado</small></article>
-    <article class="adm-stat"><span>Cultivos registrados</span><strong>{{ stats.potreros_con_cultivo }}</strong><small>Potreros con cultivo · catálogo: {{ stats.cultivos_catalogo }} cultivos</small></article>
-    <article class="adm-stat"><span>Cálculos realizados</span><strong>{{ stats.calculos }}</strong><small>Cálculos guardados en potreros</small></article>
-    <article class="adm-stat"><span>Actividades registradas</span><strong>{{ stats.actividades }}</strong><small>{{ stats.actividades_pendientes }} pendientes · {{ stats.actividades_completadas }} completadas</small></article>
-  </div>
-</section>
-
-<section class="adm-section" aria-labelledby="adm-calc">
-  <h2 id="adm-calc" class="adm-title">Qué se usa en los cálculos</h2>
-  <div class="adm-two">
-    <article class="card adm-rank">
-      <h3>Cultivos más usados</h3>
-      {% if stats.cultivos_mas_usados %}
-      <ol>{% for fila in stats.cultivos_mas_usados %}<li><span class="adm-rank-name">{{ fila.nombre }}</span><span class="adm-bar" aria-hidden="true"><i style="width: {{ fila.porcentaje }}%"></i></span><span class="adm-rank-n">{{ fila.cantidad }} <small>({{ fila.porcentaje }}%)</small></span></li>{% endfor %}</ol>
-      {% if stats.calculos_sin_cultivo %}<p class="muted adm-note">{{ stats.calculos_sin_cultivo }} cálculo{{ stats.calculos_sin_cultivo|pluralize }} no indica{{ stats.calculos_sin_cultivo|pluralize:"n" }} cultivo y no se cuenta{{ stats.calculos_sin_cultivo|pluralize:"n" }} aquí.</p>{% endif %}
-      {% else %}<p class="muted">Todavía no hay cálculos con un cultivo indicado.</p>{% endif %}
+    <div class="page-hero"><div><h1 class="page-title">Administración</h1><p>Resumen de lo que los agricultores han registrado en AgroAsesor. Las cifras salen directamente de la base de datos.</p></div><a class="button" href="{% url 'admin:index' %}">Abrir Django Admin</a></div>
+    <section class="adm-section" aria-labelledby="adm-uso">
+        <h2 id="adm-uso" class="adm-title">Uso del sistema</h2>
+        <div class="adm-grid">
+            <article class="adm-stat"><span>Agricultores</span><strong>{{ stats.agricultores }}</strong><small>Cuentas de agricultor registradas</small></article>
+            <article class="adm-stat"><span>Predios</span><strong>{{ stats.predios }}</strong><small>Campos registrados</small></article>
+            <article class="adm-stat"><span>Potreros</span><strong>{{ stats.potreros }}</strong><small>{{ stats.potreros_con_cultivo }} con cultivo asignado</small></article>
+            <article class="adm-stat"><span>Cultivos registrados</span><strong>{{ stats.potreros_con_cultivo }}</strong><small>Potreros con cultivo · catálogo: {{ stats.cultivos_catalogo }} cultivos</small></article>
+            <article class="adm-stat"><span>Cálculos realizados</span><strong>{{ stats.calculos }}</strong><small>Cálculos guardados en potreros</small></article>
+            <article class="adm-stat"><span>Actividades registradas</span><strong>{{ stats.actividades }}</strong><small>{{ stats.actividades_pendientes }} pendientes · {{ stats.actividades_completadas }} completadas</small></article>
+        </div>
+    </section>
+    <section class="adm-section" aria-labelledby="adm-calc">
+        <h2 id="adm-calc" class="adm-title">Qué se usa en los cálculos</h2>
+        <div class="adm-two">
+            <article class="card adm-rank">
+                <h3>Cultivos más usados</h3>
+                {% if stats.cultivos_mas_usados %}
+                    <ol>{% for fila in stats.cultivos_mas_usados %}<li><span class="adm-rank-name">{{ fila.nombre }}</span><span class="adm-bar" aria-hidden="true"><i style="width: {{ fila.porcentaje }}%"></i></span><span class="adm-rank-n">{{ fila.cantidad }} <small>({{ fila.porcentaje }}%)</small></span></li>{% endfor %}</ol>
+                    {% if stats.calculos_sin_cultivo %}<p class="muted adm-note">{{ stats.calculos_sin_cultivo }} cálculo{{ stats.calculos_sin_cultivo|pluralize }} no indica{{ stats.calculos_sin_cultivo|pluralize:"n" }} cultivo y no se cuenta{{ stats.calculos_sin_cultivo|pluralize:"n" }} aquí.</p>{% endif %}
+{% else %}<p class="muted">Todavía no hay cálculos con un cultivo indicado.</p>{% endif %}
     </article>
     <article class="card adm-rank">
-      <h3>Insumos más usados</h3>
-      {% if stats.insumos_mas_usados %}
-      <ol>{% for fila in stats.insumos_mas_usados %}<li><span class="adm-rank-name">{{ fila.nombre }}</span><span class="adm-bar" aria-hidden="true"><i style="width: {{ fila.porcentaje }}%"></i></span><span class="adm-rank-n">{{ fila.cantidad }} <small>({{ fila.porcentaje }}%)</small></span></li>{% endfor %}</ol>
-      {% if stats.calculos_sin_insumo %}<p class="muted adm-note">{{ stats.calculos_sin_insumo }} cálculo{{ stats.calculos_sin_insumo|pluralize }} no usa{{ stats.calculos_sin_insumo|pluralize:"n" }} un insumo del catálogo y no se cuenta{{ stats.calculos_sin_insumo|pluralize:"n" }} aquí.</p>{% endif %}
-      {% else %}<p class="muted">Todavía no hay cálculos con un insumo del catálogo.</p>{% endif %}
+        <h3>Insumos más usados</h3>
+        {% if stats.insumos_mas_usados %}
+            <ol>{% for fila in stats.insumos_mas_usados %}<li><span class="adm-rank-name">{{ fila.nombre }}</span><span class="adm-bar" aria-hidden="true"><i style="width: {{ fila.porcentaje }}%"></i></span><span class="adm-rank-n">{{ fila.cantidad }} <small>({{ fila.porcentaje }}%)</small></span></li>{% endfor %}</ol>
+            {% if stats.calculos_sin_insumo %}<p class="muted adm-note">{{ stats.calculos_sin_insumo }} cálculo{{ stats.calculos_sin_insumo|pluralize }} no usa{{ stats.calculos_sin_insumo|pluralize:"n" }} un insumo del catálogo y no se cuenta{{ stats.calculos_sin_insumo|pluralize:"n" }} aquí.</p>{% endif %}
+{% else %}<p class="muted">Todavía no hay cálculos con un insumo del catálogo.</p>{% endif %}
     </article>
-  </div>
-  {% if stats.calculos_por_operacion %}<p class="adm-ops"><strong>Cálculos por tipo:</strong> {% for fila in stats.calculos_por_operacion %}{{ fila.nombre }} {{ fila.cantidad }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
-  <p class="muted adm-note">Aquí se cuentan los <strong>cálculos</strong> que el agricultor guarda en un potrero. Las consultas (abrir una ficha, mirar el calendario o el catálogo) no se registran en el sistema, así que no se muestran como cifras.</p>
-</section>
-
-<section class="card adm-section"><h2>Cultivos base</h2><p>Carga la lista de cultivos de la zona central (cereales, hortalizas, frutales, forrajes y más) para que los agricultores puedan asignarlos a sus potreros. Son solo nombres: los rendimientos, densidades y dosis se registran aparte con su fuente. Es seguro repetirlo: solo agrega los que faltan.</p><form method="post" action="{% url 'cultivos_base' %}">{% csrf_token %}<button class="button" type="submit">Cargar cultivos base ({{ base_crops_total }})</button></form></section>
-<section class="card adm-section"><h2>Catálogos</h2><p>Los cambios se guardan mediante Django Admin y requieren permisos sobre cada modelo.</p><div class="adm-links"><a href="{% url 'admin:core_cultivo_changelist' %}">Cultivos</a><a href="{% url 'admin:core_insumo_changelist' %}">Insumos</a><a href="{% url 'admin:core_zona_changelist' %}">Zonas</a></div><p class="muted">Administradores con acceso: {{ stats.administradores }}. No hay registro público de administradores; el acceso se asigna desde el servidor.</p></section>
+    </div>
+    {% if stats.calculos_por_operacion %}<p class="adm-ops"><strong>Cálculos por tipo:</strong> {% for fila in stats.calculos_por_operacion %}{{ fila.nombre }} {{ fila.cantidad }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    <p class="muted adm-note">Aquí se cuentan los <strong>cálculos</strong> que el agricultor guarda en un potrero. Las consultas (abrir una ficha, mirar el calendario o el catálogo) no se registran en el sistema, así que no se muestran como cifras.</p>
+    </section>
+    <section class="card adm-section"><h2>Cultivos base</h2><p>Carga la lista de cultivos de la zona central (cereales, hortalizas, frutales, forrajes y más) para que los agricultores puedan asignarlos a sus potreros. Son solo nombres: los rendimientos, densidades y dosis se registran aparte con su fuente. Es seguro repetirlo: solo agrega los que faltan.</p><form method="post" action="{% url 'cultivos_base' %}">{% csrf_token %}<button class="button" type="submit">Cargar cultivos base ({{ base_crops_total }})</button></form></section>
+    <section class="card adm-section"><h2>Catálogos</h2><p>Los cambios se guardan mediante Django Admin y requieren permisos sobre cada modelo.</p><div class="adm-links"><a href="{% url 'admin:core_cultivo_changelist' %}">Cultivos</a><a href="{% url 'admin:core_insumo_changelist' %}">Insumos</a><a href="{% url 'admin:core_zona_changelist' %}">Zonas</a></div><p class="muted">Administradores con acceso: {{ stats.administradores }}. No hay registro público de administradores; el acceso se asigna desde el servidor.</p></section>
 {% endblock %}

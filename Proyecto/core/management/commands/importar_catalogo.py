@@ -18,6 +18,7 @@ Reglas:
 - Los registros existentes (mismo nombre) no se modifican salvo con ``--actualizar``.
 - Nunca se generan valores por defecto para dosis, densidades ni ventanas.
 """
+
 import csv
 import json
 from datetime import date
@@ -39,55 +40,147 @@ TEMPLATE = {
         "fecha de consulta. Elimina esta clave antes de importar si lo prefieres."
     ),
     "zonas": [{"nombre": "", "descripcion": ""}],
-    "cultivos": [{
-        "nombre": "", "descripcion": "",
-        "densidad_siembra": None, "unidad_siembra": "kg",
-        "densidad_fuente": "", "densidad_url": "", "densidad_verificada": None,
-        "rendimiento_ton_ha": None, "rendimiento_fuente": "", "rendimiento_url": "", "rendimiento_verificado": None,
-    }],
-    "tipos_insumo": [{"nombre": "Semilla"}, {"nombre": "Fertilizante"}, {"nombre": "Herbicida"},
-                     {"nombre": "Fungicida"}, {"nombre": "Insecticida"}],
-    "problemas": [{
-        "nombre": "", "tipo": "pest | disease | weed | nutrition | other",
-        "descripcion": "", "sintomas": "", "fuente_nombre": "", "fuente_url": "", "cultivos": [""],
-    }],
-    "referencias": [{
-        "cultivo": "", "zona": "", "variedad": "", "anio_referencia": None,
-        "nombre_cientifico": "", "familia_botanica": "", "tipo_cultivo": "",
-        "siembra_inicio_mes": None, "siembra_inicio_dia": None, "siembra_fin_mes": None, "siembra_fin_dia": None,
-        "cosecha_inicio_mes": None, "cosecha_inicio_dia": None, "cosecha_fin_mes": None, "cosecha_fin_dia": None,
-        "duracion_ciclo_dias": None, "rendimiento_ton_ha": None,
-        "condicion_siembra": "", "requerimientos": "", "profundidad_siembra": "",
-        "etapas_fenologicas": "", "condiciones_crecimiento": "", "manejo_general": "",
-        "indicadores_madurez": "", "consideraciones_cosecha": "",
-        "plagas": "", "enfermedades": "", "malezas": "", "manejo_integrado": "",
-        "institucion_fuente": "", "documento_fuente": "", "url_fuente": "", "fecha_consulta_fuente": None,
-        "estado": "draft",
-    }],
-    "insumos": [{
-        "nombre": "", "tipo": "", "cultivo": "", "zona": "", "problemas": [],
-        "descripcion": "", "fabricante": "", "estado_verificacion": "unverified",
-        "fuente_nombre": "", "fuente_url": "", "fecha_verificacion": None,
-        "dosis_hectarea": None, "unidad_dosis": "", "dosis_maxima_hectarea": None, "unidad_dosis_maxima": "",
-        "dosis_verificada": False, "dosis_fuente": "", "vigente": True, "vigencia_desde": None, "vigencia_hasta": None,
-        "numero_autorizacion_sag": "", "etiqueta_url": "", "hoja_seguridad_url": "",
-        "ingrediente_activo": "", "concentracion": "", "formulacion": "",
-        "cultivos_autorizados": [], "objetivos_control": [], "modo_aplicacion": "", "restricciones": "",
-        "periodo_carencia": "", "tiempo_reingreso": "", "composicion_nutricional": "",
-        "nitrogeno_pct": None, "fosforo_p2o5_pct": None, "potasio_k2o_pct": None,
-        "presentacion_cantidad": None, "presentacion_unidad": "",
-        "variedad_semilla": "", "tipo_semilla": "", "plantas_objetivo_m2": None,
-        "peso_mil_semillas_g": None, "germinacion_pct": None, "pureza_pct": None,
-    }],
-    "usos": [{
-        "cultivo": "", "problema": "", "insumo": "", "tipo": "",
-        "fuente_nombre": "", "fuente_url": "", "fecha_verificacion": None, "activo": True,
-    }],
+    "cultivos": [
+        {
+            "nombre": "",
+            "descripcion": "",
+            "densidad_siembra": None,
+            "unidad_siembra": "kg",
+            "densidad_fuente": "",
+            "densidad_url": "",
+            "densidad_verificada": None,
+            "rendimiento_ton_ha": None,
+            "rendimiento_fuente": "",
+            "rendimiento_url": "",
+            "rendimiento_verificado": None,
+        }
+    ],
+    "tipos_insumo": [
+        {"nombre": "Semilla"},
+        {"nombre": "Fertilizante"},
+        {"nombre": "Herbicida"},
+        {"nombre": "Fungicida"},
+        {"nombre": "Insecticida"},
+    ],
+    "problemas": [
+        {
+            "nombre": "",
+            "tipo": "pest | disease | weed | nutrition | other",
+            "descripcion": "",
+            "sintomas": "",
+            "fuente_nombre": "",
+            "fuente_url": "",
+            "cultivos": [""],
+        }
+    ],
+    "referencias": [
+        {
+            "cultivo": "",
+            "zona": "",
+            "variedad": "",
+            "anio_referencia": None,
+            "nombre_cientifico": "",
+            "familia_botanica": "",
+            "tipo_cultivo": "",
+            "siembra_inicio_mes": None,
+            "siembra_inicio_dia": None,
+            "siembra_fin_mes": None,
+            "siembra_fin_dia": None,
+            "cosecha_inicio_mes": None,
+            "cosecha_inicio_dia": None,
+            "cosecha_fin_mes": None,
+            "cosecha_fin_dia": None,
+            "duracion_ciclo_dias": None,
+            "rendimiento_ton_ha": None,
+            "condicion_siembra": "",
+            "requerimientos": "",
+            "profundidad_siembra": "",
+            "etapas_fenologicas": "",
+            "condiciones_crecimiento": "",
+            "manejo_general": "",
+            "indicadores_madurez": "",
+            "consideraciones_cosecha": "",
+            "plagas": "",
+            "enfermedades": "",
+            "malezas": "",
+            "manejo_integrado": "",
+            "institucion_fuente": "",
+            "documento_fuente": "",
+            "url_fuente": "",
+            "fecha_consulta_fuente": None,
+            "estado": "draft",
+        }
+    ],
+    "insumos": [
+        {
+            "nombre": "",
+            "tipo": "",
+            "cultivo": "",
+            "zona": "",
+            "problemas": [],
+            "descripcion": "",
+            "fabricante": "",
+            "estado_verificacion": "unverified",
+            "fuente_nombre": "",
+            "fuente_url": "",
+            "fecha_verificacion": None,
+            "dosis_hectarea": None,
+            "unidad_dosis": "",
+            "dosis_maxima_hectarea": None,
+            "unidad_dosis_maxima": "",
+            "dosis_verificada": False,
+            "dosis_fuente": "",
+            "vigente": True,
+            "vigencia_desde": None,
+            "vigencia_hasta": None,
+            "numero_autorizacion_sag": "",
+            "etiqueta_url": "",
+            "hoja_seguridad_url": "",
+            "ingrediente_activo": "",
+            "concentracion": "",
+            "formulacion": "",
+            "cultivos_autorizados": [],
+            "objetivos_control": [],
+            "modo_aplicacion": "",
+            "restricciones": "",
+            "periodo_carencia": "",
+            "tiempo_reingreso": "",
+            "composicion_nutricional": "",
+            "nitrogeno_pct": None,
+            "fosforo_p2o5_pct": None,
+            "potasio_k2o_pct": None,
+            "presentacion_cantidad": None,
+            "presentacion_unidad": "",
+            "variedad_semilla": "",
+            "tipo_semilla": "",
+            "plantas_objetivo_m2": None,
+            "peso_mil_semillas_g": None,
+            "germinacion_pct": None,
+            "pureza_pct": None,
+        }
+    ],
+    "usos": [
+        {
+            "cultivo": "",
+            "problema": "",
+            "insumo": "",
+            "tipo": "",
+            "fuente_nombre": "",
+            "fuente_url": "",
+            "fecha_verificacion": None,
+            "activo": True,
+        }
+    ],
 }
 
 CSV_SECTIONS = {
-    'zonas': 'zonas', 'cultivos': 'cultivos', 'problemas': 'problemas', 'insumos': 'insumos',
-    'usos': 'usos', 'calendario': 'referencias', 'rendimientos': 'referencias',
+    'zonas': 'zonas',
+    'cultivos': 'cultivos',
+    'problemas': 'problemas',
+    'insumos': 'insumos',
+    'usos': 'usos',
+    'calendario': 'referencias',
+    'rendimientos': 'referencias',
 }
 BOOL_FIELDS = {'activo', 'vigente', 'dosis_verificada'}
 LIST_FIELDS = {'problemas', 'cultivos', 'cultivos_autorizados', 'objetivos_control'}
@@ -160,13 +253,26 @@ def load_csv_sources(paths):
 
 
 DATE_FIELDS = {
-    'densidad_verificada', 'rendimiento_verificado', 'fecha_consulta_fuente', 'fecha_verificacion',
-    'vigencia_desde', 'vigencia_hasta',
+    'densidad_verificada',
+    'rendimiento_verificado',
+    'fecha_consulta_fuente',
+    'fecha_verificacion',
+    'vigencia_desde',
+    'vigencia_hasta',
 }
 DECIMAL_FIELDS = {
-    'densidad_siembra', 'rendimiento_ton_ha', 'dosis_hectarea', 'dosis_maxima_hectarea', 'nitrogeno_pct',
-    'fosforo_p2o5_pct', 'potasio_k2o_pct', 'presentacion_cantidad', 'plantas_objetivo_m2',
-    'peso_mil_semillas_g', 'germinacion_pct', 'pureza_pct',
+    'densidad_siembra',
+    'rendimiento_ton_ha',
+    'dosis_hectarea',
+    'dosis_maxima_hectarea',
+    'nitrogeno_pct',
+    'fosforo_p2o5_pct',
+    'potasio_k2o_pct',
+    'presentacion_cantidad',
+    'plantas_objetivo_m2',
+    'peso_mil_semillas_g',
+    'germinacion_pct',
+    'pureza_pct',
 }
 
 
@@ -205,15 +311,23 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('archivo', nargs='?')
         parser.add_argument('--aplicar', action='store_true', help='Guarda los cambios. Sin esta opción solo valida.')
-        parser.add_argument('--actualizar', action='store_true', help='Permite modificar registros existentes con el mismo nombre.')
-        parser.add_argument('--categorias', action='store_true', help='Carga las categorías base de insumo (fertilizante, herbicida, fungicida, insecticida, acaricida, otros, semilla).')
+        parser.add_argument(
+            '--actualizar', action='store_true', help='Permite modificar registros existentes con el mismo nombre.'
+        )
+        parser.add_argument(
+            '--categorias',
+            action='store_true',
+            help='Carga las categorías base de insumo (fertilizante, herbicida, fungicida, insecticida, acaricida, otros, semilla).',
+        )
         parser.add_argument('--plantilla', metavar='RUTA', help='Escribe una plantilla JSON vacía y termina.')
 
     def handle(self, *args, **options):
         if options['plantilla']:
             with open(options['plantilla'], 'w', encoding='utf-8') as handle:
                 json.dump(TEMPLATE, handle, ensure_ascii=False, indent=2)
-            self.stdout.write(self.style.SUCCESS(f'Plantilla creada en {options["plantilla"]}. No contiene datos agronómicos.'))
+            self.stdout.write(
+                self.style.SUCCESS(f'Plantilla creada en {options["plantilla"]}. No contiene datos agronómicos.')
+            )
             return
         if options['categorias']:
             created = ensure_insumo_categories()
@@ -221,7 +335,9 @@ class Command(BaseCommand):
             if not options['archivo']:
                 return
         if not options['archivo']:
-            raise CommandError('Indica un archivo JSON, un CSV o una carpeta con CSV, o usa --plantilla / --categorias.')
+            raise CommandError(
+                'Indica un archivo JSON, un CSV o una carpeta con CSV, o usa --plantilla / --categorias.'
+            )
         source = Path(options['archivo'])
         if source.is_dir():
             files = sorted(path for path in source.glob('*.csv') if path.stem.casefold() in CSV_SECTIONS)
@@ -322,7 +438,9 @@ class Command(BaseCommand):
             tipo = self._get(TipoInsumo, record.get('tipo'), 'El tipo de insumo')
             if tipo is None:
                 raise CommandError(f'El insumo «{record["nombre"]}» requiere un tipo.')
-            problems = [self._get(ProblemaAgricola, name, 'El problema') for name in record.get('problemas', []) if name]
+            problems = [
+                self._get(ProblemaAgricola, name, 'El problema') for name in record.get('problemas', []) if name
+            ]
             self._save('Insumos', Insumo, {'nombre': record['nombre'], 'tipo': tipo}, values, {'problemas': problems})
         for record in data.get('usos', []):
             if not (record.get('cultivo') and record.get('problema') and record.get('insumo')):
@@ -335,8 +453,16 @@ class Command(BaseCommand):
             if products.count() != 1:
                 raise CommandError(
                     f'El insumo «{record["insumo"]}» '
-                    + ('no existe en el catálogo ni en el archivo.' if not products.exists() else 'está repetido: indica también su tipo.')
+                    + (
+                        'no existe en el catálogo ni en el archivo.'
+                        if not products.exists()
+                        else 'está repetido: indica también su tipo.'
+                    )
                 )
             values = _clean_values(UsoInsumoCultivo, record, {'cultivo', 'problema', 'insumo', 'tipo'})
-            self._save('Usos cultivo → problema → insumo', UsoInsumoCultivo,
-                       {'cultivo': crop, 'problema': problem, 'insumo': products.get()}, values)
+            self._save(
+                'Usos cultivo → problema → insumo',
+                UsoInsumoCultivo,
+                {'cultivo': crop, 'problema': problem, 'insumo': products.get()},
+                values,
+            )

@@ -6,6 +6,7 @@ Importante: el sistema guarda los CÁLCULOS que el agricultor ejecuta con un pot
 semillas, nutrición, rendimiento). Las simples CONSULTAS (abrir una ficha, mirar el calendario o el
 catálogo) no se guardan en ninguna parte, por eso aquí nunca se presentan como si fueran consultas.
 """
+
 from collections import Counter
 
 from django.contrib.auth import get_user_model
@@ -21,7 +22,9 @@ def _ranking(contador, limite):
     total = sum(contador.values())
     filas = []
     for nombre, cantidad in contador.most_common(limite):
-        filas.append({'nombre': nombre, 'cantidad': cantidad, 'porcentaje': round(cantidad * 100 / total) if total else 0})
+        filas.append(
+            {'nombre': nombre, 'cantidad': cantidad, 'porcentaje': round(cantidad * 100 / total) if total else 0}
+        )
     return filas
 
 

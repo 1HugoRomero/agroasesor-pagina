@@ -20,4 +20,5 @@ def create_app(test_config=None):
     def catalogo_demo():
         """Vista de demostración independiente, sin modificar Django."""
         return render_template("catalogo.html")
+
     return app

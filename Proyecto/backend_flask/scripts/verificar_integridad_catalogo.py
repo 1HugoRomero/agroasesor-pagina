@@ -1,4 +1,5 @@
 """Verifica integridad local del YAML. NO es un sello oficial del SAG/INIA/ODEPA."""
+
 import hashlib
 from pathlib import Path
 

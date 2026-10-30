@@ -1,4 +1,5 @@
 """Predios del usuario autenticado (lectura). Crear/editar/borrar sigue en Django."""
+
 from flask import Blueprint, g, jsonify, request
 
 from app.api.v1.responses import pendiente

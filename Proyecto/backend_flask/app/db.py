@@ -4,6 +4,7 @@ La API nunca escribe en la base: Django es hoy el único escritor. La conexión 
 ``PRAGMA query_only`` (doble protección); en Docker el volumen además se monta como solo lectura.
 No hay ``create_all`` ni migraciones aquí.
 """
+
 import sqlite3
 from pathlib import Path
 

@@ -8,8 +8,7 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
@@ -49,9 +48,32 @@ class Migration(migrations.Migration):
                 ('dosis_hectarea', models.DecimalField(blank=True, decimal_places=3, max_digits=10, null=True)),
                 ('unidad_dosis', models.CharField(blank=True, max_length=50)),
                 ('vigente', models.BooleanField(default=True)),
-                ('cultivo', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='insumos', to='core.cultivo')),
-                ('tipo', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='insumos', to='core.tipoinsumo')),
-                ('zona', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='insumos', to='core.zona')),
+                (
+                    'cultivo',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='insumos',
+                        to='core.cultivo',
+                    ),
+                ),
+                (
+                    'tipo',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='insumos', to='core.tipoinsumo'
+                    ),
+                ),
+                (
+                    'zona',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='insumos',
+                        to='core.zona',
+                    ),
+                ),
             ],
         ),
     ]

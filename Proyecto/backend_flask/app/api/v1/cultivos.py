@@ -1,4 +1,5 @@
 """Catálogo de cultivos (lectura). Los datos sin fuente verificada se marcan como «sin_verificar»."""
+
 from flask import Blueprint, jsonify
 
 from app.security.gateway import requiere_usuario

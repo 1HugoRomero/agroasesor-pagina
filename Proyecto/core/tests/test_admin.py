@@ -1,4 +1,5 @@
 """Pruebas de RF-04: administradores solo desde cuentas existentes, sin registro público de administradores."""
+
 import io
 import tempfile
 from pathlib import Path
@@ -79,12 +80,22 @@ class AdministradoresCommandTests(TestCase):
 
 class RegistroPublicoNoCreaAdministradoresTests(TestCase):
     def test_registro_publico_crea_solo_usuario_normal(self):
-        self.client.post('/login/', {
-            'mode': 'register', 'nombre_completo': 'Pedro Pérez', 'email': 'pedro@example.com',
-            'telefono': '+56 9 1234 5678', 'comuna': 'Melipilla', 'rut': '',
-            'password1': 'Clave-muy-segura-2026', 'password2': 'Clave-muy-segura-2026', 'acepta_politicas': 'on',
-            'is_staff': 'on', 'is_superuser': 'on',
-        })
+        self.client.post(
+            '/login/',
+            {
+                'mode': 'register',
+                'nombre_completo': 'Pedro Pérez',
+                'email': 'pedro@example.com',
+                'telefono': '+56 9 1234 5678',
+                'comuna': 'Melipilla',
+                'rut': '',
+                'password1': 'Clave-muy-segura-2026',
+                'password2': 'Clave-muy-segura-2026',
+                'acepta_politicas': 'on',
+                'is_staff': 'on',
+                'is_superuser': 'on',
+            },
+        )
         usuario = User.objects.get(email='pedro@example.com')
         self.assertFalse(usuario.is_staff)
         self.assertFalse(usuario.is_superuser)
@@ -95,13 +106,16 @@ class RespaldoVerificableTests(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             origen = Path(tmp) / 'origen.sqlite3'
             import sqlite3
+
             con = sqlite3.connect(origen)
             con.execute('CREATE TABLE auth_user (id INTEGER PRIMARY KEY)')
             con.execute('INSERT INTO auth_user (id) VALUES (1)')
             con.commit()
             con.close()
             carpeta = Path(tmp) / 'respaldos'
-            with override_settings(DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': str(origen)}}):
+            with override_settings(
+                DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': str(origen)}}
+            ):
                 destino = dbutils.respaldar(directorio=carpeta)
             self.assertTrue(destino.exists())
             suma = Path(f'{destino}.sha256')

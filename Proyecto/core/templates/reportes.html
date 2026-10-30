@@ -1,135 +1,207 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}{{ report_title }} · Reportes · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/reportes.css' %}?v=3">{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/reportes.css' %}?v=3">
+{% endblock %}
 {% block content %}
-<div class="page-hero no-print">
-    <div>
-        <span class="eyebrow">Generar reporte</span>
-        <h1 class="page-title">Reportes del campo</h1>
-        <p class="page-sub">Informes listos para imprimir, guardar como PDF o exportar a Excel (CSV), construidos con los registros guardados en tu cuenta.</p>
-    </div>
-    <div class="toolbar">
-        <a class="button secondary" href="?{{ csv_query }}">Descargar CSV</a>
-        <button class="button" type="button" onclick="window.print()">Imprimir / guardar PDF</button>
-    </div>
-</div>
-
-<nav class="report-types no-print" aria-label="Tipo de reporte">
-    {% for key, label, help in report_types %}
-    <a class="report-type{% if report_type == key %} is-active{% endif %}" href="?tipo={{ key }}{% if report_filters.predio %}&amp;predio={{ report_filters.predio }}{% endif %}{% if report_filters.potrero %}&amp;potrero={{ report_filters.potrero }}{% endif %}">
-        <i data-lucide="{% if key == 'resumen' %}layout-dashboard{% elif key == 'cuaderno' %}notebook-pen{% elif key == 'cultivos' %}sprout{% else %}calculator{% endif %}" aria-hidden="true"></i>
-        <span><strong>{{ label }}</strong><small>{{ help }}</small></span>
-    </a>
-    {% endfor %}
-</nav>
-
-<form class="card report-filters no-print" method="get">
-    <input type="hidden" name="tipo" value="{{ report_type }}">
-    <label class="field"><span>Predio</span><select name="predio"><option value="">Todos</option>{% for farm in report_farms %}<option value="{{ farm.pk }}"{% if report_filters.predio == farm.pk|stringformat:'s' %} selected{% endif %}>{{ farm.nombre }}</option>{% endfor %}</select></label>
-    <label class="field"><span>Potrero</span><select name="potrero"><option value="">Todos</option>{% for plot in report_plots %}<option value="{{ plot.pk }}"{% if report_filters.potrero == plot.pk|stringformat:'s' %} selected{% endif %}>{{ plot.predio.nombre }} · {{ plot.nombre }}</option>{% endfor %}</select></label>
-    {% if report_type != 'resumen' %}
-    <label class="field"><span>Desde</span><input type="date" name="desde" value="{{ report_filters.desde }}"></label>
-    <label class="field"><span>Hasta</span><input type="date" name="hasta" value="{{ report_filters.hasta }}"></label>
-    {% endif %}
-    {% if report_type == 'cuaderno' %}<label class="check-line"><input type="checkbox" name="incluir_pendientes" value="1"{% if report_filters.incluir_pendientes %} checked{% endif %}> Incluir labores pendientes (plan)</label>{% endif %}
-    <div class="toolbar"><button class="button" type="submit">Actualizar reporte</button><a class="button secondary" href="?tipo={{ report_type }}">Limpiar</a></div>
-</form>
-
-<article class="report-doc card" aria-labelledby="report-title">
-    <header class="report-head">
-        <div class="report-brand"><span class="report-logo" aria-hidden="true">A</span><div><strong>AgroAsesor</strong><small>Gestión agrícola por potrero</small></div></div>
-        <div class="report-meta">
-            <h2 id="report-title">{{ report_title }}</h2>
-            <p>{{ owner_name }} · generado el {{ generated_at|date:"d/m/Y H:i" }}</p>
-            <p>{% if report_filters.potrero %}Potrero filtrado{% elif report_filters.predio %}Predio filtrado{% else %}Todos los predios{% endif %}{% if report_filters.desde or report_filters.hasta %} · {{ report_filters.desde|default:"inicio" }} a {{ report_filters.hasta|default:"hoy" }}{% endif %}</p>
+    <div class="page-hero no-print">
+        <div>
+            <span class="eyebrow">Generar reporte</span>
+            <h1 class="page-title">Reportes del campo</h1>
+            <p class="page-sub">Informes listos para imprimir, guardar como PDF o exportar a Excel (CSV), construidos con los registros guardados en tu cuenta.</p>
         </div>
-    </header>
-
-    {% if report_type == 'resumen' %}
-    <section class="report-kpis">
-        <div><span>Predios</span><strong>{{ summary_kpis.predios }}</strong></div>
-        <div><span>Superficie total</span><strong>{{ summary_kpis.superficie|floatformat:"-2" }} ha</strong></div>
-        <div><span>Potreros</span><strong>{{ summary_kpis.potreros }}</strong><small>{{ summary_kpis.con_cultivo }} con cultivo</small></div>
-        <div><span>Labores pendientes</span><strong>{{ summary_kpis.pendientes }}</strong><small>{{ summary_kpis.vencidas }} vencidas</small></div>
-        <div><span>Labores completadas</span><strong>{{ summary_kpis.completadas }}</strong></div>
-    </section>
-    {% for row in farm_rows %}
-    <section class="report-section">
-        <div class="report-section-head">
-            <h3>{{ row.farm.nombre }}</h3>
-            <p>{{ row.farm.ubicacion|default:"Ubicación no registrada" }}{% if row.farm.zona %} · {{ row.farm.zona.nombre }}{% endif %} · {{ row.farm.superficie_ha|floatformat:"-2" }} ha · {{ row.used|floatformat:"-2" }} ha en potreros ({{ row.use_pct|floatformat:0 }} %)</p>
-            <div class="usage-bar" aria-hidden="true"><span style="width: {% if row.use_pct > 100 %}100{% else %}{{ row.use_pct|floatformat:0 }}{% endif %}%"></span></div>
+        <div class="toolbar">
+            <a class="button secondary" href="?{{ csv_query }}">Descargar CSV</a>
+            <button class="button" type="button" onclick="window.print()">Imprimir / guardar PDF</button>
         </div>
-        {% if row.plots %}
-        <div class="table-wrap"><table class="report-table">
-            <thead><tr><th>Potrero</th><th class="num">Superficie (ha)</th><th>Cultivo</th><th>Variedad</th><th>Temporada</th><th>Siembra</th><th>Cosecha prevista</th><th>Estado</th></tr></thead>
-            <tbody>{% for item in row.plots %}<tr><td>{{ item.plot.nombre }}</td><td class="num">{{ item.plot.superficie_ha|floatformat:"-2" }}</td><td>{{ item.plot.cultivo.nombre|default:"Sin cultivo" }}</td><td>{{ item.plot.variedad|default:"—" }}</td><td>{{ item.season|default:"—" }}</td><td>{{ item.plot.fecha_siembra|date:"d/m/Y"|default:"—" }}</td><td>{{ item.plot.fecha_cosecha|date:"d/m/Y"|default:"—" }}</td><td>{{ item.status }}</td></tr>{% endfor %}</tbody>
-        </table></div>
-        {% else %}<p class="muted">Este predio no tiene potreros registrados.</p>{% endif %}
-    </section>
-    {% empty %}
-    <p class="report-empty">No tienes predios registrados. <a href="{% url 'predio_create' %}">Registra el primero</a>.</p>
-    {% endfor %}
-    <section class="report-section">
-        <h3>Últimos cálculos</h3>
-        {% if recent_calculations %}
-        <ul class="report-list">{% for item in recent_calculations %}<li><strong>{{ item.operation }} · {{ item.value }}</strong> — Cálculo guardado el {{ item.date|date:"d/m/Y" }} para {{ item.plot }} ({{ item.origin }})</li>{% endfor %}</ul>
+    </div>
+    <nav class="report-types no-print" aria-label="Tipo de reporte">
+        {% for key, label, help in report_types %}
+            <a class="report-type{% if report_type == key %} is-active{% endif %}"
+               href="?tipo={{ key }}{% if report_filters.predio %}&amp;predio={{ report_filters.predio }}{% endif %}{% if report_filters.potrero %}&amp;potrero={{ report_filters.potrero }}{% endif %}">
+                <i data-lucide="{% if key == 'resumen' %}layout-dashboard{% elif key == 'cuaderno' %}notebook-pen{% elif key == 'cultivos' %}sprout{% else %}calculator{% endif %}"
+                   aria-hidden="true"></i>
+                <span><strong>{{ label }}</strong><small>{{ help }}</small></span>
+            </a>
+        {% endfor %}
+    </nav>
+    <form class="card report-filters no-print" method="get">
+        <input type="hidden" name="tipo" value="{{ report_type }}">
+        <label class="field"><span>Predio</span><select name="predio"><option value="">Todos</option>{% for farm in report_farms %}<option value="{{ farm.pk }}"
+        {% if report_filters.predio == farm.pk|stringformat:'s' %} selected{% endif %}>{{ farm.nombre }}</option>{% endfor %}</select></label>
+        <label class="field"><span>Potrero</span><select name="potrero"><option value="">Todos</option>{% for plot in report_plots %}<option value="{{ plot.pk }}"
+        {% if report_filters.potrero == plot.pk|stringformat:'s' %} selected{% endif %}>{{ plot.predio.nombre }} · {{ plot.nombre }}</option>{% endfor %}</select></label>
+        {% if report_type != "resumen" %}
+            <label class="field">
+                <span>Desde</span><input type="date" name="desde" value="{{ report_filters.desde }}">
+            </label>
+            <label class="field">
+                <span>Hasta</span><input type="date" name="hasta" value="{{ report_filters.hasta }}">
+            </label>
+        {% endif %}
+        {% if report_type == "cuaderno" %}<label class="check-line"><input type="checkbox"
+       name="incluir_pendientes"
+       value="1"
+       {% if report_filters.incluir_pendientes %} checked{% endif %}> Incluir labores pendientes (plan)</label>{% endif %}
+        <div class="toolbar">
+            <button class="button"
+                    type="submit">Actualizar reporte</button><a class="button secondary"
+   href="?tipo={{ report_type }}">Limpiar</a>
+        </div>
+    </form>
+    <article class="report-doc card" aria-labelledby="report-title">
+        <header class="report-head">
+            <div class="report-brand">
+                <span class="report-logo" aria-hidden="true">A</span>
+                <div><strong>AgroAsesor</strong><small>Gestión agrícola por potrero</small></div>
+            </div>
+            <div class="report-meta">
+                <h2 id="report-title">{{ report_title }}</h2>
+                <p>{{ owner_name }} · generado el {{ generated_at|date:"d/m/Y H:i" }}</p>
+                <p>{% if report_filters.potrero %}Potrero filtrado{% elif report_filters.predio %}Predio filtrado{% else %}Todos los predios{% endif %}{% if report_filters.desde or report_filters.hasta %} · {{ report_filters.desde|default:"inicio" }} a {{ report_filters.hasta|default:"hoy" }}{% endif %}</p>
+            </div>
+        </header>
+        {% if report_type == "resumen" %}
+            <section class="report-kpis">
+                <div><span>Predios</span><strong>{{ summary_kpis.predios }}</strong></div>
+                <div><span>Superficie total</span><strong>{{ summary_kpis.superficie|floatformat:"-2" }} ha</strong></div>
+                <div><span>Potreros</span><strong>{{ summary_kpis.potreros }}</strong><small>{{ summary_kpis.con_cultivo }} con cultivo</small></div>
+                <div><span>Labores pendientes</span><strong>{{ summary_kpis.pendientes }}</strong><small>{{ summary_kpis.vencidas }} vencidas</small></div>
+                <div><span>Labores completadas</span><strong>{{ summary_kpis.completadas }}</strong></div>
+            </section>
+            {% for row in farm_rows %}
+                <section class="report-section">
+                    <div class="report-section-head">
+                        <h3>{{ row.farm.nombre }}</h3>
+                        <p>{{ row.farm.ubicacion|default:"Ubicación no registrada" }}{% if row.farm.zona %} · {{ row.farm.zona.nombre }}{% endif %} · {{ row.farm.superficie_ha|floatformat:"-2" }} ha · {{ row.used|floatformat:"-2" }} ha en potreros ({{ row.use_pct|floatformat:0 }} %)</p>
+                        <div class="usage-bar" aria-hidden="true">
+                            <span style="width: {% if row.use_pct > 100 %}100{% else %}{{ row.use_pct|floatformat:0 }}{% endif %}%"></span>
+                        </div>
+                    </div>
+                    {% if row.plots %}
+                        <div class="table-wrap">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Potrero</th>
+                                        <th class="num">Superficie (ha)</th>
+                                        <th>Cultivo</th>
+                                        <th>Variedad</th>
+                                        <th>Temporada</th>
+                                        <th>Siembra</th>
+                                        <th>Cosecha prevista</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>{% for item in row.plots %}<tr><td>{{ item.plot.nombre }}</td><td class="num">{{ item.plot.superficie_ha|floatformat:"-2" }}</td><td>{{ item.plot.cultivo.nombre|default:"Sin cultivo" }}</td><td>{{ item.plot.variedad|default:"—" }}</td><td>{{ item.season|default:"—" }}</td><td>{{ item.plot.fecha_siembra|date:"d/m/Y"|default:"—" }}</td><td>{{ item.plot.fecha_cosecha|date:"d/m/Y"|default:"—" }}</td><td>{{ item.status }}</td></tr>{% endfor %}</tbody>
+                            </table>
+                        </div>
+            {% else %}<p class="muted">Este predio no tiene potreros registrados.</p>{% endif %}
+                </section>
+            {% empty %}
+                <p class="report-empty">No tienes predios registrados. <a href="{% url 'predio_create' %}">Registra el primero</a>.</p>
+            {% endfor %}
+            <section class="report-section">
+                <h3>Últimos cálculos</h3>
+                {% if recent_calculations %}
+                    <ul class="report-list">{% for item in recent_calculations %}<li><strong>{{ item.operation }} · {{ item.value }}</strong> — Cálculo guardado el {{ item.date|date:"d/m/Y" }} para {{ item.plot }} ({{ item.origin }})</li>{% endfor %}</ul>
         {% else %}<p class="muted">Aún no hay cálculos guardados. Usa el <a href="{% url 'decisiones' %}">Centro de decisiones</a>.</p>{% endif %}
-    </section>
-
-    {% elif report_type == 'cuaderno' %}
-    <section class="report-kpis">
-        <div><span>Registros</span><strong>{{ field_log|length }}</strong></div>
-        <div><span>Aplicaciones fitosanitarias</span><strong>{{ field_log_phyto }}</strong></div>
-        <div class="{% if field_log_conflicts %}is-alert{% endif %}"><span>Alertas de carencia</span><strong>{{ field_log_conflicts }}</strong><small>cosecha antes del fin de carencia</small></div>
-    </section>
-    {% if field_log %}
-    <div class="table-wrap"><table class="report-table compact">
-        <thead><tr><th>Fecha</th><th>Potrero</th><th>Labor</th><th>Producto</th><th>Objetivo</th><th class="num">Dosis</th><th class="num">Superficie</th><th class="num">Total</th><th>Responsable</th><th>Condiciones</th><th>Fin carencia</th></tr></thead>
-        <tbody>{% for item in field_log %}<tr class="{% if item.conflicto_carencia %}row-alert{% endif %}">
-            <td>{{ item.fecha_realizada|default:item.fecha_programada|date:"d/m/Y" }}{% if item.estado != 'completada' %}<small class="tag">plan</small>{% endif %}</td>
-            <td>{{ item.potrero.nombre }}<small>{{ item.potrero.predio.nombre }}</small></td>
-            <td>{{ item.get_tipo_display }}<small>{{ item.nombre }}</small></td>
-            <td>{{ item.producto_nombre|default:"—" }}</td>
-            <td>{{ item.objetivo|default:"—" }}</td>
-            <td class="num">{% if item.dosis %}{{ item.dosis|floatformat:"-3" }} {{ item.unidad_dosis }}{% else %}—{% endif %}</td>
-            <td class="num">{% if item.superficie_ha %}{{ item.superficie_ha|floatformat:"-2" }} ha{% else %}—{% endif %}</td>
-            <td class="num">{% if item.cantidad_total %}{{ item.cantidad_total|floatformat:"-2" }} {{ item.unidad_total }}{% else %}—{% endif %}</td>
-            <td>{{ item.responsable|default:"—" }}</td>
-            <td>{{ item.condiciones_clima|default:"—" }}</td>
-            <td>{{ item.fecha_fin_carencia|date:"d/m/Y"|default:"—" }}</td>
-        </tr>{% endfor %}</tbody>
-    </table></div>
-    {% else %}
-    <p class="report-empty">No hay labores {% if report_filters.incluir_pendientes %}registradas{% else %}completadas{% endif %} en este período. Completa actividades en <a href="{% url 'actividad_list' %}">Actividades</a> para construir tu cuaderno de campo.</p>
-    {% endif %}
-    <p class="report-note">El cuaderno de campo resume las labores registradas en AgroAsesor. Para auditorías o certificaciones (BPA), verifica los requisitos del organismo correspondiente y conserva etiquetas y facturas.</p>
-
-    {% elif report_type == 'cultivos' %}
-    {% if seasons %}
-    <div class="table-wrap"><table class="report-table">
-        <thead><tr><th>Potrero</th><th>Temporada</th><th>Cultivo</th><th>Variedad</th><th>Siembra</th><th>Cosecha</th><th class="num">Días</th><th>Estado</th></tr></thead>
-        <tbody>{% for season in seasons %}<tr><td>{{ season.potrero.nombre }}<small>{{ season.potrero.predio.nombre }}</small></td><td>{{ season.temporada_agricola|default:"—" }}</td><td>{{ season.cultivo.nombre }}</td><td>{{ season.variedad|default:"—" }}</td><td>{{ season.fecha_siembra|date:"d/m/Y"|default:"—" }}</td><td>{{ season.fecha_cosecha|date:"d/m/Y"|default:"—" }}</td><td class="num">{{ season.duration|default_if_none:"—" }}</td><td>{{ season.get_estado_display }}</td></tr>{% endfor %}</tbody>
-    </table></div>
-    {% else %}
-    <p class="report-empty">No hay temporadas registradas. Asigna cultivos a tus potreros desde <a href="{% url 'predios' %}">Mis predios y potreros</a>.</p>
-    {% endif %}
-
-    {% else %}
-    {% if calculations %}
-    <div class="table-wrap"><table class="report-table">
-        <thead><tr><th>Fecha</th><th>Potrero</th><th>Operación</th><th>Cultivo / producto</th><th class="num">Resultado</th><th>Detalle</th><th>Origen del dato</th></tr></thead>
-        <tbody>{% for item in calculations %}<tr><td>{{ item.date|date:"d/m/Y H:i" }}</td><td>{{ item.plot }}<small>{{ item.farm }}</small></td><td>{{ item.operation }}</td><td>{{ item.crop|default:"—" }}{% if item.product %}<small>{{ item.product }}</small>{% endif %}</td><td class="num"><strong>{{ item.value }}</strong></td><td>{{ item.detail }}</td><td>{{ item.origin }}</td></tr>{% endfor %}</tbody>
-    </table></div>
-    {% else %}
-    <p class="report-empty">Aún no hay cálculos guardados en este período. Usa el <a href="{% url 'decisiones' %}">Centro de decisiones</a>.</p>
-    {% endif %}
-    {% endif %}
-
-    <footer class="report-foot">
-        <p>Información orientativa basada en los registros de la cuenta y en el catálogo administrado. No reemplaza la etiqueta autorizada de cada producto ni la asesoría de un ingeniero agrónomo.</p>
-        <p>AgroAsesor · {{ generated_at|date:"d/m/Y" }}</p>
-    </footer>
-</article>
+            </section>
+        {% elif report_type == "cuaderno" %}
+            <section class="report-kpis">
+                <div><span>Registros</span><strong>{{ field_log|length }}</strong></div>
+                <div><span>Aplicaciones fitosanitarias</span><strong>{{ field_log_phyto }}</strong></div>
+                <div class="{% if field_log_conflicts %}is-alert{% endif %}"><span>Alertas de carencia</span><strong>{{ field_log_conflicts }}</strong><small>cosecha antes del fin de carencia</small></div>
+            </section>
+            {% if field_log %}
+                <div class="table-wrap">
+                    <table class="report-table compact">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Potrero</th>
+                                <th>Labor</th>
+                                <th>Producto</th>
+                                <th>Objetivo</th>
+                                <th class="num">Dosis</th>
+                                <th class="num">Superficie</th>
+                                <th class="num">Total</th>
+                                <th>Responsable</th>
+                                <th>Condiciones</th>
+                                <th>Fin carencia</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in field_log %}
+                                <tr class="{% if item.conflicto_carencia %}row-alert{% endif %}">
+                                    <td>{{ item.fecha_realizada|default:item.fecha_programada|date:"d/m/Y" }}{% if item.estado != "completada" %}<small class="tag">plan</small>{% endif %}</td>
+                                    <td>{{ item.potrero.nombre }}<small>{{ item.potrero.predio.nombre }}</small></td>
+                                    <td>{{ item.get_tipo_display }}<small>{{ item.nombre }}</small></td>
+                                    <td>{{ item.producto_nombre|default:"—" }}</td>
+                                    <td>{{ item.objetivo|default:"—" }}</td>
+                                    <td class="num">{% if item.dosis %}{{ item.dosis|floatformat:"-3" }} {{ item.unidad_dosis }}{% else %}—{% endif %}</td>
+                                    <td class="num">{% if item.superficie_ha %}{{ item.superficie_ha|floatformat:"-2" }} ha{% else %}—{% endif %}</td>
+                                    <td class="num">{% if item.cantidad_total %}{{ item.cantidad_total|floatformat:"-2" }} {{ item.unidad_total }}{% else %}—{% endif %}</td>
+                                    <td>{{ item.responsable|default:"—" }}</td>
+                                    <td>{{ item.condiciones_clima|default:"—" }}</td>
+                                    <td>{{ item.fecha_fin_carencia|date:"d/m/Y"|default:"—" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="report-empty">No hay labores {% if report_filters.incluir_pendientes %}registradas{% else %}completadas{% endif %} en este período. Completa actividades en <a href="{% url 'actividad_list' %}">Actividades</a> para construir tu cuaderno de campo.</p>
+            {% endif %}
+            <p class="report-note">El cuaderno de campo resume las labores registradas en AgroAsesor. Para auditorías o certificaciones (BPA), verifica los requisitos del organismo correspondiente y conserva etiquetas y facturas.</p>
+        {% elif report_type == "cultivos" %}
+            {% if seasons %}
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Potrero</th>
+                                <th>Temporada</th>
+                                <th>Cultivo</th>
+                                <th>Variedad</th>
+                                <th>Siembra</th>
+                                <th>Cosecha</th>
+                                <th class="num">Días</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>{% for season in seasons %}<tr><td>{{ season.potrero.nombre }}<small>{{ season.potrero.predio.nombre }}</small></td><td>{{ season.temporada_agricola|default:"—" }}</td><td>{{ season.cultivo.nombre }}</td><td>{{ season.variedad|default:"—" }}</td><td>{{ season.fecha_siembra|date:"d/m/Y"|default:"—" }}</td><td>{{ season.fecha_cosecha|date:"d/m/Y"|default:"—" }}</td><td class="num">{{ season.duration|default_if_none:"—" }}</td><td>{{ season.get_estado_display }}</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="report-empty">No hay temporadas registradas. Asigna cultivos a tus potreros desde <a href="{% url 'predios' %}">Mis predios y potreros</a>.</p>
+            {% endif %}
+        {% else %}
+            {% if calculations %}
+                <div class="table-wrap">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Potrero</th>
+                                <th>Operación</th>
+                                <th>Cultivo / producto</th>
+                                <th class="num">Resultado</th>
+                                <th>Detalle</th>
+                                <th>Origen del dato</th>
+                            </tr>
+                        </thead>
+                        <tbody>{% for item in calculations %}<tr><td>{{ item.date|date:"d/m/Y H:i" }}</td><td>{{ item.plot }}<small>{{ item.farm }}</small></td><td>{{ item.operation }}</td><td>{{ item.crop|default:"—" }}{% if item.product %}<small>{{ item.product }}</small>{% endif %}</td><td class="num"><strong>{{ item.value }}</strong></td><td>{{ item.detail }}</td><td>{{ item.origin }}</td></tr>{% endfor %}</tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="report-empty">Aún no hay cálculos guardados en este período. Usa el <a href="{% url 'decisiones' %}">Centro de decisiones</a>.</p>
+            {% endif %}
+        {% endif %}
+        <footer class="report-foot">
+            <p>Información orientativa basada en los registros de la cuenta y en el catálogo administrado. No reemplaza la etiqueta autorizada de cada producto ni la asesoría de un ingeniero agrónomo.</p>
+            <p>AgroAsesor · {{ generated_at|date:"d/m/Y" }}</p>
+        </footer>
+    </article>
 {% endblock %}

@@ -23,7 +23,14 @@ class Migration(migrations.Migration):
                 ('rut', models.CharField(max_length=12, unique=True)),
                 ('telefono', models.CharField(max_length=20)),
                 ('comuna', models.CharField(max_length=100)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='agricultor', to=settings.AUTH_USER_MODEL)),
+                (
+                    'user',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='agricultor',
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -32,10 +39,27 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('nombre', models.CharField(max_length=150)),
                 ('ubicacion', models.CharField(max_length=255)),
-                ('superficie_ha', models.DecimalField(decimal_places=4, max_digits=12, validators=[django.core.validators.MinValueValidator(Decimal('0.0001'))])),
+                (
+                    'superficie_ha',
+                    models.DecimalField(
+                        decimal_places=4,
+                        max_digits=12,
+                        validators=[django.core.validators.MinValueValidator(Decimal('0.0001'))],
+                    ),
+                ),
                 ('creado', models.DateTimeField(auto_now_add=True)),
-                ('propietario', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='predios', to=settings.AUTH_USER_MODEL)),
-                ('zona', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='core.zona')),
+                (
+                    'propietario',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='predios', to=settings.AUTH_USER_MODEL
+                    ),
+                ),
+                (
+                    'zona',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='core.zona'
+                    ),
+                ),
             ],
             options={
                 'ordering': ['nombre', 'pk'],
@@ -49,14 +73,55 @@ class Migration(migrations.Migration):
                 ('variedad', models.CharField(blank=True, max_length=150)),
                 ('fecha_siembra', models.DateField(blank=True, null=True)),
                 ('fecha_cosecha', models.DateField(blank=True, null=True)),
-                ('superficie_ha', models.DecimalField(decimal_places=4, max_digits=12, validators=[django.core.validators.MinValueValidator(Decimal('0.0001'))])),
+                (
+                    'superficie_ha',
+                    models.DecimalField(
+                        decimal_places=4,
+                        max_digits=12,
+                        validators=[django.core.validators.MinValueValidator(Decimal('0.0001'))],
+                    ),
+                ),
                 ('perimetro', models.JSONField(blank=True, default=list)),
-                ('latitud', models.FloatField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(-85), django.core.validators.MaxValueValidator(85)])),
-                ('longitud', models.FloatField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(-180), django.core.validators.MaxValueValidator(180)])),
+                (
+                    'latitud',
+                    models.FloatField(
+                        blank=True,
+                        null=True,
+                        validators=[
+                            django.core.validators.MinValueValidator(-85),
+                            django.core.validators.MaxValueValidator(85),
+                        ],
+                    ),
+                ),
+                (
+                    'longitud',
+                    models.FloatField(
+                        blank=True,
+                        null=True,
+                        validators=[
+                            django.core.validators.MinValueValidator(-180),
+                            django.core.validators.MaxValueValidator(180),
+                        ],
+                    ),
+                ),
                 ('creado', models.DateTimeField(auto_now_add=True)),
                 ('actualizado', models.DateTimeField(auto_now=True)),
-                ('cultivo', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='potreros', to='core.cultivo')),
-                ('predio', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='potreros', to='core.predio')),
+                (
+                    'cultivo',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='potreros',
+                        to='core.cultivo',
+                    ),
+                ),
+                (
+                    'predio',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='potreros', to='core.predio'
+                    ),
+                ),
             ],
             options={
                 'ordering': ['nombre', 'pk'],
@@ -64,10 +129,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='predio',
-            constraint=models.CheckConstraint(condition=models.Q(('superficie_ha__gt', 0)), name='predio_superficie_positiva'),
+            constraint=models.CheckConstraint(
+                condition=models.Q(('superficie_ha__gt', 0)), name='predio_superficie_positiva'
+            ),
         ),
         migrations.AddConstraint(
             model_name='potrero',
-            constraint=models.CheckConstraint(condition=models.Q(('superficie_ha__gt', 0)), name='potrero_superficie_positiva'),
+            constraint=models.CheckConstraint(
+                condition=models.Q(('superficie_ha__gt', 0)), name='potrero_superficie_positiva'
+            ),
         ),
     ]

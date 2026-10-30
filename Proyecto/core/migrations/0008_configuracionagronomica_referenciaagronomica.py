@@ -56,15 +56,43 @@ class Migration(migrations.Migration):
                 ('documento_fuente', models.CharField(blank=True, max_length=255)),
                 ('url_fuente', models.URLField(blank=True)),
                 ('fecha_consulta_fuente', models.DateField(blank=True, null=True)),
-                ('estado', models.CharField(choices=[('draft', 'Borrador'), ('verified', 'Verificada con fuente'), ('retired', 'Retirada')], default='draft', max_length=12)),
+                (
+                    'estado',
+                    models.CharField(
+                        choices=[('draft', 'Borrador'), ('verified', 'Verificada con fuente'), ('retired', 'Retirada')],
+                        default='draft',
+                        max_length=12,
+                    ),
+                ),
                 ('creado', models.DateTimeField(auto_now_add=True)),
                 ('actualizado', models.DateTimeField(auto_now=True)),
-                ('cultivo', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='referencias_agronomicas', to='core.cultivo')),
-                ('zona', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='referencias_agronomicas', to='core.zona')),
+                (
+                    'cultivo',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='referencias_agronomicas',
+                        to='core.cultivo',
+                    ),
+                ),
+                (
+                    'zona',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='referencias_agronomicas',
+                        to='core.zona',
+                    ),
+                ),
             ],
             options={
                 'ordering': ['cultivo__nombre', 'zona__nombre', 'variedad', 'pk'],
-                'constraints': [models.UniqueConstraint(models.F('cultivo'), models.F('zona'), django.db.models.functions.text.Lower('variedad'), name='uniq_agro_ref_crop_zone_variety')],
+                'constraints': [
+                    models.UniqueConstraint(
+                        models.F('cultivo'),
+                        models.F('zona'),
+                        django.db.models.functions.text.Lower('variedad'),
+                        name='uniq_agro_ref_crop_zone_variety',
+                    )
+                ],
             },
         ),
     ]

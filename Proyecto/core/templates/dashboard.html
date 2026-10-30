@@ -1,182 +1,206 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}Hoy · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=9"><link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=9">
+    <link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">
+{% endblock %}
 {% block content %}
-<div class="dash">
-    <section class="dash-hero">
-        <div>
-            <span class="dash-eyebrow">RESUMEN DEL CAMPO</span>
-            <h1>Bienvenido a AgroAsesor{% if first_name %}, {{ first_name }}{% endif %}</h1>
-            <p>Revisa el estado de tus predios, potreros y actividades agrícolas.</p>
-        </div>
-        <a class="button dash-hero-btn" href="{% url 'predios' %}">
-            <i data-lucide="map"></i>
-            Abrir el mapa
-        </a>
-    </section>
-
-    <section class="dash-stats" id="stats" aria-label="Indicadores del campo">
-        <article class="card dash-stat predios">
-            <span class="stat-icon"><i data-lucide="map"></i></span>
-            <span><span class="muted">Predios registrados</span><strong class="stat-value">{{ farm_data.stats.predios }}</strong></span>
-        </article>
-        <article class="card dash-stat potreros">
-            <span class="stat-icon"><i data-lucide="land-plot"></i></span>
-            <span><span class="muted">Potreros registrados</span><strong class="stat-value">{{ farm_data.stats.potreros }}</strong></span>
-        </article>
-        <article class="card dash-stat total-area">
-            <span class="stat-icon"><i data-lucide="ruler"></i></span>
-            <span><span class="muted">Superficie de predios</span><strong class="stat-value">{{ farm_data.stats.superficie_predios|floatformat:2 }} <small>ha</small></strong></span>
-        </article>
-        <article class="card dash-stat area">
-            <span class="stat-icon"><i data-lucide="scan-area"></i></span>
-            <span><span class="muted">Superficie asignada a potreros</span><strong class="stat-value">{{ farm_data.stats.superficie|floatformat:2 }} <small>ha</small></strong></span>
-        </article>
-        <article class="card dash-stat crops">
-            <span class="stat-icon"><i data-lucide="sprout"></i></span>
-            <span><span class="muted">Cultivos activos</span><strong class="stat-value">{{ farm_data.stats.cultivos }}</strong></span>
-        </article>
-    </section>
-
-    <div class="dash-desk">
-        <div class="dash-main-column">
-            <section class="card dash-farms">
-                <div class="section-heading">
-                    <div><span class="dash-section-kicker">TU CAMPO</span><h2>Mis predios</h2></div>
-                    <a class="text-link" href="{% url 'predios' %}">Ver todos <i data-lucide="arrow-right"></i></a>
-                </div>
-                {% for farm in dashboard_predios %}
-                <article class="farm-card">
-                    <span class="farm-icon" aria-hidden="true"><i data-lucide="warehouse"></i></span>
-                    <div class="farm-card-info">
-                        <strong>{{ farm.name }}</strong>
-                        <span>{{ farm.area|floatformat:2 }} ha · {{ farm.plotCount }} {% if farm.plotCount == 1 %}potrero{% else %}potreros{% endif %}</span>
-                        <small>Última modificación: {{ farm.updated }}</small>
+    <div class="dash">
+        <section class="dash-hero">
+            <div>
+                <span class="dash-eyebrow">RESUMEN DEL CAMPO</span>
+                <h1>Bienvenido a AgroAsesor{% if first_name %}, {{ first_name }}{% endif %}</h1>
+                <p>Revisa el estado de tus predios, potreros y actividades agrícolas.</p>
+            </div>
+            <a class="button dash-hero-btn" href="{% url 'predios' %}">
+                <i data-lucide="map"></i>
+                Abrir el mapa
+            </a>
+        </section>
+        <section class="dash-stats" id="stats" aria-label="Indicadores del campo">
+            <article class="card dash-stat predios">
+                <span class="stat-icon"><i data-lucide="map"></i></span>
+                <span><span class="muted">Predios registrados</span><strong class="stat-value">{{ farm_data.stats.predios }}</strong></span>
+            </article>
+            <article class="card dash-stat potreros">
+                <span class="stat-icon"><i data-lucide="land-plot"></i></span>
+                <span><span class="muted">Potreros registrados</span><strong class="stat-value">{{ farm_data.stats.potreros }}</strong></span>
+            </article>
+            <article class="card dash-stat total-area">
+                <span class="stat-icon"><i data-lucide="ruler"></i></span>
+                <span><span class="muted">Superficie de predios</span><strong class="stat-value">{{ farm_data.stats.superficie_predios|floatformat:2 }} <small>ha</small></strong></span>
+            </article>
+            <article class="card dash-stat area">
+                <span class="stat-icon"><i data-lucide="scan-area"></i></span>
+                <span><span class="muted">Superficie asignada a potreros</span><strong class="stat-value">{{ farm_data.stats.superficie|floatformat:2 }} <small>ha</small></strong></span>
+            </article>
+            <article class="card dash-stat crops">
+                <span class="stat-icon"><i data-lucide="sprout"></i></span>
+                <span><span class="muted">Cultivos activos</span><strong class="stat-value">{{ farm_data.stats.cultivos }}</strong></span>
+            </article>
+        </section>
+        <div class="dash-desk">
+            <div class="dash-main-column">
+                <section class="card dash-farms">
+                    <div class="section-heading">
+                        <div>
+                            <span class="dash-section-kicker">TU CAMPO</span>
+                            <h2>Mis predios</h2>
+                        </div>
+                        <a class="text-link" href="{% url 'predios' %}">Ver todos <i data-lucide="arrow-right"></i></a>
                     </div>
-                    <a class="button secondary farm-map-link" href="{% url 'predio_detail' farm.id %}" aria-label="Ver {{ farm.name }} en el mapa y consultar su ficha">
-                        <i data-lucide="map-pinned"></i><span>Ver ficha y mapa</span>
-                    </a>
-                </article>
-                {% empty %}
-                <div class="empty-state dash-empty">
-                    <i data-lucide="map"></i>
-                    <p>Aún no tienes predios registrados. Registra el primero para organizar la superficie y sus potreros.</p>
-                    <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
-                </div>
-                {% endfor %}
-            </section>
-
-            <section class="card dash-plots">
-                <div class="section-heading">
-                    <div><span class="dash-section-kicker">MANEJO AGRÍCOLA</span><h2>Potreros activos</h2></div>
-                    <a class="text-link" href="{% url 'predios' %}"><i data-lucide="map"></i> Ver en el mapa</a>
-                </div>
-                {% if dashboard_plots %}
-                <div class="plot-head" aria-hidden="true">
-                    <span>Potrero</span><span>Predio</span><span>Superficie</span><span>Cultivo</span><span>Estado</span><span>Acceso</span>
-                </div>
-                <div id="plot-board">
-                    {% for plot in dashboard_plots %}
-                    <article class="plot-row">
-                        <strong class="plot-name">{{ plot.name }}</strong>
-                        <a class="plot-farm-link" href="{% url 'predio_detail' plot.predio %}">{{ plot.farmName }}</a>
-                        <span class="plot-area">{{ plot.areaHa|floatformat:2 }} ha</span>
-                        <span class="plot-crop">{{ plot.crop|default:'Sin cultivo' }}</span>
-                        <span class="badge{% if plot.status == 'Planificado' %} amber{% endif %}">{{ plot.status }}</span>
-                        <span class="plot-actions">
-                            <a href="{{ plot.editUrl }}">Editar</a>
-                            <a href="/calculadora/?plot={{ plot.id|urlencode }}">Calcular</a>
-                            <a href="/cobertura/?plot={{ plot.id|urlencode }}">Cobertura</a>
-                            <a href="{% url 'predio_detail' plot.predio %}">Mapa</a>
-                        </span>
-                    </article>
+                    {% for farm in dashboard_predios %}
+                        <article class="farm-card">
+                            <span class="farm-icon" aria-hidden="true"><i data-lucide="warehouse"></i></span>
+                            <div class="farm-card-info">
+                                <strong>{{ farm.name }}</strong>
+                                <span>{{ farm.area|floatformat:2 }} ha · {{ farm.plotCount }} {% if farm.plotCount == 1 %}potrero{% else %}potreros{% endif %}</span>
+                                <small>Última modificación: {{ farm.updated }}</small>
+                            </div>
+                            <a class="button secondary farm-map-link"
+                               href="{% url 'predio_detail' farm.id %}"
+                               aria-label="Ver {{ farm.name }} en el mapa y consultar su ficha">
+                                <i data-lucide="map-pinned"></i><span>Ver ficha y mapa</span>
+                            </a>
+                        </article>
+                    {% empty %}
+                        <div class="empty-state dash-empty">
+                            <i data-lucide="map"></i>
+                            <p>Aún no tienes predios registrados. Registra el primero para organizar la superficie y sus potreros.</p>
+                            <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
+                        </div>
                     {% endfor %}
-                </div>
-                {% else %}
-                <div class="empty-state dash-empty">
-                    <i data-lucide="land-plot"></i>
-                    <p>Aún no hay potreros asociados a tus predios.</p>
-                    {% if dashboard_predios %}<a class="button secondary" href="{% url 'predio_detail' dashboard_predios.0.id %}">Ver predios y registrar un potrero</a>{% else %}<a class="button secondary" href="{% url 'predio_create' %}">Registrar un predio</a>{% endif %}
-                </div>
-                {% endif %}
-            </section>
-
-            <section class="card dash-distribution">
-                <div class="section-heading">
-                    <div><span class="dash-section-kicker">USO DE LA SUPERFICIE</span><h2>Distribución de superficie</h2></div>
-                </div>
-                <div class="distribution-labels">
-                    <span>Superficie total de predios <strong>{{ farm_data.stats.superficie_predios|floatformat:2 }} ha</strong></span>
-                    <span>Asignada a potreros <strong>{{ farm_data.stats.superficie|floatformat:2 }} ha</strong></span>
-                    <span>Sin asignar <strong>{{ farm_data.stats.superficie_sin_asignar|floatformat:2 }} ha</strong></span>
-                </div>
-                {% if farm_data.stats.superficie_predios %}
-                <div class="distribution-bar" role="progressbar" aria-label="Porcentaje de superficie de predios asignada a potreros" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ farm_data.stats.distribucion_bar_pct|floatformat:0 }}">
-                    <span style="width: {{ farm_data.stats.distribucion_bar_pct|floatformat:0 }}%"></span>
-                </div>
-                <p class="distribution-caption">{{ farm_data.stats.distribucion_pct|floatformat:1 }}% de la superficie registrada está asignada a potreros.</p>
-                {% if farm_data.stats.sobreasignada %}<p class="distribution-warning" role="status">La superficie asignada supera la superficie total de predios. Revisa las áreas registradas.</p>{% endif %}
-                {% else %}
-                <div class="distribution-empty"><p>Registra un predio para consultar la distribución de superficie.</p><a href="{% url 'predio_create' %}">Registrar predio</a></div>
-                {% endif %}
-            </section>
-        </div>
-
-        <aside class="dash-side-column">
-            <section class="card dash-today">
-                <div class="section-heading">
-                    <div><span class="dash-section-kicker">PLANIFICACIÓN</span><h2>Actividades pendientes</h2></div>
-                    <span class="badge amber">{{ pending_activity_count }}</span>
-                </div>
-                {% for activity in dashboard_activities %}
-                <article class="activity-row">
-                    <div class="activity-date"><strong>{{ activity.fecha_programada|date:"d" }}</strong><span>{{ activity.fecha_programada|date:"M" }}</span></div>
-                    <div class="activity-info">
-                        <strong><a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a></strong>
-                        <p>{{ activity.get_tipo_display }} · <a href="{% url 'predio_detail' activity.potrero.predio_id %}">{{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</a></p>
-                        <span class="activity-state">{{ activity.get_estado_display }}</span>
+                </section>
+                <section class="card dash-plots">
+                    <div class="section-heading">
+                        <div>
+                            <span class="dash-section-kicker">MANEJO AGRÍCOLA</span>
+                            <h2>Potreros activos</h2>
+                        </div>
+                        <a class="text-link" href="{% url 'predios' %}"><i data-lucide="map"></i> Ver en el mapa</a>
                     </div>
-                    <form class="activity-complete-form" method="post" action="{% url 'actividad_estado' activity.pk %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="estado" value="completada">
-                        <input type="hidden" name="next" value="dashboard">
-                        <button class="button secondary" type="submit">Completar</button>
-                    </form>
-                </article>
-                {% empty %}
-                <div class="empty-state dash-empty">
-                    <i data-lucide="calendar-check"></i>
-                    <p>No hay actividades pendientes guardadas. Planifica una tarea para organizar el trabajo del campo.</p>
-                    <a class="button" href="{% url 'actividad_create' %}">Programar labor</a>
-                </div>
-                {% endfor %}
-                <a class="text-link activities-link" href="{% url 'calendario' %}">Abrir planificación <i data-lucide="arrow-right"></i></a>
-            </section>
-
-            <section class="card dash-calculations">
-                <div class="section-heading">
-                    <div><span class="dash-section-kicker">CENTRO DE DECISIONES</span><h2>Cálculos recientes</h2></div>
-                </div>
-                {% for item in dashboard_calculations %}
-                <article class="dash-calc-row">
-                    <strong>{{ item.value }}</strong>
-                    <span>{{ item.operation }}{% if item.product %} · {{ item.product }}{% elif item.crop %} · {{ item.crop }}{% endif %}</span>
-                    <small>{{ item.plot }} · {{ item.farm }} · {{ item.date|date:"d/m/Y" }}</small>
-                    <small class="dash-calc-origin">{{ item.origin }}</small>
-                </article>
-                {% empty %}
-                <div class="empty-state dash-empty">
-                    <i data-lucide="calculator"></i>
-                    <p>Aún no has guardado cálculos. Calcula cuánto llevar para un potrero y quedará aquí y en Reporte.</p>
-                    <a class="button secondary" href="{% url 'decisiones' %}">Ir al Centro de decisiones</a>
-                </div>
-                {% endfor %}
-                {% if dashboard_calculations %}<a class="text-link activities-link" href="{% url 'reportes' %}?tipo=calculos">Ver todos en Reporte <i data-lucide="arrow-right"></i></a>{% endif %}
-            </section>
-
-        </aside>
+                    {% if dashboard_plots %}
+                        <div class="plot-head" aria-hidden="true">
+                            <span>Potrero</span><span>Predio</span><span>Superficie</span><span>Cultivo</span><span>Estado</span><span>Acceso</span>
+                        </div>
+                        <div id="plot-board">
+                            {% for plot in dashboard_plots %}
+                                <article class="plot-row">
+                                    <strong class="plot-name">{{ plot.name }}</strong>
+                                    <a class="plot-farm-link"
+                                       href="{% url 'predio_detail' plot.predio %}">{{ plot.farmName }}</a>
+                                    <span class="plot-area">{{ plot.areaHa|floatformat:2 }} ha</span>
+                                    <span class="plot-crop">{{ plot.crop|default:'Sin cultivo' }}</span>
+                                    <span class="badge{% if plot.status == 'Planificado' %} amber{% endif %}">{{ plot.status }}</span>
+                                    <span class="plot-actions">
+                                        <a href="{{ plot.editUrl }}">Editar</a>
+                                        <a href="{% url 'decisiones' %}?tipo=semillas&amp;potrero={{ plot.id|urlencode }}">Calcular</a>
+                                        <a href="{% url 'decisiones' %}?herramienta=alcanza&amp;potrero={{ plot.id|urlencode }}">Cobertura</a>
+                                        <a href="{% url 'predio_detail' plot.predio %}">Mapa</a>
+                                    </span>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state dash-empty">
+                            <i data-lucide="land-plot"></i>
+                            <p>Aún no hay potreros asociados a tus predios.</p>
+                            {% if dashboard_predios %}<a class="button secondary"
+   href="{% url 'predio_detail' dashboard_predios.0.id %}">Ver predios y registrar un potrero</a>{% else %}<a class="button secondary" href="{% url 'predio_create' %}">Registrar un predio</a>{% endif %}
+                        </div>
+                    {% endif %}
+                </section>
+                <section class="card dash-distribution">
+                    <div class="section-heading">
+                        <div>
+                            <span class="dash-section-kicker">USO DE LA SUPERFICIE</span>
+                            <h2>Distribución de superficie</h2>
+                        </div>
+                    </div>
+                    <div class="distribution-labels">
+                        <span>Superficie total de predios <strong>{{ farm_data.stats.superficie_predios|floatformat:2 }} ha</strong></span>
+                        <span>Asignada a potreros <strong>{{ farm_data.stats.superficie|floatformat:2 }} ha</strong></span>
+                        <span>Sin asignar <strong>{{ farm_data.stats.superficie_sin_asignar|floatformat:2 }} ha</strong></span>
+                    </div>
+                    {% if farm_data.stats.superficie_predios %}
+                        <div class="distribution-bar"
+                             role="progressbar"
+                             aria-label="Porcentaje de superficie de predios asignada a potreros"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             aria-valuenow="{{ farm_data.stats.distribucion_bar_pct|floatformat:0 }}">
+                            <span style="width: {{ farm_data.stats.distribucion_bar_pct|floatformat:0 }}%"></span>
+                        </div>
+                        <p class="distribution-caption">{{ farm_data.stats.distribucion_pct|floatformat:1 }}% de la superficie registrada está asignada a potreros.</p>
+                        {% if farm_data.stats.sobreasignada %}<p class="distribution-warning" role="status">La superficie asignada supera la superficie total de predios. Revisa las áreas registradas.</p>{% endif %}
+                    {% else %}
+                        <div class="distribution-empty"><p>Registra un predio para consultar la distribución de superficie.</p><a href="{% url 'predio_create' %}">Registrar predio</a></div>
+                    {% endif %}
+                </section>
+            </div>
+            <aside class="dash-side-column">
+                <section class="card dash-today">
+                    <div class="section-heading">
+                        <div>
+                            <span class="dash-section-kicker">PLANIFICACIÓN</span>
+                            <h2>Actividades pendientes</h2>
+                        </div>
+                        <span class="badge amber">{{ pending_activity_count }}</span>
+                    </div>
+                    {% for activity in dashboard_activities %}
+                        <article class="activity-row">
+                            <div class="activity-date"><strong>{{ activity.fecha_programada|date:"d" }}</strong><span>{{ activity.fecha_programada|date:"M" }}</span></div>
+                            <div class="activity-info">
+                                <strong><a href="{% url 'actividad_detail' activity.pk %}">{{ activity.nombre }}</a></strong>
+                                <p>{{ activity.get_tipo_display }} · <a href="{% url 'predio_detail' activity.potrero.predio_id %}">{{ activity.potrero.nombre }} · {{ activity.potrero.predio.nombre }}</a></p>
+                                <span class="activity-state">{{ activity.get_estado_display }}</span>
+                            </div>
+                            <form class="activity-complete-form"
+                                  method="post"
+                                  action="{% url 'actividad_estado' activity.pk %}">
+                                {% csrf_token %}
+                                <input type="hidden" name="estado" value="completada">
+                                <input type="hidden" name="next" value="dashboard">
+                                <button class="button secondary" type="submit">Completar</button>
+                            </form>
+                        </article>
+                    {% empty %}
+                        <div class="empty-state dash-empty">
+                            <i data-lucide="calendar-check"></i>
+                            <p>No hay actividades pendientes guardadas. Planifica una tarea para organizar el trabajo del campo.</p>
+                            <a class="button" href="{% url 'actividad_create' %}">Programar labor</a>
+                        </div>
+                    {% endfor %}
+                    <a class="text-link activities-link"
+                       href="{% url 'calendario' %}">Abrir planificación <i data-lucide="arrow-right"></i></a>
+                </section>
+                <section class="card dash-calculations">
+                    <div class="section-heading">
+                        <div>
+                            <span class="dash-section-kicker">CENTRO DE DECISIONES</span>
+                            <h2>Cálculos recientes</h2>
+                        </div>
+                    </div>
+                    {% for item in dashboard_calculations %}
+                        <article class="dash-calc-row">
+                            <strong>{{ item.value }}</strong>
+                            <span>{{ item.operation }}{% if item.product %} · {{ item.product }}{% elif item.crop %} · {{ item.crop }}{% endif %}</span>
+                            <small>{{ item.plot }} · {{ item.farm }} · {{ item.date|date:"d/m/Y" }}</small>
+                            <small class="dash-calc-origin">{{ item.origin }}</small>
+                        </article>
+                    {% empty %}
+                        <div class="empty-state dash-empty">
+                            <i data-lucide="calculator"></i>
+                            <p>Aún no has guardado cálculos. Calcula cuánto llevar para un potrero y quedará aquí y en Reporte.</p>
+                            <a class="button secondary" href="{% url 'decisiones' %}">Ir al Centro de decisiones</a>
+                        </div>
+                    {% endfor %}
+                    {% if dashboard_calculations %}<a class="text-link activities-link"
+   href="{% url 'reportes' %}?tipo=calculos">Ver todos en Reporte <i data-lucide="arrow-right"></i></a>{% endif %}
+                </section>
+            </aside>
+        </div>
+        <p class="dash-footnote">Cultivando mejores decisiones</p>
     </div>
-    <p class="dash-footnote">Cultivando mejores decisiones</p>
-</div>
 {% endblock %}

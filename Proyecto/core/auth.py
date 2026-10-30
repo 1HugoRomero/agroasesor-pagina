@@ -5,6 +5,7 @@
 * Llamadas de la propia página (fetch/AJAX): responden JSON ``{"codigo": "sesion_vencida"}`` en vez de HTML,
   y ``static/js/layout.js`` lleva a la persona al login sin pantallas rotas.
 """
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -28,9 +29,9 @@ class EmailBackend(ModelBackend):
             return None
         identificador = username.strip()
         model = get_user_model()
-        candidatos = list(model.objects.filter(
-            Q(username__iexact=identificador) | Q(email__iexact=identificador)
-        ).order_by('pk')[:10])
+        candidatos = list(
+            model.objects.filter(Q(username__iexact=identificador) | Q(email__iexact=identificador)).order_by('pk')[:10]
+        )
         # Primero la cuenta cuyo nombre de usuario es justo lo escrito; luego las que coinciden por correo.
         candidatos.sort(key=lambda u: 0 if u.username.lower() == identificador.lower() else 1)
         if not candidatos:
@@ -56,11 +57,14 @@ def es_ajax(request):
 
 
 def _json_vencida(status):
-    return JsonResponse({
-        'error': MENSAJE_VENCIDA,
-        'codigo': 'sesion_vencida',
-        'login_url': resolve_url(settings.LOGIN_URL),
-    }, status=status)
+    return JsonResponse(
+        {
+            'error': MENSAJE_VENCIDA,
+            'codigo': 'sesion_vencida',
+            'login_url': resolve_url(settings.LOGIN_URL),
+        },
+        status=status,
+    )
 
 
 def _volver(request):

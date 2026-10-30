@@ -10,7 +10,9 @@
     return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
   }
 
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function plural(n, one, many) {
+    return n + ' ' + (n === 1 ? one : many);
+  }
 
   var MONTHS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
@@ -38,8 +40,18 @@
     holder.appendChild(strip);
     var chips = document.createElement('span');
     chips.className = 'month-chips';
-    if (sow) { var a = document.createElement('span'); a.className = 'month-chip sow'; a.textContent = 'Siembra · ' + MONTHS[sowMonth]; chips.appendChild(a); }
-    if (harvest) { var b = document.createElement('span'); b.className = 'month-chip harvest'; b.textContent = 'Cosecha · ' + MONTHS[harvestMonth]; chips.appendChild(b); }
+    if (sow) {
+      var a = document.createElement('span');
+      a.className = 'month-chip sow';
+      a.textContent = 'Siembra · ' + MONTHS[sowMonth];
+      chips.appendChild(a);
+    }
+    if (harvest) {
+      var b = document.createElement('span');
+      b.className = 'month-chip harvest';
+      b.textContent = 'Cosecha · ' + MONTHS[harvestMonth];
+      chips.appendChild(b);
+    }
     holder.appendChild(chips);
   }
 

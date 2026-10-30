@@ -15,7 +15,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='insumo',
             name='dosis_maxima_hectarea',
-            field=models.DecimalField(blank=True, decimal_places=3, max_digits=10, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.001'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=3,
+                max_digits=10,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal('0.001'))],
+            ),
         ),
         migrations.AddField(
             model_name='insumo',
@@ -35,7 +41,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='referenciaagronomica',
             name='rendimiento_ton_ha',
-            field=models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0.01'))]),
+            field=models.DecimalField(
+                blank=True,
+                decimal_places=2,
+                max_digits=10,
+                null=True,
+                validators=[django.core.validators.MinValueValidator(Decimal('0.01'))],
+            ),
         ),
         migrations.CreateModel(
             name='ProblemaAgricola',

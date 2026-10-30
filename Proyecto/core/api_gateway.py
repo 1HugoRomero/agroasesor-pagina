@@ -11,6 +11,7 @@ Sin ``AGROASESOR_API_URL`` y ``AGROASESOR_INTERNAL_SECRET`` (≥ 32 caracteres) 
 La definición de la firma debe coincidir con ``backend_flask/app/security/gateway.py`` (hay una prueba con un
 vector fijo en ambos lados).
 """
+
 import hashlib
 import hmac
 import re
@@ -30,10 +31,16 @@ PUBLICAS_GET = re.compile(r"^(health|openapi\.json|catalogo/[A-Za-z0-9_\-/]*)$")
 
 
 def firmar(secreto, usuario_id, es_admin, marca, metodo, destino, cuerpo=b""):
-    base = "|".join([
-        str(int(usuario_id)), "1" if es_admin else "0", str(int(marca)), metodo.upper(), destino,
-        hashlib.sha256(cuerpo).hexdigest(),
-    ])
+    base = "|".join(
+        [
+            str(int(usuario_id)),
+            "1" if es_admin else "0",
+            str(int(marca)),
+            metodo.upper(),
+            destino,
+            hashlib.sha256(cuerpo).hexdigest(),
+        ]
+    )
     return hmac.new(secreto.encode("utf-8"), base.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
@@ -70,12 +77,16 @@ def api_v1(request, ruta):
     if request.user.is_authenticated:
         marca = int(time.time())
         es_admin = bool(request.user.is_staff)
-        cabeceras.update({
-            "X-AgroAsesor-User": str(request.user.pk),
-            "X-AgroAsesor-Staff": "1" if es_admin else "0",
-            "X-AgroAsesor-Timestamp": str(marca),
-            "X-AgroAsesor-Signature": firmar(secreto, request.user.pk, es_admin, marca, request.method, destino, cuerpo),
-        })
+        cabeceras.update(
+            {
+                "X-AgroAsesor-User": str(request.user.pk),
+                "X-AgroAsesor-Staff": "1" if es_admin else "0",
+                "X-AgroAsesor-Timestamp": str(marca),
+                "X-AgroAsesor-Signature": firmar(
+                    secreto, request.user.pk, es_admin, marca, request.method, destino, cuerpo
+                ),
+            }
+        )
     elif not (request.method == "GET" and PUBLICAS_GET.match(ruta.rstrip("/"))):
         return _error(401, "NO_AUTENTICADO", "Inicia sesión para usar esta función.")
 

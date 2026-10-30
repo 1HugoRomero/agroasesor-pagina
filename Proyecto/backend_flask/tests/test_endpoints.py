@@ -1,5 +1,6 @@
 def test_crear_predio_existe_pero_no_esta_implementado(client_bd):
     from tests.helpers import pedir
+
     response = pedir(client_bd, "/api/v1/predios", metodo="POST", json_body={"nombre": "x"})
     assert response.status_code == 501
     assert response.get_json()["error"]["codigo"] == "NO_IMPLEMENTADO"
@@ -12,6 +13,7 @@ def test_calculadora_no_inventa_resultados(client):
 
 def test_confirmacion_perimetro_es_pendiente(client_bd):
     from tests.helpers import pedir
+
     response = pedir(client_bd, "/api/v1/potreros/1/confirmar-perimetro", metodo="POST", json_body={})
     assert response.status_code == 501
 

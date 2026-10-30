@@ -12,7 +12,9 @@ def close_existing_polygon_rings(apps, schema_editor):
         records = model.objects.using(database).exclude(geojson__isnull=True).only('pk', 'geojson')
         for record in records.iterator():
             feature = record.geojson
-            geometry = feature.get('geometry') if isinstance(feature, dict) and feature.get('type') == 'Feature' else feature
+            geometry = (
+                feature.get('geometry') if isinstance(feature, dict) and feature.get('type') == 'Feature' else feature
+            )
             if not isinstance(geometry, dict) or geometry.get('type') != 'Polygon':
                 continue
             coordinates = geometry.get('coordinates')
@@ -51,15 +53,42 @@ class Migration(migrations.Migration):
             name='PredioHistorial',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('accion', models.CharField(choices=[('created', 'Predio creado'), ('updated', 'Datos del predio modificados'), ('perimeter_updated', 'Perímetro modificado'), ('area_updated', 'Superficie modificada'), ('plot_created', 'Potrero creado'), ('plot_updated', 'Potrero modificado')], max_length=32)),
+                (
+                    'accion',
+                    models.CharField(
+                        choices=[
+                            ('created', 'Predio creado'),
+                            ('updated', 'Datos del predio modificados'),
+                            ('perimeter_updated', 'Perímetro modificado'),
+                            ('area_updated', 'Superficie modificada'),
+                            ('plot_created', 'Potrero creado'),
+                            ('plot_updated', 'Potrero modificado'),
+                        ],
+                        max_length=32,
+                    ),
+                ),
                 ('resumen', models.TextField()),
                 ('creado', models.DateTimeField(auto_now_add=True)),
                 ('geometria_anterior', models.JSONField(blank=True, null=True)),
                 ('geometria_nueva', models.JSONField(blank=True, null=True)),
                 ('superficie_anterior_ha', models.DecimalField(blank=True, decimal_places=4, max_digits=12, null=True)),
                 ('superficie_nueva_ha', models.DecimalField(blank=True, decimal_places=4, max_digits=12, null=True)),
-                ('predio', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='historial', to='core.predio')),
-                ('usuario', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='historial_predios', to=settings.AUTH_USER_MODEL)),
+                (
+                    'predio',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='historial', to='core.predio'
+                    ),
+                ),
+                (
+                    'usuario',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='historial_predios',
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
                 'ordering': ['-creado', '-pk'],

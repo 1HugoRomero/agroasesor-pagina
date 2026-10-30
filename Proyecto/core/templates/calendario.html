@@ -2,290 +2,371 @@
 {% load static agro_assets %}
 {% block title %}Calendario de siembra · AgroAsesor{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/agro-panels.css' %}?v=1">
-<link rel="stylesheet" href="{% static 'css/calendario.css' %}?v=13">
+    <link rel="stylesheet" href="{% static 'css/calendario.css' %}?v=13">
 {% endblock %}
 {% block content %}
-<div class="page-hero">
-    <div>
-        <h1 class="page-title">Siembra</h1>
-        <p class="page-sub">Tus predios y potreros en un solo lugar, y las ventanas de siembra de referencia para decidir cuándo sembrar.</p>
-    </div>
-</div>
-<section class="sowing-registry" id="siembra-registro" aria-labelledby="sowing-registry-title">
-    <header class="sowing-head">
+    <div class="page-hero">
         <div>
-            <h2 id="sowing-registry-title">Mis predios y potreros</h2>
-            <p>Todo lo que registras queda guardado aquí automáticamente, ordenado por predio.</p>
+            <h1 class="page-title">Siembra</h1>
+            <p class="page-sub">Tus predios y potreros en un solo lugar, y las ventanas de siembra de referencia para decidir cuándo sembrar.</p>
         </div>
-    </header>
-    <div class="sowing-stats">
-        <div class="sowing-stat tone-green"><span class="stat-ico"><i data-lucide="map"></i></span><div><strong>{{ sowing_farms|length }}</strong><span>Predio{{ sowing_farms|length|pluralize }}</span></div></div>
-        <div class="sowing-stat tone-blue"><span class="stat-ico"><i data-lucide="layout-grid"></i></span><div><strong>{{ sowing_plot_total }}</strong><span>Potrero{{ sowing_plot_total|pluralize }}</span></div></div>
-        <div class="sowing-stat tone-amber"><span class="stat-ico"><i data-lucide="ruler"></i></span><div><strong>{{ sowing_area_total|floatformat:"-1" }} <small>ha</small></strong><span>Superficie total</span></div></div>
-        <div class="sowing-stat tone-green"><span class="stat-ico"><i data-lucide="sprout"></i></span><div><strong>{{ sowing_planted_total }}<small> de {{ sowing_plot_total }}</small></strong><span>Con siembra y cultivo</span></div></div>
     </div>
-    {% for card in farm_cards %}{% with farm=card.predio farm_ui=card.ui %}
-    <article class="card sowing-farm">
-        <header class="sowing-farm-head">
-            <span class="sowing-farm-icon"><i data-lucide="map-pin"></i></span>
-            <div class="sowing-farm-title">
-                <h3><a href="{% url 'predio_detail' farm.pk %}">{{ farm.nombre }}</a></h3>
-                <div class="sowing-chips">
-                    <span class="chip"><i data-lucide="ruler"></i>{{ farm.superficie_ha|floatformat:"-2" }} ha</span>
-                    {% if farm.ubicacion %}<span class="chip"><i data-lucide="navigation"></i>{{ farm.ubicacion }}</span>{% endif %}
-                    {% if farm.zona %}<span class="chip"><i data-lucide="map-pinned"></i>{{ farm.zona.nombre }}</span>{% endif %}
-                    <span class="chip chip-strong"><i data-lucide="layout-grid"></i>{{ farm_ui.plot_count }} potrero{{ farm_ui.plot_count|pluralize }}</span>
-                    {% if farm_ui.pending %}<span class="chip"><i data-lucide="clipboard-check"></i>{{ farm_ui.pending }} labor{{ farm_ui.pending|pluralize:"es" }}</span>{% endif %}
-                </div>
-            </div>
-            <div class="sowing-farm-actions">
-                {% if farm_ui.overdue %}<span class="state-chip is-red">Labores vencidas · {{ farm_ui.overdue }}</span>{% elif farm_ui.pending %}<span class="state-chip is-amber">Labores pendientes · {{ farm_ui.pending }}</span>{% endif %}
-                {% if farm_ui.all_planned %}<span class="state-chip is-dark">Planificación completa</span>{% endif %}
-                <div class="row-menu" data-row-menu>
-                    <button type="button" class="row-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="Opciones de {{ farm.nombre }}"><span aria-hidden="true">⋯</span></button>
-                    <div class="row-menu-list" role="menu">
-                        <a class="row-menu-item" role="menuitem" href="{% url 'predio_detail' farm.pk %}"><i data-lucide="eye"></i> Ver predio</a>
-                        <a class="row-menu-item" role="menuitem" href="{% url 'potrero_create' farm.pk %}"><i data-lucide="plus"></i> Agregar potrero</a>
-                        <a class="row-menu-item" role="menuitem" href="{% url 'predios' %}?predio={{ farm.pk }}"><i data-lucide="map"></i> Ver en mapa</a>
-                        <a class="row-menu-item" role="menuitem" href="{% url 'predio_detail' farm.pk %}#predio-history"><i data-lucide="history"></i> Ver historial</a>
-                        <a class="row-menu-item" role="menuitem" href="{% url 'reportes' %}?predio={{ farm.pk }}"><i data-lucide="file-text"></i> Generar reporte</a>
-                    </div>
-                </div>
+    <section class="sowing-registry"
+             id="siembra-registro"
+             aria-labelledby="sowing-registry-title">
+        <header class="sowing-head">
+            <div>
+                <h2 id="sowing-registry-title">Mis predios y potreros</h2>
+                <p>Todo lo que registras queda guardado aquí automáticamente, ordenado por predio.</p>
             </div>
         </header>
-        {% if card.plots %}
-        <div class="sowing-plots">
-            <div class="sowing-cols" aria-hidden="true"><span>Potrero</span><span>Cultivo</span><span>Fechas</span><span>Avance</span><span></span></div>
-            {% for item in card.plots %}{% with plot=item.plot ui=item.ui %}
-            <div class="sowing-plot {% if not plot.cultivo %}is-empty{% elif plot.fecha_siembra %}is-planted{% else %}is-pending{% endif %}" data-sowing="{{ plot.fecha_siembra|date:'Y-m-d' }}" data-harvest="{{ plot.fecha_cosecha|date:'Y-m-d' }}">
-                <div class="sp-main">
-                    <a class="sowing-plot-name" href="{% url 'predio_detail' farm.pk %}?potrero={{ plot.pk }}">{{ plot.nombre }}</a>
-                    <span class="sowing-plot-area">{{ plot.superficie_ha|floatformat:"-2" }} ha</span>
-                    <span class="chip-row">
-                        {% if ui.has_crop %}<span class="state-chip is-green">Con cultivo</span>{% else %}<span class="state-chip is-neutral">Sin cultivo</span>{% endif %}
-                        {% if ui.plan_complete %}<span class="state-chip is-dark">Planificación completa</span>{% elif not ui.has_crop %}<span class="state-chip is-neutral">Sin planificar</span>{% else %}<span class="state-chip is-neutral">Planificación {{ ui.plan_done }}/{{ ui.plan_total }}</span>{% endif %}
-                        {% if ui.overdue %}<span class="state-chip is-red">Vencidas · {{ ui.overdue }}</span>{% elif ui.pending %}<span class="state-chip is-amber">Pendientes · {{ ui.pending }}</span>{% endif %}
-                    </span>
-                </div>
-                <div class="sp-crop">
-                    {% if plot.cultivo %}<span class="crop-ico"><i data-lucide="sprout"></i></span><div><strong>{{ plot.cultivo.nombre }}</strong>{% if plot.variedad %}<small>{{ plot.variedad }}</small>{% endif %}</div>
-                    {% else %}<span class="crop-ico is-off"><i data-lucide="circle-dashed"></i></span><div><strong>Sin cultivo</strong><small>Asigna uno para planificar</small></div>{% endif %}
-                </div>
-                <dl class="sowing-dates">
-                    <div><dt>Siembra</dt><dd>{{ plot.fecha_siembra|date:"d/m/Y"|default:"Por definir" }}</dd></div>
-                    <div><dt>Cosecha</dt><dd>{{ plot.fecha_cosecha|date:"d/m/Y"|default:"Por definir" }}</dd></div>
-                </dl>
-                <div class="sp-progress">
-                    <span class="sp-label" data-role="label">&nbsp;</span>
-                    <span class="sp-bar"><i data-role="bar"></i></span>
-                    <span class="month-line" data-role="months"></span>
-                    {% if ui.next %}<span class="next-task{% if ui.next.overdue %} is-overdue{% endif %}"><i data-lucide="{{ ui.next.icon }}"></i>{{ ui.next.label }} · {{ ui.next.date }}</span>{% endif %}
-                </div>
-                <div class="sp-side">
-                    <a class="btn-primary-agro btn-sm" href="{{ ui.primary.url }}">{{ ui.primary.label }}</a>
-                    <div class="row-menu" data-row-menu>
-                        <button type="button" class="row-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="Opciones de {{ plot.nombre }}"><span aria-hidden="true">⋯</span></button>
-                        <div class="row-menu-list" role="menu">
-                            {% if plot.cultivo %}<a class="row-menu-item" role="menuitem" href="{% url 'calendario' %}?{% if farm.zona_id %}zone={{ farm.zona_id }}&amp;{% endif %}crop={{ plot.cultivo_id }}"><i data-lucide="calendar-range"></i> Ver ventana</a>{% endif %}
-                            {% for action in ui.tool_actions %}<a class="row-menu-item" role="menuitem" href="{{ action.url }}"><i data-lucide="{{ action.icon }}"></i> {{ action.label }}</a>{% endfor %}
-                            <a class="row-menu-item" role="menuitem" href="{{ ui.task_url }}"><i data-lucide="clipboard-plus"></i> Programar labor</a>
-                            <a class="row-menu-item" role="menuitem" href="{% url 'predio_detail' farm.pk %}?potrero={{ plot.pk }}#predio-history"><i data-lucide="history"></i> Ver ficha e historial</a>
-                            <a class="row-menu-item" role="menuitem" href="{% url 'potrero_edit' farm.pk plot.pk %}"><i data-lucide="pencil"></i> {% if plot.cultivo %}Cambiar cultivo o fechas{% else %}Asignar cultivo{% endif %}</a>
+        <div class="sowing-stats">
+            <div class="sowing-stat tone-green">
+                <span class="stat-ico"><i data-lucide="map"></i></span>
+                <div><strong>{{ sowing_farms|length }}</strong><span>Predio{{ sowing_farms|length|pluralize }}</span></div>
+            </div>
+            <div class="sowing-stat tone-blue">
+                <span class="stat-ico"><i data-lucide="layout-grid"></i></span>
+                <div><strong>{{ sowing_plot_total }}</strong><span>Potrero{{ sowing_plot_total|pluralize }}</span></div>
+            </div>
+            <div class="sowing-stat tone-amber">
+                <span class="stat-ico"><i data-lucide="ruler"></i></span>
+                <div><strong>{{ sowing_area_total|floatformat:"-1" }} <small>ha</small></strong><span>Superficie total</span></div>
+            </div>
+            <div class="sowing-stat tone-green">
+                <span class="stat-ico"><i data-lucide="sprout"></i></span>
+                <div><strong>{{ sowing_planted_total }}<small> de {{ sowing_plot_total }}</small></strong><span>Con siembra y cultivo</span></div>
+            </div>
+        </div>
+        {% for card in farm_cards %}
+            {% with farm=card.predio farm_ui=card.ui %}
+                <article class="card sowing-farm">
+                    <header class="sowing-farm-head">
+                        <span class="sowing-farm-icon"><i data-lucide="map-pin"></i></span>
+                        <div class="sowing-farm-title">
+                            <h3><a href="{% url 'predio_detail' farm.pk %}">{{ farm.nombre }}</a></h3>
+                            <div class="sowing-chips">
+                                <span class="chip"><i data-lucide="ruler"></i>{{ farm.superficie_ha|floatformat:"-2" }} ha</span>
+                                {% if farm.ubicacion %}<span class="chip"><i data-lucide="navigation"></i>{{ farm.ubicacion }}</span>{% endif %}
+                                {% if farm.zona %}<span class="chip"><i data-lucide="map-pinned"></i>{{ farm.zona.nombre }}</span>{% endif %}
+                                <span class="chip chip-strong"><i data-lucide="layout-grid"></i>{{ farm_ui.plot_count }} potrero{{ farm_ui.plot_count|pluralize }}</span>
+                                {% if farm_ui.pending %}<span class="chip"><i data-lucide="clipboard-check"></i>{{ farm_ui.pending }} labor{{ farm_ui.pending|pluralize:"es" }}</span>{% endif %}
+                            </div>
                         </div>
-                    </div>
+                        <div class="sowing-farm-actions">
+                            {% if farm_ui.overdue %}<span class="state-chip is-red">Labores vencidas · {{ farm_ui.overdue }}</span>{% elif farm_ui.pending %}<span class="state-chip is-amber">Labores pendientes · {{ farm_ui.pending }}</span>{% endif %}
+                            {% if farm_ui.all_planned %}<span class="state-chip is-dark">Planificación completa</span>{% endif %}
+                            <div class="row-menu" data-row-menu>
+                                <button type="button"
+                                        class="row-menu-trigger"
+                                        aria-haspopup="menu"
+                                        aria-expanded="false"
+                                        aria-label="Opciones de {{ farm.nombre }}"><span aria-hidden="true">⋯</span></button>
+                                <div class="row-menu-list" role="menu">
+                                    <a class="row-menu-item"
+                                       role="menuitem"
+                                       href="{% url 'predio_detail' farm.pk %}"><i data-lucide="eye"></i> Ver predio</a>
+                                    <a class="row-menu-item"
+                                       role="menuitem"
+                                       href="{% url 'potrero_create' farm.pk %}"><i data-lucide="plus"></i> Agregar potrero</a>
+                                    <a class="row-menu-item"
+                                       role="menuitem"
+                                       href="{% url 'predios' %}?predio={{ farm.pk }}"><i data-lucide="map"></i> Ver en mapa</a>
+                                    <a class="row-menu-item"
+                                       role="menuitem"
+                                       href="{% url 'predio_detail' farm.pk %}#predio-history"><i data-lucide="history"></i> Ver historial</a>
+                                    <a class="row-menu-item"
+                                       role="menuitem"
+                                       href="{% url 'reportes' %}?predio={{ farm.pk }}"><i data-lucide="file-text"></i> Generar reporte</a>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+                    {% if card.plots %}
+                        <div class="sowing-plots">
+                            <div class="sowing-cols" aria-hidden="true"><span>Potrero</span><span>Cultivo</span><span>Fechas</span><span>Avance</span><span></span></div>
+                            {% for item in card.plots %}
+                                {% with plot=item.plot ui=item.ui %}
+                                    <div class="sowing-plot {% if not plot.cultivo %}is-empty{% elif plot.fecha_siembra %}is-planted{% else %}is-pending{% endif %}"
+                                         data-sowing="{{ plot.fecha_siembra|date:'Y-m-d' }}"
+                                         data-harvest="{{ plot.fecha_cosecha|date:'Y-m-d' }}">
+                                        <div class="sp-main">
+                                            <a class="sowing-plot-name"
+                                               href="{% url 'predio_detail' farm.pk %}?potrero={{ plot.pk }}">{{ plot.nombre }}</a>
+                                            <span class="sowing-plot-area">{{ plot.superficie_ha|floatformat:"-2" }} ha</span>
+                                            <span class="chip-row">
+                                                {% if ui.has_crop %}<span class="state-chip is-green">Con cultivo</span>{% else %}<span class="state-chip is-neutral">Sin cultivo</span>{% endif %}
+                                                {% if ui.plan_complete %}<span class="state-chip is-dark">Planificación completa</span>{% elif not ui.has_crop %}<span class="state-chip is-neutral">Sin planificar</span>{% else %}<span class="state-chip is-neutral">Planificación {{ ui.plan_done }}/{{ ui.plan_total }}</span>{% endif %}
+                                                {% if ui.overdue %}<span class="state-chip is-red">Vencidas · {{ ui.overdue }}</span>{% elif ui.pending %}<span class="state-chip is-amber">Pendientes · {{ ui.pending }}</span>{% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="sp-crop">
+                                            {% if plot.cultivo %}<span class="crop-ico"><i data-lucide="sprout"></i></span><div><strong>{{ plot.cultivo.nombre }}</strong>{% if plot.variedad %}<small>{{ plot.variedad }}</small>{% endif %}</div>
+                            {% else %}<span class="crop-ico is-off"><i data-lucide="circle-dashed"></i></span><div><strong>Sin cultivo</strong><small>Asigna uno para planificar</small></div>{% endif %}
+                                </div>
+                                <dl class="sowing-dates">
+                                    <div>
+                                        <dt>Siembra</dt>
+                                        <dd>
+                                            {{ plot.fecha_siembra|date:"d/m/Y"|default:"Por definir" }}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt>Cosecha</dt>
+                                        <dd>
+                                            {{ plot.fecha_cosecha|date:"d/m/Y"|default:"Por definir" }}
+                                        </dd>
+                                    </div>
+                                </dl>
+                                <div class="sp-progress">
+                                    <span class="sp-label" data-role="label">&nbsp;</span>
+                                    <span class="sp-bar"><i data-role="bar"></i></span>
+                                    <span class="month-line" data-role="months"></span>
+                                    {% if ui.next %}<span class="next-task{% if ui.next.overdue %} is-overdue{% endif %}"><i data-lucide="{{ ui.next.icon }}"></i>{{ ui.next.label }} · {{ ui.next.date }}</span>{% endif %}
+                                </div>
+                                <div class="sp-side">
+                                    <a class="btn-primary-agro btn-sm"
+                                       href="{{ ui.primary.url }}">{{ ui.primary.label }}</a>
+                                    <div class="row-menu" data-row-menu>
+                                        <button type="button"
+                                                class="row-menu-trigger"
+                                                aria-haspopup="menu"
+                                                aria-expanded="false"
+                                                aria-label="Opciones de {{ plot.nombre }}"><span aria-hidden="true">⋯</span></button>
+                                        <div class="row-menu-list" role="menu">
+                                            {% if plot.cultivo %}<a class="row-menu-item"
+   role="menuitem"
+   href="{% url 'calendario' %}?{% if farm.zona_id %}zone={{ farm.zona_id }}&amp;{% endif %}crop={{ plot.cultivo_id }}"><i data-lucide="calendar-range"></i> Ver ventana</a>{% endif %}
+                                            {% for action in ui.tool_actions %}<a class="row-menu-item" role="menuitem" href="{{ action.url }}"><i data-lucide="{{ action.icon }}"></i> {{ action.label }}</a>{% endfor %}
+                                            <a class="row-menu-item"
+                                               role="menuitem"
+                                               href="{{ ui.task_url }}"><i data-lucide="clipboard-plus"></i> Programar labor</a>
+                                            <a class="row-menu-item"
+                                               role="menuitem"
+                                               href="{% url 'predio_detail' farm.pk %}?potrero={{ plot.pk }}#predio-history"><i data-lucide="history"></i> Ver ficha e historial</a>
+                                            <a class="row-menu-item"
+                                               role="menuitem"
+                                               href="{% url 'potrero_edit' farm.pk plot.pk %}"><i data-lucide="pencil"></i> {% if plot.cultivo %}Cambiar cultivo o fechas{% else %}Asignar cultivo{% endif %}</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                </div>
+                            {% endwith %}
+                    {% endfor %}
                 </div>
-            </div>
-            {% endwith %}{% endfor %}
-        </div>
-        {% else %}
-        <div class="empty-state is-compact">
-            <span class="empty-state-icon"><i data-lucide="layout-grid"></i></span>
-            <h3>Este predio aún no tiene potreros.</h3>
-            <p>Divide tu predio en sectores o utiliza todo el predio como un solo potrero.</p>
-            <a class="btn-primary-agro btn-sm" href="{% url 'predio_detail' farm.pk %}?nuevo=1"><i data-lucide="settings-2"></i> Configurar potrero</a>
-        </div>
-        {% endif %}
-    </article>
-    {% endwith %}{% empty %}
+            {% else %}
+                <div class="empty-state is-compact">
+                    <span class="empty-state-icon"><i data-lucide="layout-grid"></i></span>
+                    <h3>Este predio aún no tiene potreros.</h3>
+                    <p>Divide tu predio en sectores o utiliza todo el predio como un solo potrero.</p>
+                    <a class="btn-primary-agro btn-sm"
+                       href="{% url 'predio_detail' farm.pk %}?nuevo=1"><i data-lucide="settings-2"></i> Configurar potrero</a>
+                </div>
+            {% endif %}
+            </article>
+        {% endwith %}
+{% empty %}
     <div class="card sowing-empty-card"><i data-lucide="map"></i><p><strong>No tienes predios registrados.</strong></p><p>Cuando registres uno aparecerá aquí junto con sus potreros.</p><a class="btn-primary-agro" href="{% url 'predio_create' %}"><i data-lucide="plus"></i> Registrar primer predio</a></div>
-    {% endfor %}
+{% endfor %}
 </section>
-
 {% if sowing_farms %}
-<section class="card sowing-timeline" aria-labelledby="tl-title">
-    <header class="sowing-head">
-        <div>
-            <h2 id="tl-title">Mis fechas en el año</h2>
-            <p>Cuándo siembras y cuándo cosechas en cada potrero, según las fechas que registraste.</p>
-        </div>
-        <div class="tl-nav" role="group" aria-label="Cambiar año">
-            <a class="btn-secondary-agro btn-compact" href="?anio={{ timeline_prev }}" aria-label="Año anterior"><i data-lucide="chevron-left"></i></a>
-            <strong>{{ timeline.year }}</strong>
-            <a class="btn-secondary-agro btn-compact" href="?anio={{ timeline_next }}" aria-label="Año siguiente"><i data-lucide="chevron-right"></i></a>
-        </div>
-    </header>
-    {% if timeline.rows %}
-    <div class="tl-scroll">
-        <div class="tl-grid">
-            <div class="tl-head"><span></span><div class="tl-months">{% for m in timeline.months %}<span>{{ m }}</span>{% endfor %}</div></div>
-            {% for row in timeline.rows %}
-            <div class="tl-row {% if not row.crop %}is-empty{% endif %}">
-                <div class="tl-label">
-                    <a href="{% url 'predio_detail' row.farm.pk %}?potrero={{ row.plot.pk }}">{{ row.plot.nombre }}</a>
-                    <small>{{ row.farm.nombre }} · {% if row.crop %}{{ row.crop }}{% else %}Sin cultivo{% endif %}</small>
-                </div>
-                <div class="tl-track">
-                    {% if timeline.today %}<i class="tl-today" style="left:{{ timeline.today }}%" title="Hoy"></i>{% endif %}
-                    <span class="tl-bar kind-{{ row.kind }}{% if row.cut_left %} cut-left{% endif %}{% if row.cut_right %} cut-right{% endif %}" style="left:{{ row.left }}%;width:{{ row.width }}%" title="{% if row.kind == 'range' %}Siembra {{ row.start|date:'d/m/Y' }} → cosecha {{ row.end|date:'d/m/Y' }}{% elif row.kind == 'sow' %}Siembra {{ row.start|date:'d/m/Y' }} (sin fecha de cosecha){% else %}Cosecha {{ row.end|date:'d/m/Y' }} (sin fecha de siembra){% endif %}">
-                        <em>{{ row.start|date:"j M" }}{% if row.kind == 'range' %} → {{ row.end|date:"j M" }}{% endif %}</em>
-                    </span>
+    <section class="card sowing-timeline" aria-labelledby="tl-title">
+        <header class="sowing-head">
+            <div>
+                <h2 id="tl-title">Mis fechas en el año</h2>
+                <p>Cuándo siembras y cuándo cosechas en cada potrero, según las fechas que registraste.</p>
+            </div>
+            <div class="tl-nav" role="group" aria-label="Cambiar año">
+                <a class="btn-secondary-agro btn-compact"
+                   href="?anio={{ timeline_prev }}"
+                   aria-label="Año anterior"><i data-lucide="chevron-left"></i></a>
+                <strong>{{ timeline.year }}</strong>
+                <a class="btn-secondary-agro btn-compact"
+                   href="?anio={{ timeline_next }}"
+                   aria-label="Año siguiente"><i data-lucide="chevron-right"></i></a>
+            </div>
+        </header>
+        {% if timeline.rows %}
+            <div class="tl-scroll">
+                <div class="tl-grid">
+                    <div class="tl-head"><span></span><div class="tl-months">{% for m in timeline.months %}<span>{{ m }}</span>{% endfor %}</div></div>
+                    {% for row in timeline.rows %}
+                        <div class="tl-row {% if not row.crop %}is-empty{% endif %}">
+                            <div class="tl-label">
+                                <a href="{% url 'predio_detail' row.farm.pk %}?potrero={{ row.plot.pk }}">{{ row.plot.nombre }}</a>
+                                <small>{{ row.farm.nombre }} · {% if row.crop %}{{ row.crop }}{% else %}Sin cultivo{% endif %}</small>
+                            </div>
+                            <div class="tl-track">
+                                {% if timeline.today %}
+                                    <i class="tl-today" style="left:{{ timeline.today }}%" title="Hoy"></i>
+                                {% endif %}
+                                <span class="tl-bar kind-{{ row.kind }}{% if row.cut_left %} cut-left{% endif %}{% if row.cut_right %} cut-right{% endif %}"
+                                      style="left:{{ row.left }}%;
+                                             width:{{ row.width }}%"
+                                      title="{% if row.kind == 'range' %}Siembra {{ row.start|date:'d/m/Y' }} → cosecha {{ row.end|date:'d/m/Y' }}{% elif row.kind == 'sow' %}Siembra {{ row.start|date:'d/m/Y' }} (sin fecha de cosecha){% else %}Cosecha {{ row.end|date:'d/m/Y' }} (sin fecha de siembra){% endif %}">
+                                    <em>{{ row.start|date:"j M" }}{% if row.kind == "range" %} → {{ row.end|date:"j M" }}{% endif %}</em>
+                                </span>
+                            </div>
+                        </div>
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
-        </div>
-    </div>
-    <div class="tl-legend">
-        <span><i class="dot sow"></i> Siembra → cosecha</span>
-        <span><i class="dot today"></i> Hoy</span>
-        {% if timeline.undated %}<span class="warn"><i data-lucide="alert-triangle"></i> {{ timeline.undated }} potrero{{ timeline.undated|pluralize }} sin fechas</span>{% endif %}
-        {% if timeline.outside %}<span>{{ timeline.outside }} en otro año</span>{% endif %}
-    </div>
-    {% else %}
-    <p class="sowing-empty"><i data-lucide="calendar-x"></i> No hay siembras ni cosechas registradas en {{ timeline.year }}.{% if timeline.undated %} {{ timeline.undated }} potrero{{ timeline.undated|pluralize }} aún no tiene{{ timeline.undated|pluralize:"n" }} fechas: edítalo{{ timeline.undated|pluralize }} para verlo{{ timeline.undated|pluralize }} aquí.{% endif %}{% if timeline.outside %} Hay {{ timeline.outside }} en otros años.{% endif %}</p>
-    {% endif %}
-</section>
+            <div class="tl-legend">
+                <span><i class="dot sow"></i> Siembra → cosecha</span>
+                <span><i class="dot today"></i> Hoy</span>
+                {% if timeline.undated %}<span class="warn"><i data-lucide="alert-triangle"></i> {{ timeline.undated }} potrero{{ timeline.undated|pluralize }} sin fechas</span>{% endif %}
+                {% if timeline.outside %}<span>{{ timeline.outside }} en otro año</span>{% endif %}
+            </div>
+        {% else %}
+            <p class="sowing-empty"><i data-lucide="calendar-x"></i> No hay siembras ni cosechas registradas en {{ timeline.year }}.{% if timeline.undated %} {{ timeline.undated }} potrero{{ timeline.undated|pluralize }} aún no tiene{{ timeline.undated|pluralize:"n" }} fechas: edítalo{{ timeline.undated|pluralize }} para verlo{{ timeline.undated|pluralize }} aquí.{% endif %}{% if timeline.outside %} Hay {{ timeline.outside }} en otros años.{% endif %}</p>
+        {% endif %}
+    </section>
 {% endif %}
-
 {% if sowing_farms %}
-<section class="sowing-next" aria-labelledby="next-title">
-    <header class="sowing-head">
-        <div>
-            <h2 id="next-title">Lo que sigue en tus potreros</h2>
-            <p>Tus labores pendientes y lo que falta completar para tener la siembra bien planificada.</p>
-        </div>
-        {% if next_steps.upcoming %}<a class="btn-primary-agro" href="{% url 'actividad_create' %}"><i data-lucide="plus"></i> Programar labor</a>{% endif %}
-    </header>
-    <div class="next-grid">
-        <article class="card next-card">
-            <header class="next-card-head">
-                <h3><i data-lucide="clipboard-check"></i> Próximas labores</h3>
-                {% if next_steps.overdue %}<span class="badge late">{{ next_steps.overdue }} atrasada{{ next_steps.overdue|pluralize }}</span>{% elif next_steps.pending_total %}<span class="badge">{{ next_steps.pending_total }} pendiente{{ next_steps.pending_total|pluralize }}</span>{% endif %}
-            </header>
-            {% if next_steps.upcoming %}
-            <ul class="next-list">
-                {% for item in next_steps.upcoming %}
-                <li class="next-item tone-{{ item.tone }} type-{{ item.activity.tipo }}">
-                    <span class="next-ico"><i data-lucide="{{ item.icon }}"></i></span>
-                    <div class="next-body">
-                        <a href="{% url 'actividad_detail' item.activity.pk %}">{{ item.activity.nombre }}</a>
-                        <small>{{ item.activity.potrero.nombre }} · {{ item.activity.potrero.predio.nombre }} · {{ item.activity.fecha_programada|date:"d/m/Y" }}</small>
+    <section class="sowing-next" aria-labelledby="next-title">
+        <header class="sowing-head">
+            <div>
+                <h2 id="next-title">Lo que sigue en tus potreros</h2>
+                <p>Tus labores pendientes y lo que falta completar para tener la siembra bien planificada.</p>
+            </div>
+            {% if next_steps.upcoming %}<a class="btn-primary-agro"
+   href="{% url 'actividad_create' %}"><i data-lucide="plus"></i> Programar labor</a>{% endif %}
+        </header>
+        <div class="next-grid">
+            <article class="card next-card">
+                <header class="next-card-head">
+                    <h3><i data-lucide="clipboard-check"></i> Próximas labores</h3>
+                    {% if next_steps.overdue %}<span class="badge late">{{ next_steps.overdue }} atrasada{{ next_steps.overdue|pluralize }}</span>{% elif next_steps.pending_total %}<span class="badge">{{ next_steps.pending_total }} pendiente{{ next_steps.pending_total|pluralize }}</span>{% endif %}
+                </header>
+                {% if next_steps.upcoming %}
+                    <ul class="next-list">
+                        {% for item in next_steps.upcoming %}
+                            <li class="next-item tone-{{ item.tone }} type-{{ item.activity.tipo }}">
+                                <span class="next-ico"><i data-lucide="{{ item.icon }}"></i></span>
+                                <div class="next-body">
+                                    <a href="{% url 'actividad_detail' item.activity.pk %}">{{ item.activity.nombre }}</a>
+                                    <small>{{ item.activity.potrero.nombre }} · {{ item.activity.potrero.predio.nombre }} · {{ item.activity.fecha_programada|date:"d/m/Y" }}</small>
+                                </div>
+                                <span class="next-when">{{ item.label }}</span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    <a class="next-more" href="{% url 'actividad_list' %}">Ver todas las labores{% if next_steps.pending_total > 6 %} ({{ next_steps.pending_total }}){% endif %} <i data-lucide="arrow-right"></i></a>
+                {% else %}
+                    <div class="next-empty">
+                        <i data-lucide="calendar-check"></i>
+                        <p>
+                            <strong>No tienes labores pendientes.</strong>
+                            <br>
+                            Programa riegos, fertilizaciones o controles y aparecerán aquí con su fecha.
+                        </p>
+                        <a class="btn-primary-agro btn-sm"
+                           href="{% url 'actividad_create' %}">Programar primera labor</a>
                     </div>
-                    <span class="next-when">{{ item.label }}</span>
-                </li>
-                {% endfor %}
-            </ul>
-            <a class="next-more" href="{% url 'actividad_list' %}">Ver todas las labores{% if next_steps.pending_total > 6 %} ({{ next_steps.pending_total }}){% endif %} <i data-lucide="arrow-right"></i></a>
-            {% else %}
-            <div class="next-empty">
-                <i data-lucide="calendar-check"></i>
-                <p><strong>No tienes labores pendientes.</strong><br>Programa riegos, fertilizaciones o controles y aparecerán aquí con su fecha.</p>
-                <a class="btn-primary-agro btn-sm" href="{% url 'actividad_create' %}">Programar primera labor</a>
-            </div>
-            {% endif %}
-        </article>
-        <article class="card next-card">
-            <header class="next-card-head">
-                <h3><i data-lucide="list-checks"></i> Para completar tu planificación</h3>
-                {% if next_steps.tasks_total %}<span class="badge amber">{{ next_steps.tasks_total }} por hacer</span>{% else %}<span class="badge">Al día</span>{% endif %}
-            </header>
-            {% if next_steps.tasks %}
-            <ul class="next-list plan-checklist">
-                <li class="next-item plan-check is-done">
-                    <span class="check-mark" aria-hidden="true">✓</span>
-                    <div class="next-body"><strong>Predio registrado</strong></div>
-                </li>
-                {% for task in next_steps.tasks %}
-                <li class="next-item plan-check is-todo task-{{ task.tone }}">
-                    <span class="check-mark" aria-hidden="true">○</span>
-                    <div class="next-body"><strong>{{ task.text }}</strong><small>{{ task.hint }}</small></div>
-                    <a class="btn-ghost-agro btn-compact" href="{{ task.url }}">{{ task.cta }}</a>
-                </li>
-                {% endfor %}
-            </ul>
-            {% if next_steps.tasks_total > 8 %}<p class="next-foot">Hay {{ next_steps.tasks_total }} pendientes en total; aquí ves los primeros 8.</p>{% endif %}
-            {% else %}
-            <div class="next-empty is-ok">
-                <i data-lucide="badge-check"></i>
-                <p><strong>Todo al día.</strong><br>Tus potreros tienen cultivo, fechas de siembra y cosecha, y la siembra próxima ya está programada.</p>
-            </div>
-            {% endif %}
-        </article>
-    </div>
-</section>
+                {% endif %}
+            </article>
+            <article class="card next-card">
+                <header class="next-card-head">
+                    <h3><i data-lucide="list-checks"></i> Para completar tu planificación</h3>
+                    {% if next_steps.tasks_total %}<span class="badge amber">{{ next_steps.tasks_total }} por hacer</span>{% else %}<span class="badge">Al día</span>{% endif %}
+                </header>
+                {% if next_steps.tasks %}
+                    <ul class="next-list plan-checklist">
+                        <li class="next-item plan-check is-done">
+                            <span class="check-mark" aria-hidden="true">✓</span>
+                            <div class="next-body"><strong>Predio registrado</strong></div>
+                        </li>
+                        {% for task in next_steps.tasks %}
+                            <li class="next-item plan-check is-todo task-{{ task.tone }}">
+                                <span class="check-mark" aria-hidden="true">○</span>
+                                <div class="next-body"><strong>{{ task.text }}</strong><small>{{ task.hint }}</small></div>
+                                <a class="btn-ghost-agro btn-compact" href="{{ task.url }}">{{ task.cta }}</a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    {% if next_steps.tasks_total > 8 %}<p class="next-foot">Hay {{ next_steps.tasks_total }} pendientes en total; aquí ves los primeros 8.</p>{% endif %}
+                {% else %}
+                    <div class="next-empty is-ok">
+                        <i data-lucide="badge-check"></i>
+                        <p>
+                            <strong>Todo al día.</strong>
+                            <br>
+                            Tus potreros tienen cultivo, fechas de siembra y cosecha, y la siembra próxima ya está programada.
+                        </p>
+                    </div>
+                {% endif %}
+            </article>
+        </div>
+    </section>
 {% endif %}
-
 {% if calendar_references or request.user.is_staff %}
-<section class="cal-section" aria-labelledby="cal-title">
-    <header class="sowing-head">
-        <div>
-            <h2 id="cal-title">Cuándo sembrar según el catálogo</h2>
-            <p>{% if calendar_references %}Verde siembra, ámbar crecimiento, café cosecha.{% else %}Vista para administradores: los agricultores no ven esta sección hasta que haya referencias.{% endif %}{% if calendar_has_unverified %} Incluye datos de demostración o sin fuente verificada, marcados como tales.{% endif %}</p>
-        </div>
-    </header>
-{% if calendar_references %}
-<div class="info-strip" id="cal-stats"></div>
-<div class="card cal-filters">
-    <label class="field"><span>Zona</span>
-        <select id="zone">
-            {% for zone in calendar_zones %}<option value="{{ zone.pk }}"{% if zone.pk == calendar_default_zone %} selected{% endif %}>{{ zone.nombre }}</option>{% empty %}<option value="">Sin zonas en el catálogo</option>{% endfor %}
-        </select>
-    </label>
-    <label class="field"><span>Cultivo</span>
-        <select id="crop-filter">
-            <option value="">Todos los cultivos</option>
-            {% for crop in calendar_crops %}<option value="{{ crop.pk }}"{% if crop.pk|stringformat:"s" == calendar_selected_crop %} selected{% endif %}>{{ crop.nombre }}</option>{% endfor %}
-        </select>
-    </label>
-    <label class="field"><span>Año de referencia</span>
-        <select id="year">
-            {% for year in calendar_years %}<option{% if year == calendar_current_year %} selected{% endif %}>{{ year }}</option>{% endfor %}
-        </select>
-    </label>
-</div>
-<div class="cal-legend-row">
-    <span><i class="swatch sow"></i> Siembra</span>
-    <span><i class="swatch grow"></i> Crecimiento</span>
-    <span><i class="swatch harvest"></i> Cosecha</span>
-    <span><i class="swatch idle"></i> Fuera de ventana</span>
-</div>
-<div class="split-layout cal-layout"
-     data-calc-url="{% url 'decisiones' %}?herramienta=llevar&amp;tipo=semillas"
-     data-product-url="{% url 'producto_detail' 0 %}"
-     data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_referenciaagronomica_changelist' %}{% endif %}"
-     data-selected-variety="{% if calendar_selected_variety != '*' %}{{ calendar_selected_variety }}{% endif %}">
-    <div class="cal-scroll card" id="cal-board"></div>
-    <aside class="card" id="cal-detail" aria-live="polite"></aside>
-</div>
-{% else %}
-    <div class="cal-notice">
-        <span class="cal-empty-icon"><i data-lucide="book-open-check"></i></span>
-        <div class="cal-notice-text">
-            <strong>Ventanas de referencia por cultivo y zona</strong>
-            <p>El catálogo todavía no tiene referencias agronómicas. Cuando las registres, cada agricultor verá aquí en qué meses conviene sembrar y cosechar cada cultivo, con su fuente.</p>
-        </div>
-        <div class="toolbar">
-            {% if request.user.is_staff %}<a class="btn-secondary-agro btn-sm" href="{% url 'admin:core_referenciaagronomica_changelist' %}"><i data-lucide="plus"></i> Registrar referencias</a>{% endif %}
-        </div>
-    </div>
-{% endif %}
-</section>
+    <section class="cal-section" aria-labelledby="cal-title">
+        <header class="sowing-head">
+            <div>
+                <h2 id="cal-title">Cuándo sembrar según el catálogo</h2>
+                <p>{% if calendar_references %}Verde siembra, ámbar crecimiento, café cosecha.{% else %}Vista para administradores: los agricultores no ven esta sección hasta que haya referencias.{% endif %}{% if calendar_has_unverified %} Incluye datos de demostración o sin fuente verificada, marcados como tales.{% endif %}</p>
+            </div>
+        </header>
+        {% if calendar_references %}
+            <div class="info-strip" id="cal-stats"></div>
+            <div class="card cal-filters">
+                <label class="field">
+                    <span>Zona</span>
+                    <select id="zone">
+                        {% for zone in calendar_zones %}<option value="{{ zone.pk }}"
+        {% if zone.pk == calendar_default_zone %} selected{% endif %}>{{ zone.nombre }}</option>{% empty %}<option value="">Sin zonas en el catálogo</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Cultivo</span>
+                    <select id="crop-filter">
+                        <option value="">Todos los cultivos</option>
+                        {% for crop in calendar_crops %}<option value="{{ crop.pk }}"
+        {% if crop.pk|stringformat:"s" == calendar_selected_crop %} selected{% endif %}>{{ crop.nombre }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="field">
+                    <span>Año de referencia</span>
+                    <select id="year">
+                        {% for year in calendar_years %}<option {% if year == calendar_current_year %} selected{% endif %}>{{ year }}</option>{% endfor %}
+                    </select>
+                </label>
+            </div>
+            <div class="cal-legend-row">
+                <span><i class="swatch sow"></i> Siembra</span>
+                <span><i class="swatch grow"></i> Crecimiento</span>
+                <span><i class="swatch harvest"></i> Cosecha</span>
+                <span><i class="swatch idle"></i> Fuera de ventana</span>
+            </div>
+            <div class="split-layout cal-layout"
+                 data-calc-url="{% url 'decisiones' %}?herramienta=llevar&amp;tipo=semillas"
+                 data-product-url="{% url 'producto_detail' 0 %}"
+                 data-admin-url="{% if request.user.is_staff %}{% url 'admin:core_referenciaagronomica_changelist' %}{% endif %}"
+                 data-selected-variety="{% if calendar_selected_variety != '*' %}{{ calendar_selected_variety }}{% endif %}">
+                <div class="cal-scroll card" id="cal-board"></div>
+                <aside class="card" id="cal-detail" aria-live="polite">
+                </aside>
+            </div>
+        {% else %}
+            <div class="cal-notice">
+                <span class="cal-empty-icon"><i data-lucide="book-open-check"></i></span>
+                <div class="cal-notice-text">
+                    <strong>Ventanas de referencia por cultivo y zona</strong>
+                    <p>El catálogo todavía no tiene referencias agronómicas. Cuando las registres, cada agricultor verá aquí en qué meses conviene sembrar y cosechar cada cultivo, con su fuente.</p>
+                </div>
+                <div class="toolbar">
+                    {% if request.user.is_staff %}<a class="btn-secondary-agro btn-sm"
+   href="{% url 'admin:core_referenciaagronomica_changelist' %}"><i data-lucide="plus"></i> Registrar referencias</a>{% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </section>
 {% endif %}
 {{ calendar_references|json_script:"calendar-references" }}
 {% endblock %}
 {% block extra_js %}
-<script src="{% static 'js/siembra-registro.js' %}?v=2"></script>
-<script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}"></script>
-<script src="{% static 'js/agro-pdf.js' %}?v=1"></script>
-<script src="{% static 'js/calendario.js' %}?v=5"></script>
+    <script src="{% static 'js/siembra-registro.js' %}?v=2"></script>
+    <script src="{% vendor 'jspdf.umd.min.js' 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js' %}"></script>
+    <script src="{% static 'js/agro-pdf.js' %}?v=1"></script>
+    <script src="{% static 'js/calendario.js' %}?v=5"></script>
 {% endblock %}

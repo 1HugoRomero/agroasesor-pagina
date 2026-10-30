@@ -1,6 +1,23 @@
 from django.contrib import admin
 
-from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, TipoInsumo, Zona, Agricultor, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola, UsoInsumoCultivo
+from .models import (
+    AceptacionPoliticas,
+    ActividadAgricola,
+    CalculoAgricola,
+    ConfiguracionAgronomica,
+    Cultivo,
+    Insumo,
+    TipoInsumo,
+    Zona,
+    Agricultor,
+    Predio,
+    PredioHistorial,
+    Potrero,
+    ReferenciaAgronomica,
+    TemporadaCultivo,
+    ProblemaAgricola,
+    UsoInsumoCultivo,
+)
 
 
 @admin.register(Zona)
@@ -16,48 +33,109 @@ class CultivoAdmin(admin.ModelAdmin):
     search_fields = ('nombre',)
     fieldsets = (
         (None, {'fields': ('nombre', 'descripcion', 'activo')}),
-        ('Parámetros de referencia (no son recomendaciones)', {'fields': (
-            'rendimiento_ton_ha', 'rendimiento_fuente', 'rendimiento_url', 'rendimiento_verificado',
-            'densidad_siembra', 'unidad_siembra', 'densidad_fuente', 'densidad_url', 'densidad_verificada',
-        )}),
+        (
+            'Parámetros de referencia (no son recomendaciones)',
+            {
+                'fields': (
+                    'rendimiento_ton_ha',
+                    'rendimiento_fuente',
+                    'rendimiento_url',
+                    'rendimiento_verificado',
+                    'densidad_siembra',
+                    'unidad_siembra',
+                    'densidad_fuente',
+                    'densidad_url',
+                    'densidad_verificada',
+                )
+            },
+        ),
     )
 
 
 @admin.register(ReferenciaAgronomica)
 class ReferenciaAgronomicaAdmin(admin.ModelAdmin):
     list_display = (
-        'cultivo', 'zona', 'variedad', 'estado',
-        'institucion_fuente', 'fecha_consulta_fuente',
+        'cultivo',
+        'zona',
+        'variedad',
+        'estado',
+        'institucion_fuente',
+        'fecha_consulta_fuente',
     )
     list_filter = ('estado', 'zona', 'cultivo')
     search_fields = (
-        'cultivo__nombre', 'zona__nombre', 'variedad',
-        'institucion_fuente', 'documento_fuente',
+        'cultivo__nombre',
+        'zona__nombre',
+        'variedad',
+        'institucion_fuente',
+        'documento_fuente',
     )
     fieldsets = (
-        ('Cultivo y contexto', {'fields': (
-            'cultivo', 'zona', 'anio_referencia', 'variedad', 'nombre_cientifico',
-            'familia_botanica', 'tipo_cultivo',
-        )}),
-        ('Calendario documentado', {'fields': (
-            ('siembra_inicio_mes', 'siembra_inicio_dia'),
-            ('siembra_fin_mes', 'siembra_fin_dia'),
-            ('cosecha_inicio_mes', 'cosecha_inicio_dia'),
-            ('cosecha_fin_mes', 'cosecha_fin_dia'),
-            'duracion_ciclo_dias', 'rendimiento_ton_ha',
-        )}),
-        ('Siembra y desarrollo', {'fields': (
-            'condicion_siembra', 'requerimientos', 'profundidad_siembra',
-            'etapas_fenologicas', 'condiciones_crecimiento', 'manejo_general',
-        )}),
-        ('Cosecha y sanidad', {'fields': (
-            'indicadores_madurez', 'consideraciones_cosecha', 'plagas',
-            'enfermedades', 'malezas', 'manejo_integrado',
-        )}),
-        ('Fuente y verificación', {'fields': (
-            'estado', 'institucion_fuente', 'documento_fuente',
-            'url_fuente', 'fecha_consulta_fuente',
-        )}),
+        (
+            'Cultivo y contexto',
+            {
+                'fields': (
+                    'cultivo',
+                    'zona',
+                    'anio_referencia',
+                    'variedad',
+                    'nombre_cientifico',
+                    'familia_botanica',
+                    'tipo_cultivo',
+                )
+            },
+        ),
+        (
+            'Calendario documentado',
+            {
+                'fields': (
+                    ('siembra_inicio_mes', 'siembra_inicio_dia'),
+                    ('siembra_fin_mes', 'siembra_fin_dia'),
+                    ('cosecha_inicio_mes', 'cosecha_inicio_dia'),
+                    ('cosecha_fin_mes', 'cosecha_fin_dia'),
+                    'duracion_ciclo_dias',
+                    'rendimiento_ton_ha',
+                )
+            },
+        ),
+        (
+            'Siembra y desarrollo',
+            {
+                'fields': (
+                    'condicion_siembra',
+                    'requerimientos',
+                    'profundidad_siembra',
+                    'etapas_fenologicas',
+                    'condiciones_crecimiento',
+                    'manejo_general',
+                )
+            },
+        ),
+        (
+            'Cosecha y sanidad',
+            {
+                'fields': (
+                    'indicadores_madurez',
+                    'consideraciones_cosecha',
+                    'plagas',
+                    'enfermedades',
+                    'malezas',
+                    'manejo_integrado',
+                )
+            },
+        ),
+        (
+            'Fuente y verificación',
+            {
+                'fields': (
+                    'estado',
+                    'institucion_fuente',
+                    'documento_fuente',
+                    'url_fuente',
+                    'fecha_consulta_fuente',
+                )
+            },
+        ),
         ('Trazabilidad', {'fields': ('creado', 'actualizado')}),
     )
     readonly_fields = ('creado', 'actualizado')
@@ -97,25 +175,70 @@ class InsumoAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {'fields': ('nombre', 'tipo', 'cultivo', 'zona', 'problemas', 'descripcion', 'fabricante', 'vigente')}),
         ('Vigencia', {'fields': ('vigencia_desde', 'vigencia_hasta')}),
-        ('Verificación y trazabilidad', {'fields': (
-            'estado_verificacion', 'fuente_nombre', 'fuente_url', 'fecha_verificacion',
-            'dosis_hectarea', 'unidad_dosis', 'dosis_maxima_hectarea',
-            'unidad_dosis_maxima', 'dosis_verificada', 'dosis_fuente',
-        )}),
-        ('Documentación y plaguicidas', {'fields': (
-            'numero_autorizacion_sag', 'ingrediente_activo', 'concentracion', 'formulacion',
-            'cultivos_autorizados', 'objetivos_control', 'etiqueta_url', 'hoja_seguridad_url',
-            'modo_aplicacion', 'restricciones', 'periodo_carencia', 'tiempo_reingreso',
-            'precauciones_ambientales', 'advertencia_polinizadores',
-        )}),
-        ('Composición y presentación de fertilizantes', {'fields': (
-            'composicion_nutricional', 'nitrogeno_pct', 'fosforo_p2o5_pct', 'potasio_k2o_pct',
-            'presentacion_cantidad', 'presentacion_unidad',
-        )}),
-        ('Datos documentados de semillas', {'fields': (
-            'variedad_semilla', 'tipo_semilla', 'plantas_objetivo_m2', 'peso_mil_semillas_g',
-            'germinacion_pct', 'pureza_pct',
-        )}),
+        (
+            'Verificación y trazabilidad',
+            {
+                'fields': (
+                    'estado_verificacion',
+                    'fuente_nombre',
+                    'fuente_url',
+                    'fecha_verificacion',
+                    'dosis_hectarea',
+                    'unidad_dosis',
+                    'dosis_maxima_hectarea',
+                    'unidad_dosis_maxima',
+                    'dosis_verificada',
+                    'dosis_fuente',
+                )
+            },
+        ),
+        (
+            'Documentación y plaguicidas',
+            {
+                'fields': (
+                    'numero_autorizacion_sag',
+                    'ingrediente_activo',
+                    'concentracion',
+                    'formulacion',
+                    'cultivos_autorizados',
+                    'objetivos_control',
+                    'etiqueta_url',
+                    'hoja_seguridad_url',
+                    'modo_aplicacion',
+                    'restricciones',
+                    'periodo_carencia',
+                    'tiempo_reingreso',
+                    'precauciones_ambientales',
+                    'advertencia_polinizadores',
+                )
+            },
+        ),
+        (
+            'Composición y presentación de fertilizantes',
+            {
+                'fields': (
+                    'composicion_nutricional',
+                    'nitrogeno_pct',
+                    'fosforo_p2o5_pct',
+                    'potasio_k2o_pct',
+                    'presentacion_cantidad',
+                    'presentacion_unidad',
+                )
+            },
+        ),
+        (
+            'Datos documentados de semillas',
+            {
+                'fields': (
+                    'variedad_semilla',
+                    'tipo_semilla',
+                    'plantas_objetivo_m2',
+                    'peso_mil_semillas_g',
+                    'germinacion_pct',
+                    'pureza_pct',
+                )
+            },
+        ),
     )
 
     @admin.display(boolean=True, description='Vigente hoy')
@@ -154,9 +277,16 @@ class PredioHistorialAdmin(admin.ModelAdmin):
     list_filter = ('accion', 'creado')
     search_fields = ('predio__nombre', 'resumen', 'usuario__email')
     readonly_fields = (
-        'predio', 'potrero', 'usuario', 'accion', 'resumen', 'creado',
-        'geometria_anterior', 'geometria_nueva',
-        'superficie_anterior_ha', 'superficie_nueva_ha',
+        'predio',
+        'potrero',
+        'usuario',
+        'accion',
+        'resumen',
+        'creado',
+        'geometria_anterior',
+        'geometria_nueva',
+        'superficie_anterior_ha',
+        'superficie_nueva_ha',
     )
 
     def has_add_permission(self, request):
@@ -176,12 +306,19 @@ class PotreroAdmin(admin.ModelAdmin):
 @admin.register(TemporadaCultivo)
 class TemporadaCultivoAdmin(admin.ModelAdmin):
     list_display = (
-        'cultivo', 'variedad', 'temporada_agricola', 'potrero', 'fecha_siembra',
-        'fecha_cosecha', 'estado',
+        'cultivo',
+        'variedad',
+        'temporada_agricola',
+        'potrero',
+        'fecha_siembra',
+        'fecha_cosecha',
+        'estado',
     )
     list_filter = ('estado', 'cultivo', 'temporada_agricola')
     search_fields = (
-        'cultivo__nombre', 'variedad', 'potrero__nombre',
+        'cultivo__nombre',
+        'variedad',
+        'potrero__nombre',
         'potrero__predio__nombre',
     )
     readonly_fields = ('creado', 'actualizado')
@@ -195,8 +332,10 @@ class CalculoAgricolaAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'potrero', 'operacion', 'creado')
     list_filter = ('operacion', 'creado')
     search_fields = (
-        'usuario__username', 'usuario__email',
-        'potrero__nombre', 'potrero__predio__nombre',
+        'usuario__username',
+        'usuario__email',
+        'potrero__nombre',
+        'potrero__predio__nombre',
     )
     readonly_fields = ('usuario', 'potrero', 'operacion', 'entrada', 'resultado', 'creado')
 

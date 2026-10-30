@@ -18,12 +18,34 @@ class Migration(migrations.Migration):
                 ('variedad', models.CharField(blank=True, max_length=150)),
                 ('fecha_siembra', models.DateField(blank=True, null=True)),
                 ('fecha_cosecha', models.DateField(blank=True, null=True)),
-                ('estado', models.CharField(choices=[('planned', 'Planificada'), ('sown', 'Sembrada'), ('harvested', 'Cosechada'), ('closed', 'Cerrada')], default='planned', max_length=12)),
+                (
+                    'estado',
+                    models.CharField(
+                        choices=[
+                            ('planned', 'Planificada'),
+                            ('sown', 'Sembrada'),
+                            ('harvested', 'Cosechada'),
+                            ('closed', 'Cerrada'),
+                        ],
+                        default='planned',
+                        max_length=12,
+                    ),
+                ),
                 ('observaciones', models.TextField(blank=True)),
                 ('creado', models.DateTimeField(auto_now_add=True)),
                 ('actualizado', models.DateTimeField(auto_now=True)),
-                ('cultivo', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='temporadas', to='core.cultivo')),
-                ('potrero', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='temporadas', to='core.potrero')),
+                (
+                    'cultivo',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='temporadas', to='core.cultivo'
+                    ),
+                ),
+                (
+                    'potrero',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='temporadas', to='core.potrero'
+                    ),
+                ),
             ],
             options={
                 'ordering': ['-fecha_siembra', '-creado', '-pk'],

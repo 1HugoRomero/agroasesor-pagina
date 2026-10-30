@@ -1,5 +1,4 @@
-/* Si alcanza y Cosecha: capa de presentación guiada (paso a paso), igual que «Cuánto llevar».
- * También ofrece los selectores visuales (potrero, cultivo) que usa la Ficha de insumo en decisiones.js.
+/* «¿Me alcanza?»: capa de presentación guiada (paso a paso), igual que «Cuánto llevar».
  *
  * No calcula nada ni llama al servidor: el motor de cada formulario sigue en decisiones.js (que valida con el
  * servidor). Aquí solo se leen los <select> e <input> reales, se marcan los pasos completados, se bloquea lo que aún
@@ -15,7 +14,11 @@
   function readJson(id, fallback) {
     const node = document.getElementById(id);
     if (!node) return fallback;
-    try { return JSON.parse(node.textContent) || fallback; } catch (error) { return fallback; }
+    try {
+      return JSON.parse(node.textContent) || fallback;
+    } catch (error) {
+      return fallback;
+    }
   }
   function h(tag, attrs, ...kids) {
     const node = document.createElement(tag);
@@ -32,9 +35,16 @@
   }
   const fmt = (value, digits) => {
     const number = Number(value);
-    return Number.isFinite(number) ? number.toLocaleString('es-CL', { maximumFractionDigits: digits === undefined ? 2 : digits }) : '—';
+    return Number.isFinite(number)
+      ? number.toLocaleString('es-CL', { maximumFractionDigits: digits === undefined ? 2 : digits })
+      : '—';
   };
-  const norm = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const norm = (text) =>
+    String(text || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim();
 
   const farm = readJson('agro-farms', { predios: [], plots: [] });
   const catalog = readJson('agro-catalog', {});
@@ -45,15 +55,13 @@
   const allProducts = catalog.insumos || [];
   const groupShort = new Map((hints.groups || []).map((group) => [group.name, group.short || group.name]));
   const groupOrder = (hints.groups || []).map((group) => group.name);
-  const groupKeys = new Map((hints.groups || []).map((group) => [group.name, group.key]));
 
   const plotById = (id) => plots.find((plot) => String(plot.id) === String(id)) || null;
   const cropById = (id) => crops.find((crop) => String(crop.id) === String(id)) || null;
   const productById = (id) => allProducts.find((item) => String(item.id) === String(id)) || null;
   const shortGroup = (crop) => groupShort.get(crop.group) || crop.group || '';
   function emoji(crop) {
-    const picker = window.AgroCropPicker;
-    return picker && picker.emojiFor && crop ? picker.emojiFor(crop.name, groupKeys.get(crop.group) || '') : '🌱';
+    return window.AgroCalculator ? window.AgroCalculator.cropEmoji(crop) : '🌱';
   }
   function plotIcon(plot) {
     const crop = plot.cropId ? cropById(plot.cropId) : null;
@@ -66,11 +74,14 @@
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
   function emptyCard(icon, title, text, actions) {
-    return h('div', { class: 'calc-empty-card' },
+    return h(
+      'div',
+      { class: 'calc-empty-card' },
       h('span', { class: 'calc-empty-ico', 'aria-hidden': 'true' }, icon),
       h('strong', null, title),
       h('p', null, text),
-      actions && actions.length ? h('div', { class: 'calc-empty-actions' }, actions) : null);
+      actions && actions.length ? h('div', { class: 'calc-empty-actions' }, actions) : null,
+    );
   }
 
   // ---------- Selector visual genérico (tarjetas con buscador y filtros) ----------
@@ -85,7 +96,13 @@
       const selected = cfg.selected();
       const canChange = cfg.canChange ? cfg.canChange(items) : items.length > 1;
       const choosing = !selected || (view.choosing && canChange);
-      const sig = [items.map((item) => item.id).join(','), selected ? selected.id : '', choosing, view.query, view.filter].join('|');
+      const sig = [
+        items.map((item) => item.id).join(','),
+        selected ? selected.id : '',
+        choosing,
+        view.query,
+        view.filter,
+      ].join('|');
       if (!force && sig === signature) return;
       signature = sig;
       if (cfg.step) {
@@ -95,14 +112,28 @@
       cfg.host.hidden = false;
       cfg.host.replaceChildren();
 
-      if (!items.length) { cfg.host.append(cfg.empty()); return; }
+      if (!items.length) {
+        cfg.host.append(cfg.empty());
+        return;
+      }
 
       if (selected && !choosing) {
         const info = cfg.chosen(selected);
-        cfg.host.append(h('div', { class: 'calc-chosen' },
-          h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, info.icon),
-          h('div', { class: 'calc-chosen-copy' }, h('strong', null, info.title), h('small', null, info.sub)),
-          canChange ? h('button', { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': '1' }, cfg.changeLabel || 'Cambiar') : null));
+        cfg.host.append(
+          h(
+            'div',
+            { class: 'calc-chosen' },
+            h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, info.icon),
+            h('div', { class: 'calc-chosen-copy' }, h('strong', null, info.title), h('small', null, info.sub)),
+            canChange
+              ? h(
+                  'button',
+                  { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': '1' },
+                  cfg.changeLabel || 'Cambiar',
+                )
+              : null,
+          ),
+        );
         return;
       }
 
@@ -110,28 +141,66 @@
       const fill = () => {
         const query = norm(view.query);
         grid.replaceChildren();
-        const list = items.filter((item) => (view.filter === 'all' || !cfg.group || cfg.group(item) === view.filter) &&
-          (!query || norm(cfg.text(item)).includes(query)));
+        const list = items.filter(
+          (item) =>
+            (view.filter === 'all' || !cfg.group || cfg.group(item) === view.filter) &&
+            (!query || norm(cfg.text(item)).includes(query)),
+        );
         list.forEach((item) => {
           const info = cfg.option(item);
-          grid.append(h('button', { class: 'calc-opt', type: 'button', 'data-pick': item.id, 'aria-pressed': String(Boolean(selected) && String(item.id) === String(selected.id)) },
-            h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, info.icon),
-            h('span', { class: 'calc-opt-copy' }, h('strong', null, info.title), (info.subs || []).filter(Boolean).map((sub) => h('small', null, sub)))));
+          grid.append(
+            h(
+              'button',
+              {
+                class: 'calc-opt',
+                type: 'button',
+                'data-pick': item.id,
+                'aria-pressed': String(Boolean(selected) && String(item.id) === String(selected.id)),
+              },
+              h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, info.icon),
+              h(
+                'span',
+                { class: 'calc-opt-copy' },
+                h('strong', null, info.title),
+                (info.subs || []).filter(Boolean).map((sub) => h('small', null, sub)),
+              ),
+            ),
+          );
         });
         if (!list.length) grid.append(h('p', { class: 'calc-opts-empty' }, 'Nada coincide con la búsqueda.'));
       };
 
       if (items.length > (cfg.searchFrom === undefined ? 6 : cfg.searchFrom)) {
         const tools = h('div', { class: 'calc-picker-tools' });
-        const search = h('input', { class: 'calc-search', type: 'search', placeholder: cfg.searchPlaceholder || 'Buscar…', 'aria-label': cfg.searchPlaceholder || 'Buscar', value: view.query });
-        search.addEventListener('input', () => { view.query = search.value; fill(); });
+        const search = h('input', {
+          class: 'calc-search',
+          type: 'search',
+          placeholder: cfg.searchPlaceholder || 'Buscar…',
+          'aria-label': cfg.searchPlaceholder || 'Buscar',
+          value: view.query,
+        });
+        search.addEventListener('input', () => {
+          view.query = search.value;
+          fill();
+        });
         tools.append(search);
         const groups = cfg.group ? Array.from(new Set(items.map(cfg.group))).filter(Boolean) : [];
         if (groups.length > 1) {
           const filters = h('div', { class: 'calc-filters', role: 'group', 'aria-label': 'Filtrar por categoría' });
-          ['all'].concat(groups).forEach((name) => filters.append(h('button', {
-            class: 'calc-chip' + (view.filter === name ? ' is-active' : ''), type: 'button', 'data-filter': name, 'aria-pressed': String(view.filter === name),
-          }, name === 'all' ? 'Todos' : name)));
+          ['all'].concat(groups).forEach((name) =>
+            filters.append(
+              h(
+                'button',
+                {
+                  class: 'calc-chip' + (view.filter === name ? ' is-active' : ''),
+                  type: 'button',
+                  'data-filter': name,
+                  'aria-pressed': String(view.filter === name),
+                },
+                name === 'all' ? 'Todos' : name,
+              ),
+            ),
+          );
           filters.addEventListener('click', (event) => {
             const chip = event.target.closest('[data-filter]');
             if (!chip) return;
@@ -149,8 +218,19 @@
         const frequent = cfg.frequent ? cfg.frequent(items) : [];
         if (frequent.length) {
           cfg.host.append(h('p', { class: 'calc-freq-label' }, cfg.frequentLabel || 'Sugeridos'));
-          cfg.host.append(h('div', { class: 'calc-freq' }, frequent.map((item) =>
-            h('button', { class: 'calc-chip', type: 'button', 'data-pick': item.id }, cfg.option(item).icon + ' ' + cfg.option(item).title))));
+          cfg.host.append(
+            h(
+              'div',
+              { class: 'calc-freq' },
+              frequent.map((item) =>
+                h(
+                  'button',
+                  { class: 'calc-chip', type: 'button', 'data-pick': item.id },
+                  cfg.option(item).icon + ' ' + cfg.option(item).title,
+                ),
+              ),
+            ),
+          );
         }
       }
       fill();
@@ -159,12 +239,21 @@
 
     cfg.host.addEventListener('click', (event) => {
       if (event.target.closest('[data-change]')) {
-        if (cfg.onChange) { cfg.onChange(); return; }
-        view.choosing = true; view.query = ''; view.filter = 'all'; render(true); return;
+        if (cfg.onChange) {
+          cfg.onChange();
+          return;
+        }
+        view.choosing = true;
+        view.query = '';
+        view.filter = 'all';
+        render(true);
+        return;
       }
       const option = event.target.closest('[data-pick]');
       if (!option) return;
-      view.choosing = false; view.query = ''; view.filter = 'all';
+      view.choosing = false;
+      view.query = '';
+      view.filter = 'all';
       cfg.pick(option.dataset.pick);
       render(true);
     });
@@ -179,100 +268,184 @@
     });
   }
 
-  // Configuración base del selector de cultivo (formularios y ficha).
+  // Configuración base del selector de cultivo.
   function cropPickerConfig(base) {
-    return Object.assign({
-      searchFrom: 8,
-      searchPlaceholder: 'Buscar cultivo…',
-      label: 'Cultivos del catálogo',
-      changeLabel: 'Cambiar cultivo',
-      canChange: () => true,
-      text: (crop) => crop.name + ' ' + crop.group,
-      group: shortGroup,
-      frequent: (items) => (hints.frequent || []).map((id) => items.find((crop) => String(crop.id) === String(id))).filter(Boolean),
-      frequentLabel: hints.frequentBasis === 'used' ? 'Frecuentes en tus potreros' : 'Sugeridos',
-      chosen: (crop) => ({
-        icon: emoji(crop), title: crop.name,
-        sub: [shortGroup(crop), crop.density !== null && crop.density !== undefined ? 'Densidad ' + fmt(crop.density) + ' ' + (crop.unit || 'kg') + '/ha' : 'Sin densidad documentada'].filter(Boolean).join(' · '),
-      }),
-      option: (crop) => ({ icon: emoji(crop), title: crop.name, subs: [shortGroup(crop)] }),
-      empty: () => emptyCard('🌱', 'No hay cultivos activos en el catálogo',
-        'Sin cultivos no se puede continuar, y AgroAsesor no inventa datos. ' + (root.dataset.staff === '1' ? 'Regístralos desde administración.' : 'Pide al administrador que los cargue.')),
-    }, base);
+    return Object.assign(
+      {
+        searchFrom: 8,
+        searchPlaceholder: 'Buscar cultivo…',
+        label: 'Cultivos del catálogo',
+        changeLabel: 'Cambiar cultivo',
+        canChange: () => true,
+        text: (crop) => crop.name + ' ' + crop.group,
+        group: shortGroup,
+        frequent: (items) =>
+          (hints.frequent || []).map((id) => items.find((crop) => String(crop.id) === String(id))).filter(Boolean),
+        frequentLabel: hints.frequentBasis === 'used' ? 'Frecuentes en tus potreros' : 'Sugeridos',
+        chosen: (crop) => ({
+          icon: emoji(crop),
+          title: crop.name,
+          sub: [
+            shortGroup(crop),
+            crop.density !== null && crop.density !== undefined
+              ? 'Densidad ' + fmt(crop.density) + ' ' + (crop.unit || 'kg') + '/ha'
+              : 'Sin densidad documentada',
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        }),
+        option: (crop) => ({ icon: emoji(crop), title: crop.name, subs: [shortGroup(crop)] }),
+        empty: () =>
+          emptyCard(
+            '🌱',
+            'No hay cultivos activos en el catálogo',
+            'Sin cultivos no se puede continuar, y AgroAsesor no inventa datos. ' +
+              (root.dataset.staff === '1'
+                ? 'Regístralos desde administración.'
+                : 'Pide al administrador que los cargue.'),
+          ),
+      },
+      base,
+    );
   }
 
   // ---------- Resumen del potrero y del cultivo (columna derecha) ----------
   function plotCard(plot) {
     const rows = [
-      ['Predio', plot.farmName], ['Superficie', fmt(plot.areaHa, 3) + ' ha'],
+      ['Predio', plot.farmName],
+      ['Superficie', fmt(plot.areaHa, 3) + ' ha'],
       ['Cultivo actual', plot.crop ? plot.crop + (plot.variety ? ' · ' + plot.variety : '') : 'Sin cultivo'],
-      ['Estado', plot.status || ''], ['Temporada', plot.season || ''],
+      ['Estado', plot.status || ''],
+      ['Temporada', plot.season || ''],
     ].filter((row) => row[1]);
     let next = null;
     if (!plot.crop) {
-      next = h('p', { class: 'calc-mini-next' }, h('strong', null, 'Siguiente paso: '),
+      next = h(
+        'p',
+        { class: 'calc-mini-next' },
+        h('strong', null, 'Siguiente paso: '),
         'este potrero no tiene cultivo. Asígnalo para planificar la siembra; mientras tanto puedes simular con otro cultivo. ',
-        plot.editUrl ? h('a', { href: plot.editUrl }, 'Asignar cultivo') : null);
+        plot.editUrl ? h('a', { href: plot.editUrl }, 'Asignar cultivo') : null,
+      );
     } else if (!plot.sowing) {
-      next = h('p', { class: 'calc-mini-next' }, h('strong', null, 'Siguiente paso: '),
-        'registra la fecha de siembra de este potrero. ', plot.editUrl ? h('a', { href: plot.editUrl }, 'Definir siembra') : null);
+      next = h(
+        'p',
+        { class: 'calc-mini-next' },
+        h('strong', null, 'Siguiente paso: '),
+        'registra la fecha de siembra de este potrero. ',
+        plot.editUrl ? h('a', { href: plot.editUrl }, 'Definir siembra') : null,
+      );
     }
-    return h('div', { class: 'calc-mini' },
+    return h(
+      'div',
+      { class: 'calc-mini' },
       h('p', { class: 'calc-mini-kicker' }, 'Potrero'),
       h('div', { class: 'calc-mini-head' }, h('h3', null, plot.name)),
-      h('dl', null, rows.map((row) => [h('dt', null, row[0]), h('dd', null, row[1])])),
-      next);
+      h(
+        'dl',
+        null,
+        rows.map((row) => [h('dt', null, row[0]), h('dd', null, row[1])]),
+      ),
+      next,
+    );
   }
-  function metric(label, value) { return h('div', { class: 'metric' }, h('span', null, label), h('strong', null, value)); }
+  function metric(label, value) {
+    return h('div', { class: 'metric' }, h('span', null, label), h('strong', null, value));
+  }
   function cropCard(crop) {
     const hasDensity = crop.density !== null && crop.density !== undefined;
     const hasYield = crop.yield !== null && crop.yield !== undefined;
     const sources = [];
-    if (hasDensity) sources.push(crop.densitySource ? 'Densidad: ' + crop.densitySource : 'Densidad sin fuente registrada');
-    if (hasYield) sources.push(crop.yieldSource ? 'Rendimiento: ' + crop.yieldSource : 'Rendimiento sin fuente registrada');
-    return h('div', { class: 'calc-mini' },
-      h('div', { class: 'calc-crop-head' },
+    if (hasDensity)
+      sources.push(crop.densitySource ? 'Densidad: ' + crop.densitySource : 'Densidad sin fuente registrada');
+    if (hasYield)
+      sources.push(crop.yieldSource ? 'Rendimiento: ' + crop.yieldSource : 'Rendimiento sin fuente registrada');
+    return h(
+      'div',
+      { class: 'calc-mini' },
+      h(
+        'div',
+        { class: 'calc-crop-head' },
         h('span', { class: 'calc-crop-emoji', 'aria-hidden': 'true' }, emoji(crop)),
-        h('div', null, h('h3', null, crop.name), crop.group ? h('span', { class: 'badge' }, crop.group) : null)),
+        h('div', null, h('h3', null, crop.name), crop.group ? h('span', { class: 'badge' }, crop.group) : null),
+      ),
       crop.description ? h('p', { class: 'calc-crop-desc' }, crop.description) : null,
-      h('div', { class: 'metric-grid calc-metrics' },
+      h(
+        'div',
+        { class: 'metric-grid calc-metrics' },
         metric('Unidad base', crop.unit || 'kg'),
         metric('Densidad de siembra', hasDensity ? fmt(crop.density) + ' ' + (crop.unit || 'kg') + '/ha' : 'Sin dato'),
-        metric('Rendimiento ref.', hasYield ? fmt(crop.yield, 1) + ' t/ha' : '—')),
-      h('p', { class: 'calc-source-note' }, h('strong', null, 'Fuente de datos: '),
-        sources.length ? sources.join(' · ') + '.' : 'el catálogo no tiene datos de siembra de este cultivo.'));
+        metric('Rendimiento ref.', hasYield ? fmt(crop.yield, 1) + ' t/ha' : '—'),
+      ),
+      h(
+        'p',
+        { class: 'calc-source-note' },
+        h('strong', null, 'Fuente de datos: '),
+        sources.length ? sources.join(' · ') + '.' : 'el catálogo no tiene datos de siembra de este cultivo.',
+      ),
+    );
   }
   function productCard(item) {
     if (!item) return null;
-    const dose = item.dose !== null && item.dose !== undefined
-      ? fmt(item.dose, 3) + ' ' + (item.unit || '') + (item.doseVerified ? ' (verificada)' : ' (sin verificar)') : 'No documentada';
-    return h('div', { class: 'calc-mini' },
+    const dose =
+      item.dose !== null && item.dose !== undefined
+        ? fmt(item.dose, 3) + ' ' + (item.unit || '') + (item.doseVerified ? ' (verificada)' : ' (sin verificar)')
+        : 'No documentada';
+    return h(
+      'div',
+      { class: 'calc-mini' },
       h('p', { class: 'calc-mini-kicker' }, 'Producto'),
       h('div', { class: 'calc-mini-head' }, h('h3', null, item.name)),
-      h('dl', null,
-        h('dt', null, 'Categoría'), h('dd', null, item.categoryLabel || '—'),
-        h('dt', null, 'Dosis'), h('dd', null, dose),
-        h('dt', null, 'Fuente'), h('dd', null, item.sourceName || 'Sin fuente registrada')));
+      h(
+        'dl',
+        null,
+        h('dt', null, 'Categoría'),
+        h('dd', null, item.categoryLabel || '—'),
+        h('dt', null, 'Dosis'),
+        h('dd', null, dose),
+        h('dt', null, 'Fuente'),
+        h('dd', null, item.sourceName || 'Sin fuente registrada'),
+      ),
+    );
   }
 
   // ---------- Lista de lo que falta (estado vacío del resultado) ----------
   function checklist(items) {
-    return h('ul', { class: 'calc-checklist', 'aria-label': 'Qué falta para continuar' }, items.map((item) =>
-      h('li', { class: item.ok ? 'is-ok' : 'is-todo' }, h('span', null, item.label), item.ok ? null : h('small', null, item.hint))));
+    return h(
+      'ul',
+      { class: 'calc-checklist', 'aria-label': 'Qué falta para continuar' },
+      items.map((item) =>
+        h(
+          'li',
+          { class: item.ok ? 'is-ok' : 'is-todo' },
+          h('span', null, item.label),
+          item.ok ? null : h('small', null, item.hint),
+        ),
+      ),
+    );
   }
   function pendingResult(panel, spec) {
     panel.replaceChildren(
-      h('div', { class: 'calc-result-top' }, h('p', { class: 'result-kicker' }, spec.kicker || 'Resultado'), h('span', { class: 'badge amber' }, 'Pendiente')),
+      h(
+        'div',
+        { class: 'calc-result-top' },
+        h('p', { class: 'result-kicker' }, spec.kicker || 'Resultado'),
+        h('span', { class: 'badge amber' }, 'Pendiente'),
+      ),
       h('p', { class: 'result-value is-empty', 'aria-hidden': 'true' }, h('strong', null, '—')),
       h('h2', { class: 'calc-empty-title' }, spec.title),
       h('p', { class: 'muted calc-empty-text' }, spec.text),
-      spec.items && !spec.ready ? checklist(spec.items) : null);
+      spec.items && !spec.ready ? checklist(spec.items) : null,
+    );
   }
 
-  // ---------- Formularios guiados (Si alcanza y Cosecha) ----------
+  // ---------- Formulario guiado de «¿Me alcanza?» ----------
   const FLOWS = {
     'cover-form': {
-      tool: 'alcanza', verb: 'comprobar', action: 'Comprobar disponibilidad', resultName: 'la disponibilidad',
+      tool: 'alcanza',
+      verb: 'comprobar',
+      action: 'Comprobar disponibilidad',
+      resultName: 'la disponibilidad',
       steps: ['plot', 'crop', 'product', 'stock', 'dose', 'go'],
       stepItems: { plot: ['plot'], crop: ['crop'], product: ['product'], stock: ['stock'], dose: ['dose', 'area'] },
       items(ctx) {
@@ -281,34 +454,38 @@
         const needsTarget = Boolean(targetField && !targetField.hidden);
         const stock = f.stock.value;
         return [
-          ctx.plotItem, ctx.cropItem,
-          { key: 'product', label: 'Producto', ok: f.product.value !== '' && (!needsTarget || f.target.value !== ''),
-            hint: !crop ? 'Primero elige un cultivo' : f.product.value === '' ? 'Elige un producto o «no registrado»' : 'Selecciona el objetivo de control' },
-          { key: 'stock', label: 'Cantidad disponible', ok: stock !== '' && Number(stock) >= 0, hint: 'Indica cuánto producto tienes (0 o más)' },
-          { key: 'dose', label: 'Dosis o requerimiento', ok: Number(f.dose.value) > 0, hint: 'Ingresa una dosis mayor que 0' },
+          ctx.plotItem,
+          ctx.cropItem,
+          {
+            key: 'product',
+            label: 'Producto',
+            ok: f.product.value !== '' && (!needsTarget || f.target.value !== ''),
+            hint: !crop
+              ? 'Primero elige un cultivo'
+              : f.product.value === ''
+                ? 'Elige un producto o «no registrado»'
+                : 'Selecciona el objetivo de control',
+          },
+          {
+            key: 'stock',
+            label: 'Cantidad disponible',
+            ok: stock !== '' && Number(stock) >= 0,
+            hint: 'Indica cuánto producto tienes (0 o más)',
+          },
+          {
+            key: 'dose',
+            label: 'Dosis o requerimiento',
+            ok: Number(f.dose.value) > 0,
+            hint: 'Ingresa una dosis mayor que 0',
+          },
           ctx.areaItem,
         ];
       },
       pendingText: 'En cuanto lo completes, aquí verás si te alcanza el producto y qué superficie alcanzas a cubrir.',
       readyText: 'Pulsa «Comprobar disponibilidad» para ver si te alcanza.',
-      extraSummary(ctx) { return productCard(productById(ctx.f.product.value)); },
-    },
-    'yield-form': {
-      tool: 'cosecha', verb: 'estimar', action: 'Estimar cosecha', resultName: 'la cosecha',
-      steps: ['plot', 'crop', 'area', 'rate', 'go'],
-      stepItems: { plot: ['plot'], crop: ['crop'], area: ['area'], rate: ['rate', 'source'] },
-      items(ctx) {
-        const { f } = ctx;
-        const reference = f.rate.readOnly;
-        return [
-          ctx.plotItem, ctx.cropItem, ctx.areaItem,
-          { key: 'rate', label: 'Rendimiento esperado', ok: Number(f.rate.value) > 0, hint: 'Ingresa un rendimiento esperado mayor que 0' },
-          { key: 'source', label: 'Origen del rendimiento', ok: reference || f.source.value.trim() !== '', hint: 'Indica de dónde sale el rendimiento' },
-        ];
+      extraSummary(ctx) {
+        return productCard(productById(ctx.f.product.value));
       },
-      pendingText: 'En cuanto lo completes, aquí verás la producción estimada y de dónde sale el rendimiento usado.',
-      readyText: 'Pulsa «Estimar cosecha» para ver la producción estimada.',
-      extraSummary() { return null; },
     },
   };
 
@@ -318,7 +495,9 @@
     const panel = form.closest('.tool-flow');
     const f = form.elements;
     const steps = {};
-    form.querySelectorAll('.calc-step[data-step]').forEach((node) => { steps[node.dataset.step] = node; });
+    form.querySelectorAll('.calc-step[data-step]').forEach((node) => {
+      steps[node.dataset.step] = node;
+    });
     const status = panel.querySelector('[data-flow-status]');
     const hint = form.querySelector('[data-flow-hint]');
     const submit = form.querySelector('[data-flow-submit]');
@@ -335,32 +514,57 @@
     const currentCrop = () => cropById(cropSelect.value);
 
     const plotPicker = createPicker({
-      host: plotHost, step: steps.plot, label: 'Potreros', searchFrom: 6, searchPlaceholder: 'Buscar potrero o predio…',
+      host: plotHost,
+      step: steps.plot,
+      label: 'Potreros',
+      searchFrom: 6,
+      searchPlaceholder: 'Buscar potrero o predio…',
       items: () => plots,
       selected: currentPlot,
       pick: (id) => fireChange(plotSelect, id),
       text: (plot) => plot.name + ' ' + plot.farmName + ' ' + plot.crop,
       chosen: (plot) => ({ icon: plotIcon(plot), title: plot.name, sub: plotMeta(plot) }),
-      option: (plot) => ({ icon: plotIcon(plot), title: plot.name, subs: [plotMeta(plot), plot.crop ? 'Cultivo: ' + plot.crop : 'Sin cultivo'] }),
+      option: (plot) => ({
+        icon: plotIcon(plot),
+        title: plot.name,
+        subs: [plotMeta(plot), plot.crop ? 'Cultivo: ' + plot.crop : 'Sin cultivo'],
+      }),
       changeLabel: 'Cambiar potrero',
       empty: () => {
         const withSetup = predios.find((item) => item.setupUrl);
         if (withSetup) {
-          return emptyCard('🗺️', 'Tu predio ya está registrado: ¿cómo quieres trabajar este terreno?',
+          return emptyCard(
+            '🗺️',
+            'Tu predio ya está registrado: ¿cómo quieres trabajar este terreno?',
             'Usa todo el predio como un solo potrero o divídelo en sectores para continuar.',
-            [h('a', { class: 'btn-primary-agro btn-sm', href: withSetup.setupUrl }, 'Definir potreros')]);
+            [h('a', { class: 'btn-primary-agro btn-sm', href: withSetup.setupUrl }, 'Definir potreros')],
+          );
         }
-        return emptyCard('🗺️', 'Comienza registrando tu predio',
+        return emptyCard(
+          '🗺️',
+          'Comienza registrando tu predio',
           'Primero registra tu predio; después defines sus potreros y podrás continuar.',
-          [h('a', { class: 'btn-primary-agro btn-sm', href: plotHost.dataset.farmCreateUrl || '/predios/nuevo/' }, 'Registrar predio')]);
+          [
+            h(
+              'a',
+              { class: 'btn-primary-agro btn-sm', href: plotHost.dataset.farmCreateUrl || '/predios/nuevo/' },
+              'Registrar predio',
+            ),
+          ],
+        );
       },
     });
     const availableCrops = () => {
-      const present = new Set(Array.from(cropSelect.options).filter((option) => option.value && !option.disabled).map((option) => option.value));
+      const present = new Set(
+        Array.from(cropSelect.options)
+          .filter((option) => option.value && !option.disabled)
+          .map((option) => option.value),
+      );
       return crops.filter((crop) => present.has(String(crop.id)));
     };
     const cropCfg = cropPickerConfig({
-      host: cropHost, step: steps.crop,
+      host: cropHost,
+      step: steps.crop,
       items: () => sortCrops(availableCrops()),
       selected: currentCrop,
       pick: (id) => fireChange(cropSelect, id),
@@ -373,12 +577,31 @@
       const area = Number(String(f.area.value).replace(',', '.'));
       const areaOk = Boolean(plot) && Number.isFinite(area) && area > 0 && area <= plot.areaHa + 1e-9;
       return {
-        form, f, plot, crop,
-        plotItem: { key: 'plot', label: 'Potrero', ok: Boolean(plot), hint: plots.length ? 'Selecciona un potrero' : 'Registra un potrero en Mis predios y potreros' },
-        cropItem: { key: 'crop', label: 'Cultivo', ok: Boolean(crop), hint: crops.length ? 'Selecciona un cultivo' : 'El catálogo no tiene cultivos activos' },
+        form,
+        f,
+        plot,
+        crop,
+        plotItem: {
+          key: 'plot',
+          label: 'Potrero',
+          ok: Boolean(plot),
+          hint: plots.length ? 'Selecciona un potrero' : 'Registra un potrero en Mis predios y potreros',
+        },
+        cropItem: {
+          key: 'crop',
+          label: 'Cultivo',
+          ok: Boolean(crop),
+          hint: crops.length ? 'Selecciona un cultivo' : 'El catálogo no tiene cultivos activos',
+        },
         areaItem: {
-          key: 'area', label: 'Superficie', ok: areaOk,
-          hint: !plot ? 'Primero elige un potrero' : !(area > 0) ? 'Ingresa una superficie mayor que 0' : 'No puede superar ' + fmt(plot.areaHa, 3) + ' ha',
+          key: 'area',
+          label: 'Superficie',
+          ok: areaOk,
+          hint: !plot
+            ? 'Primero elige un potrero'
+            : !(area > 0)
+              ? 'Ingresa una superficie mayor que 0'
+              : 'No puede superar ' + fmt(plot.areaHa, 3) + ' ha',
         },
       };
     }
@@ -386,24 +609,33 @@
     function stateFor(items) {
       if (!plots.length) return ['blocked', 'Necesitas un potrero'];
       if (!crops.length) return ['blocked', 'El catálogo no tiene cultivos'];
-      if (result.dataset.state === 'done') return result.dataset.simulation === '1' ? ['sim', 'Simulación guardada'] : ['done', 'Resultado guardado'];
+      if (result.dataset.state === 'done')
+        return result.dataset.simulation === '1' ? ['sim', 'Simulación guardada'] : ['done', 'Resultado guardado'];
       const missing = items.filter((item) => !item.ok);
       if (!missing.length) return ['ready', 'Listo para ' + spec.verb];
-      return ['pending', missing.length === 1 ? 'Falta: ' + missing[0].label.toLowerCase() : 'Faltan ' + missing.length + ' datos'];
+      return [
+        'pending',
+        missing.length === 1 ? 'Falta: ' + missing[0].label.toLowerCase() : 'Faltan ' + missing.length + ' datos',
+      ];
     }
 
     function refresh() {
       const ctx = context();
       const items = spec.items(ctx);
       const ok = {};
-      items.forEach((item) => { ok[item.key] = item.ok; });
+      items.forEach((item) => {
+        ok[item.key] = item.ok;
+      });
       const done = {};
-      spec.steps.forEach((key) => { if (spec.stepItems[key]) done[key] = spec.stepItems[key].every((k) => ok[k]); });
+      spec.steps.forEach((key) => {
+        if (spec.stepItems[key]) done[key] = spec.stepItems[key].every((k) => ok[k]);
+      });
       done.go = result.dataset.state === 'done';
       const current = spec.steps.find((key) => key !== 'go' && !done[key]) || 'go';
       // Sin potrero no se elige cultivo; sin cultivo no tiene sentido pedir lo demás (los productos dependen del cultivo).
       let lockFrom = spec.steps.length;
-      if (!ok.plot) lockFrom = 1; else if (!ok.crop) lockFrom = 2;
+      if (!ok.plot) lockFrom = 1;
+      else if (!ok.crop) lockFrom = 2;
       spec.steps.forEach((key, index) => {
         const node = steps[key];
         if (!node) return;
@@ -414,7 +646,8 @@
         const body = node.querySelector('.calc-step-body');
         if (body) {
           body.toggleAttribute('inert', locked);
-          if (locked) body.setAttribute('aria-disabled', 'true'); else body.removeAttribute('aria-disabled');
+          if (locked) body.setAttribute('aria-disabled', 'true');
+          else body.removeAttribute('aria-disabled');
         }
       });
 
@@ -429,8 +662,11 @@
       const missing = items.filter((item) => !item.ok);
       if (!plots.length) hint.textContent = 'Necesitas al menos un potrero registrado para continuar.';
       else if (!crops.length) hint.textContent = 'Sin cultivos activos en el catálogo no se puede continuar.';
-      else if (result.dataset.state === 'done') hint.textContent = 'Resultado guardado. Puedes ajustar los datos y volver a ' + spec.verb + '.';
-      else if (ready) hint.textContent = 'Todo listo. «' + spec.action + '» valida el cálculo con el catálogo y lo guarda en tu cuenta.';
+      else if (result.dataset.state === 'done')
+        hint.textContent = 'Resultado guardado. Puedes ajustar los datos y volver a ' + spec.verb + '.';
+      else if (ready)
+        hint.textContent =
+          'Todo listo. «' + spec.action + '» valida el cálculo con el catálogo y lo guarda en tu cuenta.';
       else hint.textContent = 'Te falta: ' + missing.map((item) => item.label.toLowerCase()).join(', ') + '.';
 
       // Superficie: atajo para usar todo el potrero.
@@ -439,7 +675,13 @@
         const plot = ctx.plot;
         const area = Number(String(f.area.value).replace(',', '.'));
         if (plot && (!Number.isFinite(area) || Math.abs(area - plot.areaHa) > 1e-6)) {
-          areaTools.append(h('button', { class: 'calc-chip', type: 'button', 'data-use-all': '1' }, 'Usar todo el potrero (' + fmt(plot.areaHa, 2) + ' ha)'));
+          areaTools.append(
+            h(
+              'button',
+              { class: 'calc-chip', type: 'button', 'data-use-all': '1' },
+              'Usar todo el potrero (' + fmt(plot.areaHa, 2) + ' ha)',
+            ),
+          );
         }
       }
 
@@ -453,11 +695,21 @@
 
       // Resultado: mientras no haya uno vigente se muestra qué falta.
       if (result.dataset.state !== 'done' && result.dataset.state !== 'stale') {
-        let title; let body;
-        if (!plots.length) { title = 'Necesitas un potrero'; body = 'Registra tu predio y define sus potreros en «Mis predios y potreros» para continuar.'; }
-        else if (!crops.length) { title = 'El catálogo no tiene cultivos'; body = 'Sin cultivos activos no se puede calcular y AgroAsesor no inventa datos.'; }
-        else if (ready) { title = 'Todo listo'; body = spec.readyText; }
-        else { title = missing.length === 1 ? 'Aún falta un dato' : 'Aún faltan ' + missing.length + ' datos'; body = spec.pendingText; }
+        let title;
+        let body;
+        if (!plots.length) {
+          title = 'Necesitas un potrero';
+          body = 'Registra tu predio y define sus potreros en «Mis predios y potreros» para continuar.';
+        } else if (!crops.length) {
+          title = 'El catálogo no tiene cultivos';
+          body = 'Sin cultivos activos no se puede calcular y AgroAsesor no inventa datos.';
+        } else if (ready) {
+          title = 'Todo listo';
+          body = spec.readyText;
+        } else {
+          title = missing.length === 1 ? 'Aún falta un dato' : 'Aún faltan ' + missing.length + ' datos';
+          body = spec.pendingText;
+        }
         pendingResult(result, { title, text: body, items, ready });
       }
     }
@@ -467,10 +719,18 @@
       if (result.dataset.state !== 'done') return;
       result.dataset.state = 'stale';
       result.classList.add('is-stale');
-      result.prepend(h('p', { class: 'flow-stale' }, 'Cambiaste datos: vuelve a ' + spec.verb + ' para actualizar este resultado.'));
+      result.prepend(
+        h('p', { class: 'flow-stale' }, 'Cambiaste datos: vuelve a ' + spec.verb + ' para actualizar este resultado.'),
+      );
     }
-    form.addEventListener('input', (event) => { if (event.target.matches('input, select')) markStale(); refresh(); });
-    form.addEventListener('change', (event) => { if (event.target.matches('input, select')) markStale(); refresh(); });
+    form.addEventListener('input', (event) => {
+      if (event.target.matches('input, select')) markStale();
+      refresh();
+    });
+    form.addEventListener('change', (event) => {
+      if (event.target.matches('input, select')) markStale();
+      refresh();
+    });
     form.addEventListener('flow:refresh', refresh);
     form.addEventListener('flow:result', (event) => {
       result.classList.remove('is-stale');
@@ -495,16 +755,23 @@
     // Indicadores compactos del catálogo (los mismos de «Cuánto llevar»).
     const seeds = (catalog.semillas || []).length;
     const active = allProducts.filter((item) => item.active !== false).length;
-    const chips = [['Cultivos', crops.length], ['Semillas en catálogo', seeds], ['Insumos vigentes', active]].filter((pair) => Number(pair[1]) > 0);
+    const chips = [
+      ['Cultivos', crops.length],
+      ['Semillas en catálogo', seeds],
+      ['Insumos vigentes', active],
+    ].filter((pair) => Number(pair[1]) > 0);
     if (catalog.fromDb === false) chips.push(['Fuente', 'Demo local']);
     document.querySelectorAll('[data-flow-strip]').forEach((strip) => {
       strip.hidden = !chips.length;
-      strip.replaceChildren(...chips.map((pair) => h('div', { class: 'info-chip' }, h('span', null, pair[0]), h('strong', null, String(pair[1])))));
+      strip.replaceChildren(
+        ...chips.map((pair) =>
+          h('div', { class: 'info-chip' }, h('span', null, pair[0]), h('strong', null, String(pair[1]))),
+        ),
+      );
     });
     // El aviso «Continuar como simulación» lleva a «Cuánto llevar» (ya existente); no se toca aquí.
   }
 
-  window.AgroToolFlow = { h, fmt, norm, emoji, emptyCard, createPicker, cropPickerConfig, sortCrops, plotCard, cropCard, productCard, pendingResult, checklist, shortGroup };
   // decisiones.js (se carga después) rellena los <select> al ejecutarse; los formularios se montan al terminar la carga.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountAll);
   else mountAll();

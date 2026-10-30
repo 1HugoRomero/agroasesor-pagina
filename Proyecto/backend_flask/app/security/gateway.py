@@ -10,6 +10,7 @@ La firma cubre usuario, rol, fecha, método, ruta+consulta y huella del cuerpo, 
 el usuario, reutilizar la firma en otra ruta ni alterar el contenido. Caduca a los 60 s. La API no emite
 sesiones ni contraseñas propias.
 """
+
 import hashlib
 import hmac
 import time
@@ -31,10 +32,16 @@ class Usuario:
 
 def firmar(secreto, usuario_id, es_admin, marca, metodo, destino, cuerpo=b""):
     """Firma HMAC-SHA256 (hex). Django usa esta misma definición (ver core/api_gateway.py)."""
-    base = "|".join([
-        str(int(usuario_id)), "1" if es_admin else "0", str(int(marca)), metodo.upper(), destino,
-        hashlib.sha256(cuerpo).hexdigest(),
-    ])
+    base = "|".join(
+        [
+            str(int(usuario_id)),
+            "1" if es_admin else "0",
+            str(int(marca)),
+            metodo.upper(),
+            destino,
+            hashlib.sha256(cuerpo).hexdigest(),
+        ]
+    )
     return hmac.new(secreto.encode("utf-8"), base.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
@@ -69,6 +76,7 @@ def requiere_usuario(vista):
     def envoltura(*args, **kwargs):
         g.usuario = usuario_firmado()
         return vista(*args, **kwargs)
+
     return envoltura
 
 
@@ -79,4 +87,5 @@ def requiere_admin(vista):
         if not g.usuario.es_admin:
             raise ApiError(403, "SIN_PERMISO", "Esta operación es solo para administradores.")
         return vista(*args, **kwargs)
+
     return envoltura

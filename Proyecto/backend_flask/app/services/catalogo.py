@@ -2,6 +2,7 @@
 
 Este módulo no conecta la base de datos oficial ni descarga datos en vivo.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
@@ -16,7 +17,17 @@ import yaml
 DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "catalogo_agricola.yaml"
 # citada_sin_cotejar: el valor viene de una publicación institucional citada, pero aún no se cotejó con el documento.
 ESTADOS_REFERENCIA = {"cotejada_con_fuente", "citada_sin_cotejar"}
-OFFICIAL_HOSTS = {"www.sag.gob.cl", "sag.gob.cl", "www.inia.cl", "inia.cl", "biblioteca.inia.cl", "planpredial.inia.cl", "www.odepa.gob.cl", "odepa.gob.cl"}
+OFFICIAL_HOSTS = {
+    "www.sag.gob.cl",
+    "sag.gob.cl",
+    "www.inia.cl",
+    "inia.cl",
+    "biblioteca.inia.cl",
+    "planpredial.inia.cl",
+    "www.odepa.gob.cl",
+    "odepa.gob.cl",
+}
+
 
 class CatalogoError(ValueError):
     pass
@@ -59,7 +70,10 @@ def cargar_catalogo():
             raise RuntimeError(f"Fuente inexistente para producto {product['id']}")
         if product.get("precio_clp") is not None or product.get("presentaciones_comerciales_verificadas"):
             raise RuntimeError("Este borrador no admite precios ni envases comerciales no cotejados")
-        if product["clase"] == "producto_con_etiqueta_sag" and product.get("estado_autorizacion") != "requiere_cotejo_vigente":
+        if (
+            product["clase"] == "producto_con_etiqueta_sag"
+            and product.get("estado_autorizacion") != "requiere_cotejo_vigente"
+        ):
             raise RuntimeError("No afirmar registro vigente sin cotejo del SAG")
     for ref in data["referencias_siembra"]:
         if ref["fuente_id"] not in ids_fuente:
@@ -94,11 +108,21 @@ def productos(q="", categoria="", pagina=1, limite=20):
         raise CatalogoError("La búsqueda no puede superar 100 caracteres")
     if not 1 <= pagina <= 100000 or not 1 <= limite <= 100:
         raise CatalogoError("Paginación fuera de rango")
-    found = [p for p in data["productos"] if (not categoria or p["categoria"] == categoria)
-             and (not q or _norm(q) in _norm(" ".join((p["nombre"],p["descripcion"],p["categoria"]))))]
+    found = [
+        p
+        for p in data["productos"]
+        if (not categoria or p["categoria"] == categoria)
+        and (not q or _norm(q) in _norm(" ".join((p["nombre"], p["descripcion"], p["categoria"]))))
+    ]
     total = len(found)
-    start = (pagina-1)*limite
-    return {"total": total, "pagina": pagina, "limite": limite, "resultados": [_enriquecer(p) for p in found[start:start+limite]], "aviso": data["aviso_general"]}
+    start = (pagina - 1) * limite
+    return {
+        "total": total,
+        "pagina": pagina,
+        "limite": limite,
+        "resultados": [_enriquecer(p) for p in found[start : start + limite]],
+        "aviso": data["aviso_general"],
+    }
 
 
 def producto_por_id(product_id):
@@ -131,7 +155,7 @@ def calcular_sacos(payload):
         raise CatalogoError("Enviar objeto JSON")
     allowed = {"referencia_id", "superficie_ha", "superficie_m2", "peso_saco_kg", "dosis_kg_ha", "precio_saco_clp"}
     if set(payload) - allowed:
-        raise CatalogoError("Campos no admitidos: " + ", ".join(sorted(set(payload)-allowed)))
+        raise CatalogoError("Campos no admitidos: " + ", ".join(sorted(set(payload) - allowed)))
     has_ha = "superficie_ha" in payload
     has_m2 = "superficie_m2" in payload
     if has_ha == has_m2:
@@ -139,23 +163,37 @@ def calcular_sacos(payload):
     ref = next((r for r in referencias_siembra() if r["id"] == payload.get("referencia_id")), None)
     if ref is None:
         raise CatalogoError("Referencia de siembra desconocida")
-    ha = _decimal_positivo(payload["superficie_ha"], "superficie_ha", 100000) if has_ha else _decimal_positivo(payload["superficie_m2"], "superficie_m2", 1000000000)/Decimal(10000)
+    ha = (
+        _decimal_positivo(payload["superficie_ha"], "superficie_ha", 100000)
+        if has_ha
+        else _decimal_positivo(payload["superficie_m2"], "superficie_m2", 1000000000) / Decimal(10000)
+    )
     peso = _decimal_positivo(payload.get("peso_saco_kg"), "peso_saco_kg", 1000)
     dosis = _decimal_positivo(payload.get("dosis_kg_ha"), "dosis_kg_ha", 100000)
     if not Decimal(str(ref["dosis_min_kg_ha"])) <= dosis <= Decimal(str(ref["dosis_max_kg_ha"])):
         raise CatalogoError("Dosis fuera del rango de referencia INIA; revisar sistema, variedad y condiciones")
-    precio = (_decimal_positivo(payload["precio_saco_clp"], "precio_saco_clp", 1000000000)
-              if "precio_saco_clp" in payload else None)
+    precio = (
+        _decimal_positivo(payload["precio_saco_clp"], "precio_saco_clp", 1000000000)
+        if "precio_saco_clp" in payload
+        else None
+    )
     if precio is not None and precio != precio.to_integral_value():
         raise CatalogoError("precio_saco_clp debe expresarse en pesos enteros")
     total = ha * dosis
     sacos = int((total / peso).to_integral_value(rounding=ROUND_CEILING))
     redondear = lambda x: float(x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-    return {"referencia_id":ref["id"],"cultivo":ref["cultivo"],"sistema":ref["sistema"],
-            "superficie_ha":redondear(ha),"dosis_elegida_kg_ha":redondear(dosis),
-            "peso_saco_simulado_kg":redondear(peso),"semilla_requerida_kg":redondear(total),
-            "sacos_necesarios":sacos,"capacidad_total_comprada_kg":redondear(peso*sacos),
-            "sobrante_teorico_kg":redondear(peso*sacos-total),
-            "costo_estimado_clp":int(precio*sacos) if precio is not None else None,
-            "fuente":ref["fuente"],
-            "advertencia":"Cálculo orientativo para compra. El tamaño de saco lo ingresa el usuario; no representa un producto comercial verificado. Confirmar dosis con asesoría técnica y datos del lote."}
+    return {
+        "referencia_id": ref["id"],
+        "cultivo": ref["cultivo"],
+        "sistema": ref["sistema"],
+        "superficie_ha": redondear(ha),
+        "dosis_elegida_kg_ha": redondear(dosis),
+        "peso_saco_simulado_kg": redondear(peso),
+        "semilla_requerida_kg": redondear(total),
+        "sacos_necesarios": sacos,
+        "capacidad_total_comprada_kg": redondear(peso * sacos),
+        "sobrante_teorico_kg": redondear(peso * sacos - total),
+        "costo_estimado_clp": int(precio * sacos) if precio is not None else None,
+        "fuente": ref["fuente"],
+        "advertencia": "Cálculo orientativo para compra. El tamaño de saco lo ingresa el usuario; no representa un producto comercial verificado. Confirmar dosis con asesoría técnica y datos del lote.",
+    }

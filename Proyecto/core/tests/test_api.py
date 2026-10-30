@@ -3,6 +3,7 @@
 Las pruebas de integración levantan la API Flask real en un hilo, apuntando a una COPIA de la base de pruebas de
 Django (nunca a la base oficial), y se omiten si Flask no está instalado en el entorno.
 """
+
 import sqlite3
 import sys
 import tempfile
@@ -95,6 +96,7 @@ class PuertaDeEnlaceSinFlaskTests(TestCase):
         def falso(self_, peticion, timeout=None):
             capturado.update({k.lower(): v for k, v in peticion.header_items()})
             raise OSError("fin")
+
         with mock.patch("urllib.request.OpenerDirector.open", falso):
             c.get("/api/v1/predios", HTTP_X_AGROASESOR_USER="999", HTTP_X_AGROASESOR_STAFF="1")
         self.assertEqual(capturado["x-agroasesor-user"], str(usuario.pk))
@@ -123,8 +125,12 @@ class PuertaDeEnlaceConFlaskTests(TestCase):
         self.luis = User.objects.create_user("luis_api", "luis_api@example.com", "Clave-segura-123")
         self.admin = User.objects.create_user("admin_api", "admin_api@example.com", "Clave-segura-123", is_staff=True)
         Agricultor.objects.create(user=self.ana, nombre="Ana", telefono="", comuna="Melipilla")
-        p_ana = Predio.objects.create(propietario=self.ana, nombre="Predio Ana", ubicacion="Melipilla", superficie_ha="10.5")
-        p_luis = Predio.objects.create(propietario=self.luis, nombre="Predio Luis", ubicacion="Talagante", superficie_ha="3")
+        p_ana = Predio.objects.create(
+            propietario=self.ana, nombre="Predio Ana", ubicacion="Melipilla", superficie_ha="10.5"
+        )
+        p_luis = Predio.objects.create(
+            propietario=self.luis, nombre="Predio Luis", ubicacion="Talagante", superficie_ha="3"
+        )
         self.pot_ana = Potrero.objects.create(predio=p_ana, nombre="Norte", superficie_ha="1.5", perimetro=[])
         self.pot_luis = Potrero.objects.create(predio=p_luis, nombre="Sur", superficie_ha="2", perimetro=[])
         self.predio_luis = p_luis
@@ -137,7 +143,9 @@ class PuertaDeEnlaceConFlaskTests(TestCase):
         # base en memoria compartida de las pruebas mientras hay una transacción abierta.
         destino.executescript("\n".join(connection.connection.iterdump()))
         destino.close()
-        app = self._create_app({"TESTING": True, "AGROASESOR_DB_PATH": str(copia), "AGROASESOR_INTERNAL_SECRET": SECRETO})
+        app = self._create_app(
+            {"TESTING": True, "AGROASESOR_DB_PATH": str(copia), "AGROASESOR_INTERNAL_SECRET": SECRETO}
+        )
         self.servidor = self._make_server("127.0.0.1", 0, app)
         self.hilo = threading.Thread(target=self.servidor.serve_forever, daemon=True)
         self.hilo.start()

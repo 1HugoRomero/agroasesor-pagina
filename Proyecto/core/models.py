@@ -7,7 +7,14 @@ from django.utils import timezone
 from decimal import Decimal
 import math
 from datetime import date, timedelta
-from .geometry import polygon_area, polygon_perimeter, polygon_geojson, coordinates_from_geojson, polygon_contains, polygons_overlap
+from .geometry import (
+    polygon_area,
+    polygon_perimeter,
+    polygon_geojson,
+    coordinates_from_geojson,
+    polygon_contains,
+    polygons_overlap,
+)
 
 
 class Zona(models.Model):
@@ -127,45 +134,42 @@ class ReferenciaAgronomica(models.Model):
             end_month = getattr(self, f'{prefix}_fin_mes')
             end_day = getattr(self, f'{prefix}_fin_dia')
             values = (start_month, start_day, end_month, end_day)
-            if any(value is not None for value in values) and not all(
-                value is not None for value in values
-            ):
-                errors[f'{prefix}_inicio_mes'] = (
-                    f'Completa las fechas de inicio y término de la ventana de {label}.'
-                )
+            if any(value is not None for value in values) and not all(value is not None for value in values):
+                errors[f'{prefix}_inicio_mes'] = f'Completa las fechas de inicio y término de la ventana de {label}.'
                 continue
             if all(value is not None for value in values):
                 try:
                     date(2000, start_month, start_day)
                     date(2000, end_month, end_day)
                 except ValueError:
-                    errors[f'{prefix}_inicio_mes'] = (
-                        f'La ventana de {label} contiene una fecha inválida.'
-                    )
+                    errors[f'{prefix}_inicio_mes'] = f'La ventana de {label} contiene una fecha inválida.'
 
-        duplicates = type(self).objects.filter(
-            cultivo_id=self.cultivo_id,
-            zona_id=self.zona_id,
-            anio_referencia=self.anio_referencia,
-            variedad__iexact=self.variedad.strip(),
-        ).exclude(pk=self.pk)
-        if self.cultivo_id and self.zona_id and duplicates.exists():
-            errors['variedad'] = (
-                'Ya existe una referencia para este cultivo, zona y variedad.'
+        duplicates = (
+            type(self)
+            .objects.filter(
+                cultivo_id=self.cultivo_id,
+                zona_id=self.zona_id,
+                anio_referencia=self.anio_referencia,
+                variedad__iexact=self.variedad.strip(),
             )
+            .exclude(pk=self.pk)
+        )
+        if self.cultivo_id and self.zona_id and duplicates.exists():
+            errors['variedad'] = 'Ya existe una referencia para este cultivo, zona y variedad.'
         if self.duracion_ciclo_dias == 0:
             errors['duracion_ciclo_dias'] = 'La duración del ciclo debe ser mayor que cero.'
         if self.rendimiento_ton_ha is not None and self.rendimiento_ton_ha <= 0:
             errors['rendimiento_ton_ha'] = 'El rendimiento debe ser mayor que cero.'
-        if self.estado == self.Estado.VERIFICADA and not all((
-            self.institucion_fuente,
-            self.documento_fuente,
-            self.url_fuente,
-            self.fecha_consulta_fuente,
-        )):
+        if self.estado == self.Estado.VERIFICADA and not all(
+            (
+                self.institucion_fuente,
+                self.documento_fuente,
+                self.url_fuente,
+                self.fecha_consulta_fuente,
+            )
+        ):
             errors['estado'] = (
-                'Para verificar esta referencia registra institución, documento, '
-                'URL y fecha de consulta.'
+                'Para verificar esta referencia registra institución, documento, ' 'URL y fecha de consulta.'
             )
         if errors:
             raise ValidationError(errors)
@@ -176,12 +180,14 @@ class ReferenciaAgronomica(models.Model):
 
     @property
     def tiene_fuente_verificada(self):
-        return self.estado == self.Estado.VERIFICADA and all((
-            self.institucion_fuente,
-            self.documento_fuente,
-            self.url_fuente,
-            self.fecha_consulta_fuente,
-        ))
+        return self.estado == self.Estado.VERIFICADA and all(
+            (
+                self.institucion_fuente,
+                self.documento_fuente,
+                self.url_fuente,
+                self.fecha_consulta_fuente,
+            )
+        )
 
     def __str__(self):
         context = f' · {self.variedad}' if self.variedad else ''
@@ -289,18 +295,54 @@ class Insumo(models.Model):
     tiempo_reingreso = models.CharField(max_length=100, blank=True)
     precauciones_ambientales = models.TextField(blank=True)
     advertencia_polinizadores = models.TextField(blank=True)
-    presentacion_cantidad = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))])
+    presentacion_cantidad = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))]
+    )
     presentacion_unidad = models.CharField(max_length=50, blank=True)
     composicion_nutricional = models.CharField(max_length=255, blank=True)
-    nitrogeno_pct = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))])
-    fosforo_p2o5_pct = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))])
-    potasio_k2o_pct = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))])
+    nitrogeno_pct = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+    )
+    fosforo_p2o5_pct = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+    )
+    potasio_k2o_pct = models.DecimalField(
+        max_digits=6,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('100'))],
+    )
     variedad_semilla = models.CharField(max_length=150, blank=True)
     tipo_semilla = models.CharField(max_length=100, blank=True)
-    plantas_objetivo_m2 = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))])
-    peso_mil_semillas_g = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))])
-    germinacion_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('100'))])
-    pureza_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('100'))])
+    plantas_objetivo_m2 = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))]
+    )
+    peso_mil_semillas_g = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))]
+    )
+    germinacion_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('100'))],
+    )
+    pureza_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01')), MaxValueValidator(Decimal('100'))],
+    )
 
     def clean(self):
         super().clean()
@@ -312,17 +354,9 @@ class Insumo(models.Model):
                 errors['unidad_dosis_maxima'] = 'Indica la unidad de la dosis máxima.'
             if self.unidad_dosis and self.unidad_dosis_maxima != self.unidad_dosis:
                 errors['unidad_dosis_maxima'] = 'La unidad de la dosis máxima debe coincidir con la dosis registrada.'
-            if (
-                self.dosis_hectarea is not None
-                and self.dosis_hectarea > self.dosis_maxima_hectarea
-            ):
+            if self.dosis_hectarea is not None and self.dosis_hectarea > self.dosis_maxima_hectarea:
                 errors['dosis_maxima_hectarea'] = 'La dosis máxima no puede ser menor que la dosis registrada.'
-            if not (
-                self.dosis_verificada
-                and self.dosis_fuente
-                and self.fuente_url
-                and self.fecha_verificacion
-            ):
+            if not (self.dosis_verificada and self.dosis_fuente and self.fuente_url and self.fecha_verificacion):
                 errors['dosis_maxima_hectarea'] = (
                     'Verifica la dosis máxima con una fuente, URL y fecha antes de registrarla.'
                 )
@@ -330,7 +364,9 @@ class Insumo(models.Model):
             errors['vigencia_hasta'] = 'La fecha final de vigencia no puede ser anterior a la inicial.'
         if self.estado_verificacion == 'verified':
             if not self.fuente_nombre or not self.fuente_url or not self.fecha_verificacion:
-                errors['estado_verificacion'] = 'Registra una fuente y fecha de verificación antes de marcar el producto como verificado.'
+                errors['estado_verificacion'] = (
+                    'Registra una fuente y fecha de verificación antes de marcar el producto como verificado.'
+                )
             if self.es_fitosanitario and (
                 not self.numero_autorizacion_sag
                 or not self.etiqueta_url
@@ -339,7 +375,9 @@ class Insumo(models.Model):
                 or not isinstance(self.objetivos_control, list)
                 or not self.objetivos_control
             ):
-                errors['estado_verificacion'] = 'Para verificar un plaguicida registra autorización, etiqueta, cultivo y objetivo de control.'
+                errors['estado_verificacion'] = (
+                    'Para verificar un plaguicida registra autorización, etiqueta, cultivo y objetivo de control.'
+                )
         if self.dosis_verificada:
             if not self.dosis_hectarea or self.dosis_hectarea <= 0 or not self.unidad_dosis:
                 errors['dosis_verificada'] = 'Registra una dosis positiva y su unidad antes de verificarla.'
@@ -437,7 +475,9 @@ class Predio(models.Model):
     ubicacion = models.CharField(max_length=255)
     descripcion = models.TextField(blank=True)
     observaciones = models.TextField(blank=True)
-    superficie_ha = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+    superficie_ha = models.DecimalField(
+        max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))]
+    )
     latitud = models.FloatField(null=True, blank=True, validators=[MinValueValidator(-85), MaxValueValidator(85)])
     longitud = models.FloatField(null=True, blank=True, validators=[MinValueValidator(-180), MaxValueValidator(180)])
     geojson = models.JSONField(null=True, blank=True)
@@ -447,7 +487,9 @@ class Predio(models.Model):
 
     class Meta:
         ordering = ['nombre', 'pk']
-        constraints = [models.CheckConstraint(condition=models.Q(superficie_ha__gt=0), name='predio_superficie_positiva')]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(superficie_ha__gt=0), name='predio_superficie_positiva')
+        ]
 
     def clean(self):
         super().clean()
@@ -550,7 +592,9 @@ class Potrero(models.Model):
     variedad = models.CharField(max_length=150, blank=True)
     fecha_siembra = models.DateField(null=True, blank=True)
     fecha_cosecha = models.DateField(null=True, blank=True)
-    superficie_ha = models.DecimalField(max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))])
+    superficie_ha = models.DecimalField(
+        max_digits=12, decimal_places=4, validators=[MinValueValidator(Decimal('0.0001'))]
+    )
     perimetro = models.JSONField(default=list, blank=True)
     geojson = models.JSONField(null=True, blank=True)
     latitud = models.FloatField(null=True, blank=True, validators=[MinValueValidator(-85), MaxValueValidator(85)])
@@ -560,7 +604,9 @@ class Potrero(models.Model):
 
     class Meta:
         ordering = ['nombre', 'pk']
-        constraints = [models.CheckConstraint(condition=models.Q(superficie_ha__gt=0), name='potrero_superficie_positiva')]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(superficie_ha__gt=0), name='potrero_superficie_positiva')
+        ]
 
     def clean(self):
         super().clean()
@@ -666,9 +712,11 @@ class TemporadaCultivo(models.Model):
     def clean(self):
         super().clean()
         if self.fecha_siembra and self.fecha_cosecha and self.fecha_cosecha < self.fecha_siembra:
-            raise ValidationError({
-                'fecha_cosecha':'La cosecha no puede ser anterior a la siembra.',
-            })
+            raise ValidationError(
+                {
+                    'fecha_cosecha': 'La cosecha no puede ser anterior a la siembra.',
+                }
+            )
         if self.temporada_agricola:
             parts = self.temporada_agricola.split('-')
             if (
@@ -676,19 +724,25 @@ class TemporadaCultivo(models.Model):
                 or not all(part.isdigit() and len(part) == 4 for part in parts)
                 or int(parts[1]) not in {int(parts[0]), int(parts[0]) + 1}
             ):
-                raise ValidationError({
-                    'temporada_agricola':'Usa el formato AAAA-AAAA con años consecutivos, por ejemplo 2026-2027.',
-                })
+                raise ValidationError(
+                    {
+                        'temporada_agricola': 'Usa el formato AAAA-AAAA con años consecutivos, por ejemplo 2026-2027.',
+                    }
+                )
         if self.cultivo_id and not self.cultivo.activo and not self.pk:
-            raise ValidationError({'cultivo':'Selecciona un cultivo activo del catálogo.'})
+            raise ValidationError({'cultivo': 'Selecciona un cultivo activo del catálogo.'})
         if self.estado == self.Estado.SEMBRADA and not self.fecha_siembra:
-            raise ValidationError({
-                'fecha_siembra':'Registra la fecha de siembra para marcar la temporada como sembrada.',
-            })
+            raise ValidationError(
+                {
+                    'fecha_siembra': 'Registra la fecha de siembra para marcar la temporada como sembrada.',
+                }
+            )
         if self.estado == self.Estado.COSECHADA and not self.fecha_cosecha:
-            raise ValidationError({
-                'fecha_cosecha':'Registra la fecha de cosecha para cerrar la temporada como cosechada.',
-            })
+            raise ValidationError(
+                {
+                    'fecha_cosecha': 'Registra la fecha de cosecha para cerrar la temporada como cosechada.',
+                }
+            )
 
     def save(self, *args, **kwargs):
         self.variedad = self.variedad.strip()
@@ -770,6 +824,7 @@ class ActividadAgricola(models.Model):
         on_delete=models.CASCADE,
         related_name='actividades',
     )
+
     class Prioridad(models.TextChoices):
         ALTA = 'alta', 'Alta'
         MEDIA = 'media', 'Media'
@@ -787,14 +842,22 @@ class ActividadAgricola(models.Model):
     )
     prioridad = models.CharField(max_length=8, choices=Prioridad.choices, default=Prioridad.MEDIA)
     temporada = models.ForeignKey(
-        'TemporadaCultivo', on_delete=models.SET_NULL, null=True, blank=True, related_name='actividades',
+        'TemporadaCultivo',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='actividades',
     )
     # Registro de aplicación (cuaderno de campo): qué se aplicó, cuánto, dónde y quién.
     insumo = models.ForeignKey(Insumo, on_delete=models.SET_NULL, null=True, blank=True, related_name='actividades')
     insumo_otro = models.CharField(max_length=150, blank=True)
-    dosis = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))])
+    dosis = models.DecimalField(
+        max_digits=12, decimal_places=3, null=True, blank=True, validators=[MinValueValidator(Decimal('0.001'))]
+    )
     unidad_dosis = models.CharField(max_length=20, blank=True)
-    superficie_ha = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, validators=[MinValueValidator(Decimal('0.0001'))])
+    superficie_ha = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True, validators=[MinValueValidator(Decimal('0.0001'))]
+    )
     objetivo = models.CharField(max_length=150, blank=True)
     responsable = models.CharField(max_length=150, blank=True)
     fecha_realizada = models.DateField(null=True, blank=True)
@@ -898,10 +961,16 @@ class UsoInsumoCultivo(models.Model):
     cultivo = models.ForeignKey(Cultivo, on_delete=models.CASCADE, related_name='usos_insumo')
     problema = models.ForeignKey(ProblemaAgricola, on_delete=models.CASCADE, related_name='usos_insumo')
     insumo = models.ForeignKey(Insumo, on_delete=models.CASCADE, related_name='usos_cultivo')
-    fuente_nombre = models.CharField('fuente', max_length=255, help_text='Documento o institución que respalda este uso (SAG, INIA, ODEPA, etiqueta del fabricante…).')
+    fuente_nombre = models.CharField(
+        'fuente',
+        max_length=255,
+        help_text='Documento o institución que respalda este uso (SAG, INIA, ODEPA, etiqueta del fabricante…).',
+    )
     fuente_url = models.URLField('enlace de la fuente', blank=True)
     fecha_verificacion = models.DateField('fecha de verificación')
-    activo = models.BooleanField('vigente', default=True, help_text='Desmárcalo para dejar de recomendar este uso sin borrar el historial.')
+    activo = models.BooleanField(
+        'vigente', default=True, help_text='Desmárcalo para dejar de recomendar este uso sin borrar el historial.'
+    )
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)
 

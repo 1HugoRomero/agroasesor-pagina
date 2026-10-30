@@ -3,6 +3,7 @@
 Uso (Docker):  docker exec agroasesor_hugo python manage.py respaldar_bd
 Los respaldos quedan en la carpeta «backups» junto al docker-compose.yml.
 """
+
 from django.core.management.base import BaseCommand
 
 from core import dbutils
@@ -12,7 +13,9 @@ class Command(BaseCommand):
     help = 'Crea un respaldo fechado de la base de datos (seguro con la aplicación encendida).'
 
     def add_arguments(self, parser):
-        parser.add_argument('--mantener', type=int, default=20, help='Cuántos respaldos automáticos conservar (por defecto 20).')
+        parser.add_argument(
+            '--mantener', type=int, default=20, help='Cuántos respaldos automáticos conservar (por defecto 20).'
+        )
         parser.add_argument('--prefijo', default='db', help='Prefijo del archivo (por defecto «db»).')
 
     def handle(self, *args, **options):

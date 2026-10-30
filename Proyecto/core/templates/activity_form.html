@@ -1,126 +1,165 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}{{ heading }} · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">{% endblock %}
-{% block content %}
-<div class="page-hero">
-    <div>
-        <span class="eyebrow">Planificación y cuaderno de campo</span>
-        <h1 class="page-title">{{ heading }}</h1>
-        <p class="page-sub">Programa labores por potrero y temporada. Al completarlas, registra lo realizado para mantener la trazabilidad de tu campo.</p>
-    </div>
-    <div class="toolbar">
-        <a class="button secondary" href="{% url 'actividad_list' %}">Ver todas las actividades</a>
-    </div>
-</div>
-
-{% if not form.fields.potrero.queryset.exists %}
-<section class="card empty-hero">
-    <h2>Primero registra un potrero</h2>
-    <p>Cada actividad se asocia a un potrero para que el historial y los reportes sean confiables.</p>
-    <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
-</section>
-{% else %}
-<div class="activity-layout">
-    <form method="post" novalidate class="activity-form" id="activity-form">
-        {% csrf_token %}
-        {% if form.non_field_errors %}<div class="alert" role="alert">{{ form.non_field_errors }}</div>{% endif %}
-
-        <section class="card form-section">
-            <header class="form-section-head"><span class="step-badge">1</span><div><h2>Labor y ubicación</h2><p>Qué se hará y en qué potrero.</p></div></header>
-            <fieldset class="type-picker">
-                <legend>Tipo de labor <span class="req" aria-hidden="true">*</span></legend>
-                <div class="type-grid">
-                    {% for value, label in form.fields.tipo.choices %}{% if value %}
-                    <label class="type-option">
-                        <input type="radio" name="tipo" value="{{ value }}"{% if form.tipo.value == value %} checked{% endif %} required>
-                        <span><i data-lucide="{% if value == 'preparacion' %}shovel{% elif value == 'siembra' %}sprout{% elif value == 'fertilizacion' %}flask-conical{% elif value == 'riego' %}droplets{% elif value == 'monitoreo' %}scan-search{% elif value == 'control_fitosanitario' %}shield-alert{% elif value == 'cosecha' %}wheat{% else %}clipboard-list{% endif %}" aria-hidden="true"></i>{{ label }}</span>
-                    </label>
-                    {% endif %}{% endfor %}
-                </div>
-                {% for error in form.tipo.errors %}<small class="error" role="alert">{{ error }}</small>{% endfor %}
-            </fieldset>
-            <div class="form-grid">
-                {% include "partials/field.html" with field=form.nombre wide=True help="Se sugiere según el tipo; puedes cambiarlo." %}
-                {% include "partials/field.html" with field=form.potrero %}
-                {% include "partials/field.html" with field=form.temporada help="Vincula la labor a la temporada del cultivo." %}
-            </div>
-        </section>
-
-        <section class="card form-section">
-            <header class="form-section-head"><span class="step-badge">2</span><div><h2>Programación</h2><p>Cuándo, con qué prioridad y quién la ejecuta.</p></div></header>
-            <div class="form-grid three">
-                {% include "partials/field.html" with field=form.fecha_programada %}
-                {% include "partials/field.html" with field=form.prioridad %}
-                {% include "partials/field.html" with field=form.estado %}
-                {% include "partials/field.html" with field=form.responsable %}
-                {% include "partials/field.html" with field=form.fecha_realizada attrs='data-done-only' help="Obligatoria al marcarla como completada." %}
-                {% include "partials/field.html" with field=form.condiciones_clima attrs='data-done-only' %}
-            </div>
-        </section>
-
-        <section class="card form-section" id="input-section" data-state="pending">
-            <header class="form-section-head"><span class="step-badge">3</span><div><h2>Producto y dosis</h2><p>Solo para siembra, fertilización y control fitosanitario.</p></div><span class="input-state" id="input-state"></span></header>
-            <div class="input-callout" id="input-callout" role="status" aria-live="polite"></div>
-            <div id="product-fields">
-                <div class="form-grid">
-                    {% include "partials/field.html" with field=form.insumo wide=True %}
-                    {% include "partials/field.html" with field=form.insumo_otro %}
-                </div>
-                <div class="form-grid">
-                    {% include "partials/field.html" with field=form.dosis %}
-                    {% include "partials/field.html" with field=form.unidad_dosis %}
-                </div>
-            </div>
-            <div class="form-grid" id="treated-fields">
-                {% include "partials/field.html" with field=form.objetivo %}
-                {% include "partials/field.html" with field=form.superficie_ha %}
-            </div>
-            <div class="dose-summary" id="dose-summary" aria-live="polite"></div>
-            <div class="product-context" id="product-context" aria-live="polite"></div>
-        </section>
-
-        <section class="card form-section">
-            <header class="form-section-head"><span class="step-badge">4</span><div><h2>Observaciones</h2><p>Detalles útiles para el historial del potrero.</p></div></header>
-            {% include "partials/field.html" with field=form.observaciones %}
-        </section>
-
-        <div class="form-actions card">
-            <p class="muted">Los campos con <span class="req">*</span> son obligatorios.</p>
-            <div class="toolbar">
-                <a class="button secondary" href="{% if activity %}{% url 'actividad_detail' activity.pk %}{% else %}{% url 'actividad_list' %}{% endif %}">Cancelar</a>
-                {% if not activity %}<button class="button secondary" type="submit" name="siguiente" value="otra">Guardar y planificar otra</button>{% endif %}
-                <button class="button" type="submit">Guardar actividad</button>
-            </div>
-        </div>
-    </form>
-
-    <aside class="activity-aside">
-        <section class="card aside-card" id="plot-context">
-            <h2>Potrero seleccionado</h2>
-            <p class="muted">Elige un potrero para ver su cultivo, temporada y superficie.</p>
-        </section>
-        <section class="card aside-card guidance-card" id="guidance">
-            <h2>Buenas prácticas</h2>
-            <p class="muted">Selecciona un tipo de labor para ver recomendaciones de manejo y registro.</p>
-        </section>
-        <section class="card aside-card">
-            <h2>Próximas actividades</h2>
-            <ul class="mini-agenda" id="plot-agenda">
-                {% for item in upcoming_activities %}
-                <li data-plot="{{ item.potrero_id }}"{% if forloop.counter > 6 %} hidden{% endif %}>
-                    <time datetime="{{ item.fecha_programada|date:'Y-m-d' }}"><strong>{{ item.fecha_programada|date:"d" }}</strong>{{ item.fecha_programada|date:"M" }}</time>
-                    <div><a href="{% url 'actividad_detail' item.pk %}">{{ item.nombre }}</a><small>{{ item.get_tipo_display }} · {{ item.potrero.nombre }}{% if item.vencida %} · <span class="overdue">vencida</span>{% endif %}</small></div>
-                </li>
-                {% empty %}
-                <li class="muted">No tienes actividades pendientes.</li>
-                {% endfor %}
-            </ul>
-        </section>
-    </aside>
-</div>
-{% endif %}
-{{ activity_plots|json_script:"activity-plots" }}
-{{ activity_guidance|json_script:"activity-guidance" }}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">
 {% endblock %}
-{% block extra_js %}<script src="{% static 'js/actividades.js' %}?v=3"></script>{% endblock %}
+{% block content %}
+    <div class="page-hero">
+        <div>
+            <span class="eyebrow">Planificación y cuaderno de campo</span>
+            <h1 class="page-title">{{ heading }}</h1>
+            <p class="page-sub">Programa labores por potrero y temporada. Al completarlas, registra lo realizado para mantener la trazabilidad de tu campo.</p>
+        </div>
+        <div class="toolbar">
+            <a class="button secondary" href="{% url 'actividad_list' %}">Ver todas las actividades</a>
+        </div>
+    </div>
+    {% if not form.fields.potrero.queryset.exists %}
+        <section class="card empty-hero">
+            <h2>Primero registra un potrero</h2>
+            <p>Cada actividad se asocia a un potrero para que el historial y los reportes sean confiables.</p>
+            <a class="button" href="{% url 'predio_create' %}">Registrar predio</a>
+        </section>
+    {% else %}
+        <div class="activity-layout">
+            <form method="post" novalidate class="activity-form" id="activity-form">
+                {% csrf_token %}
+                {% if form.non_field_errors %}<div class="alert"
+     role="alert">{{ form.non_field_errors }}</div>{% endif %}
+                <section class="card form-section">
+                    <header class="form-section-head">
+                        <span class="step-badge">1</span>
+                        <div>
+                            <h2>Labor y ubicación</h2>
+                            <p>Qué se hará y en qué potrero.</p>
+                        </div>
+                    </header>
+                    <fieldset class="type-picker">
+                        <legend>Tipo de labor <span class="req" aria-hidden="true">*</span></legend>
+                        <div class="type-grid">
+                            {% for value, label in form.fields.tipo.choices %}
+                                {% if value %}
+                                    <label class="type-option">
+                                        <input type="radio"
+                                               name="tipo"
+                                               value="{{ value }}"
+                                               {% if form.tipo.value == value %} checked{% endif %}
+                                               required>
+                                        <span><i data-lucide="{% if value == 'preparacion' %}shovel{% elif value == 'siembra' %}sprout{% elif value == 'fertilizacion' %}flask-conical{% elif value == 'riego' %}droplets{% elif value == 'monitoreo' %}scan-search{% elif value == 'control_fitosanitario' %}shield-alert{% elif value == 'cosecha' %}wheat{% else %}clipboard-list{% endif %}"
+   aria-hidden="true"></i>{{ label }}</span>
+                                    </label>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% for error in form.tipo.errors %}<small class="error"
+       role="alert">{{ error }}</small>{% endfor %}
+                    </fieldset>
+                    <div class="form-grid">
+                        {% include "partials/field.html" with field=form.nombre wide=True help="Se sugiere según el tipo; puedes cambiarlo." %}
+                        {% include "partials/field.html" with field=form.potrero %}
+                        {% include "partials/field.html" with field=form.temporada help="Vincula la labor a la temporada del cultivo." %}
+                    </div>
+                </section>
+                <section class="card form-section">
+                    <header class="form-section-head">
+                        <span class="step-badge">2</span>
+                        <div>
+                            <h2>Programación</h2>
+                            <p>Cuándo, con qué prioridad y quién la ejecuta.</p>
+                        </div>
+                    </header>
+                    <div class="form-grid three">
+                        {% include "partials/field.html" with field=form.fecha_programada %}
+                        {% include "partials/field.html" with field=form.prioridad %}
+                        {% include "partials/field.html" with field=form.estado %}
+                        {% include "partials/field.html" with field=form.responsable %}
+                        {% include "partials/field.html" with field=form.fecha_realizada attrs="data-done-only" help="Obligatoria al marcarla como completada." %}
+                        {% include "partials/field.html" with field=form.condiciones_clima attrs="data-done-only" %}
+                    </div>
+                </section>
+                <section class="card form-section" id="input-section" data-state="pending">
+                    <header class="form-section-head">
+                        <span class="step-badge">3</span>
+                        <div>
+                            <h2>Producto y dosis</h2>
+                            <p>Solo para siembra, fertilización y control fitosanitario.</p>
+                        </div>
+                        <span class="input-state" id="input-state"></span>
+                    </header>
+                    <div class="input-callout"
+                         id="input-callout"
+                         role="status"
+                         aria-live="polite"></div>
+                    <div id="product-fields">
+                        <div class="form-grid">
+                            {% include "partials/field.html" with field=form.insumo wide=True %}
+                            {% include "partials/field.html" with field=form.insumo_otro %}
+                        </div>
+                        <div class="form-grid">
+                            {% include "partials/field.html" with field=form.dosis %}
+                            {% include "partials/field.html" with field=form.unidad_dosis %}
+                        </div>
+                    </div>
+                    <div class="form-grid" id="treated-fields">
+                        {% include "partials/field.html" with field=form.objetivo %}
+                        {% include "partials/field.html" with field=form.superficie_ha %}
+                    </div>
+                    <div class="dose-summary" id="dose-summary" aria-live="polite"></div>
+                    <div class="product-context" id="product-context" aria-live="polite"></div>
+                </section>
+                <section class="card form-section">
+                    <header class="form-section-head">
+                        <span class="step-badge">4</span>
+                        <div>
+                            <h2>Observaciones</h2>
+                            <p>Detalles útiles para el historial del potrero.</p>
+                        </div>
+                    </header>
+                    {% include "partials/field.html" with field=form.observaciones %}
+                </section>
+                <div class="form-actions card">
+                    <p class="muted">Los campos con <span class="req">*</span> son obligatorios.</p>
+                    <div class="toolbar">
+                        <a class="button secondary"
+                           href="{% if activity %}{% url 'actividad_detail' activity.pk %}{% else %}{% url 'actividad_list' %}{% endif %}">Cancelar</a>
+                        {% if not activity %}<button class="button secondary"
+        type="submit"
+        name="siguiente"
+        value="otra">Guardar y planificar otra</button>{% endif %}
+                        <button class="button" type="submit">Guardar actividad</button>
+                    </div>
+                </div>
+            </form>
+            <aside class="activity-aside">
+                <section class="card aside-card" id="plot-context">
+                    <h2>Potrero seleccionado</h2>
+                    <p class="muted">Elige un potrero para ver su cultivo, temporada y superficie.</p>
+                </section>
+                <section class="card aside-card guidance-card" id="guidance">
+                    <h2>Buenas prácticas</h2>
+                    <p class="muted">Selecciona un tipo de labor para ver recomendaciones de manejo y registro.</p>
+                </section>
+                <section class="card aside-card">
+                    <h2>Próximas actividades</h2>
+                    <ul class="mini-agenda" id="plot-agenda">
+                        {% for item in upcoming_activities %}
+                            <li data-plot="{{ item.potrero_id }}"
+                                {% if forloop.counter > 6 %} hidden{% endif %}>
+                                <time datetime="{{ item.fecha_programada|date:'Y-m-d' }}"><strong>{{ item.fecha_programada|date:"d" }}</strong>{{ item.fecha_programada|date:"M" }}</time>
+                                <div><a href="{% url 'actividad_detail' item.pk %}">{{ item.nombre }}</a><small>{{ item.get_tipo_display }} · {{ item.potrero.nombre }}{% if item.vencida %} · <span class="overdue">vencida</span>{% endif %}</small></div>
+                            </li>
+                        {% empty %}
+                            <li class="muted">No tienes actividades pendientes.</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            </aside>
+        </div>
+    {% endif %}
+    {{ activity_plots|json_script:"activity-plots" }}
+    {{ activity_guidance|json_script:"activity-guidance" }}
+{% endblock %}
+{% block extra_js %}
+    <script src="{% static 'js/actividades.js' %}?v=3"></script>
+{% endblock %}

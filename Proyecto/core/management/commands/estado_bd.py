@@ -2,6 +2,7 @@
 
 Uso (Docker):  docker exec agroasesor_hugo python manage.py estado_bd
 """
+
 from datetime import datetime
 
 from django.core.management.base import BaseCommand
@@ -26,10 +27,12 @@ class Command(BaseCommand):
         if dbutils.es_base_oficial():
             self.stdout.write(self.style.SUCCESS('Estado  : BASE OFICIAL (volumen persistente de Docker)'))
         else:
-            self.stdout.write(self.style.WARNING(
-                'Estado  : NO es la base oficial. Para trabajar con la oficial usa '
-                '«docker compose up -d» y entra por http://localhost:8000/.'
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    'Estado  : NO es la base oficial. Para trabajar con la oficial usa '
+                    '«docker compose up -d» y entra por http://localhost:8000/.'
+                )
+            )
         try:
             pendientes = MigrationExecutor(connection).migration_plan(
                 MigrationExecutor(connection).loader.graph.leaf_nodes()

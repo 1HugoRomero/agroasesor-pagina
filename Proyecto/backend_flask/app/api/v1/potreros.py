@@ -1,4 +1,5 @@
 """Potreros del usuario autenticado (lectura) con superficie en ha y m²."""
+
 from flask import Blueprint, g, jsonify, request
 
 from app.api.v1.responses import pendiente

@@ -1,4 +1,5 @@
 """Borrar cookies / sesión vencida: la página responde con avisos claros, no con errores ni botones muertos."""
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 

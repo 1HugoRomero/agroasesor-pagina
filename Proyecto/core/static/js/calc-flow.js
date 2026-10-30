@@ -17,7 +17,11 @@
   function readJson(id, fallback) {
     const node = document.getElementById(id);
     if (!node) return fallback;
-    try { return JSON.parse(node.textContent) || fallback; } catch (error) { return fallback; }
+    try {
+      return JSON.parse(node.textContent) || fallback;
+    } catch (error) {
+      return fallback;
+    }
   }
   function h(tag, attrs, ...kids) {
     const node = document.createElement(tag);
@@ -32,8 +36,14 @@
     });
     return node;
   }
-  const fmt = (value, digits) => Number(value).toLocaleString('es-CL', { maximumFractionDigits: digits === undefined ? 2 : digits });
-  const norm = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const fmt = (value, digits) =>
+    Number(value).toLocaleString('es-CL', { maximumFractionDigits: digits === undefined ? 2 : digits });
+  const norm = (text) =>
+    String(text || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim();
 
   const farm = readJson('agro-farms', { predios: [], plots: [] });
   const catalog = readJson('agro-catalog', {});
@@ -59,7 +69,9 @@
   if (!plotSelect || !cropSelect || !plotHost || !cropHost) return;
 
   const steps = {};
-  root.querySelectorAll('.calc-step[data-step]').forEach((node) => { steps[node.dataset.step] = node; });
+  root.querySelectorAll('.calc-step[data-step]').forEach((node) => {
+    steps[node.dataset.step] = node;
+  });
   const STEP_ORDER = ['plot', 'crop', 'area', 'dose', 'unit', 'go'];
 
   const view = { plotChoosing: false, cropChoosing: false, plotQuery: '', cropQuery: '', cropFilter: 'all' };
@@ -76,15 +88,20 @@
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
   function emptyCard(icon, title, text, actions) {
-    return h('div', { class: 'calc-empty-card' },
+    return h(
+      'div',
+      { class: 'calc-empty-card' },
       h('span', { class: 'calc-empty-ico', 'aria-hidden': 'true' }, icon),
       h('strong', null, title),
       h('p', null, text),
-      actions && actions.length ? h('div', { class: 'calc-empty-actions' }, actions) : null);
+      actions && actions.length ? h('div', { class: 'calc-empty-actions' }, actions) : null,
+    );
   }
 
   // ---------- Potrero ----------
-  function plotMeta(plot) { return plot.farmName + ' · ' + fmt(plot.areaHa, 2) + ' ha'; }
+  function plotMeta(plot) {
+    return plot.farmName + ' · ' + fmt(plot.areaHa, 2) + ' ha';
+  }
   function plotIcon(plot) {
     const crop = plot.cropId ? cropById(plot.cropId) : null;
     return crop ? emoji(crop) : '🟩';
@@ -103,22 +120,50 @@
     if (!plots.length) {
       const farmWithSetup = predios.find((item) => item.setupUrl);
       if (farmWithSetup) {
-        plotHost.append(emptyCard('🗺️', 'Tu predio ya está registrado: ¿cómo quieres trabajar este terreno?',
-          'Los cálculos se hacen por potrero. Usa todo el predio como un solo potrero o divídelo en sectores.',
-          [h('a', { class: 'btn-primary-agro btn-sm', href: farmWithSetup.setupUrl }, 'Definir potreros')]));
+        plotHost.append(
+          emptyCard(
+            '🗺️',
+            'Tu predio ya está registrado: ¿cómo quieres trabajar este terreno?',
+            'Los cálculos se hacen por potrero. Usa todo el predio como un solo potrero o divídelo en sectores.',
+            [h('a', { class: 'btn-primary-agro btn-sm', href: farmWithSetup.setupUrl }, 'Definir potreros')],
+          ),
+        );
       } else {
-        plotHost.append(emptyCard('🗺️', 'Comienza registrando tu predio',
-          'Primero registra tu predio; después defines sus potreros y podrás calcular cuánto llevar.',
-          [h('a', { class: 'btn-primary-agro btn-sm', href: plotHost.dataset.farmCreateUrl || '/predios/nuevo/' }, 'Registrar predio')]));
+        plotHost.append(
+          emptyCard(
+            '🗺️',
+            'Comienza registrando tu predio',
+            'Primero registra tu predio; después defines sus potreros y podrás calcular cuánto llevar.',
+            [
+              h(
+                'a',
+                { class: 'btn-primary-agro btn-sm', href: plotHost.dataset.farmCreateUrl || '/predios/nuevo/' },
+                'Registrar predio',
+              ),
+            ],
+          ),
+        );
       }
       return;
     }
 
     if (selected && !choosing) {
-      plotHost.append(h('div', { class: 'calc-chosen' },
-        h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, plotIcon(selected)),
-        h('div', { class: 'calc-chosen-copy' }, h('strong', null, selected.name), h('small', null, plotMeta(selected))),
-        plots.length > 1 ? h('button', { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': 'plot' }, 'Cambiar potrero') : null));
+      plotHost.append(
+        h(
+          'div',
+          { class: 'calc-chosen' },
+          h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, plotIcon(selected)),
+          h(
+            'div',
+            { class: 'calc-chosen-copy' },
+            h('strong', null, selected.name),
+            h('small', null, plotMeta(selected)),
+          ),
+          plots.length > 1
+            ? h('button', { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': 'plot' }, 'Cambiar potrero')
+            : null,
+        ),
+      );
       return;
     }
 
@@ -126,17 +171,44 @@
     const fill = () => {
       const query = norm(view.plotQuery);
       grid.replaceChildren();
-      const list = plots.filter((plot) => !query || norm(plot.name + ' ' + plot.farmName + ' ' + plot.crop).includes(query));
-      list.forEach((plot) => grid.append(h('button', {
-        class: 'calc-opt', type: 'button', 'data-plot': plot.id, 'aria-pressed': String(String(plot.id) === plotSelect.value),
-      },
-      h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, plotIcon(plot)),
-      h('span', { class: 'calc-opt-copy' }, h('strong', null, plot.name), h('small', null, plotMeta(plot)), h('small', null, plot.crop ? 'Cultivo: ' + plot.crop : 'Sin cultivo')))));
+      const list = plots.filter(
+        (plot) => !query || norm(plot.name + ' ' + plot.farmName + ' ' + plot.crop).includes(query),
+      );
+      list.forEach((plot) =>
+        grid.append(
+          h(
+            'button',
+            {
+              class: 'calc-opt',
+              type: 'button',
+              'data-plot': plot.id,
+              'aria-pressed': String(String(plot.id) === plotSelect.value),
+            },
+            h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, plotIcon(plot)),
+            h(
+              'span',
+              { class: 'calc-opt-copy' },
+              h('strong', null, plot.name),
+              h('small', null, plotMeta(plot)),
+              h('small', null, plot.crop ? 'Cultivo: ' + plot.crop : 'Sin cultivo'),
+            ),
+          ),
+        ),
+      );
       if (!list.length) grid.append(h('p', { class: 'calc-opts-empty' }, 'Ningún potrero coincide con la búsqueda.'));
     };
     if (plots.length > 6) {
-      const search = h('input', { class: 'calc-search', type: 'search', placeholder: 'Buscar potrero o predio…', 'aria-label': 'Buscar potrero', value: view.plotQuery });
-      search.addEventListener('input', () => { view.plotQuery = search.value; fill(); });
+      const search = h('input', {
+        class: 'calc-search',
+        type: 'search',
+        placeholder: 'Buscar potrero o predio…',
+        'aria-label': 'Buscar potrero',
+        value: view.plotQuery,
+      });
+      search.addEventListener('input', () => {
+        view.plotQuery = search.value;
+        fill();
+      });
       plotHost.append(h('div', { class: 'calc-picker-tools' }, search));
     }
     fill();
@@ -145,18 +217,26 @@
 
   // ---------- Cultivo ----------
   function cropChoices() {
-    const present = new Set(Array.from(cropSelect.options).filter((option) => option.value && !option.disabled).map((option) => option.value));
-    return crops.filter((crop) => present.has(String(crop.id))).sort((a, b) => {
-      const byGroup = (groupOrder.indexOf(a.group) + 1 || 99) - (groupOrder.indexOf(b.group) + 1 || 99);
-      return byGroup || a.name.localeCompare(b.name, 'es');
-    });
+    const present = new Set(
+      Array.from(cropSelect.options)
+        .filter((option) => option.value && !option.disabled)
+        .map((option) => option.value),
+    );
+    return crops
+      .filter((crop) => present.has(String(crop.id)))
+      .sort((a, b) => {
+        const byGroup = (groupOrder.indexOf(a.group) + 1 || 99) - (groupOrder.indexOf(b.group) + 1 || 99);
+        return byGroup || a.name.localeCompare(b.name, 'es');
+      });
   }
 
   function renderCrops() {
     const selected = cropById(cropSelect.value);
     const choices = cropChoices();
     const choosing = !selected || view.cropChoosing;
-    const signature = [choices.length, selected ? selected.id : '', choosing, view.cropQuery, view.cropFilter].join('|');
+    const signature = [choices.length, selected ? selected.id : '', choosing, view.cropQuery, view.cropFilter].join(
+      '|',
+    );
     if (signature === signatures.crop) return;
     signatures.crop = signature;
     steps.crop.classList.add('is-enhanced');
@@ -166,19 +246,45 @@
 
     if (!choices.length) {
       const adminUrl = cropHost.dataset.adminUrl;
-      cropHost.append(emptyCard('🌱', 'No hay cultivos activos en el catálogo',
-        'Sin cultivos no se puede calcular, y AgroAsesor no inventa datos. ' + (adminUrl ? 'Regístralos desde administración.' : 'Pide al administrador que los cargue.'),
-        adminUrl ? [h('a', { class: 'btn-secondary-agro btn-sm', href: adminUrl }, 'Ir al catálogo')] : []));
+      cropHost.append(
+        emptyCard(
+          '🌱',
+          'No hay cultivos activos en el catálogo',
+          'Sin cultivos no se puede calcular, y AgroAsesor no inventa datos. ' +
+            (adminUrl ? 'Regístralos desde administración.' : 'Pide al administrador que los cargue.'),
+          adminUrl ? [h('a', { class: 'btn-secondary-agro btn-sm', href: adminUrl }, 'Ir al catálogo')] : [],
+        ),
+      );
       return;
     }
 
     if (selected && !choosing) {
       const hasDensity = selected.density !== null && selected.density !== undefined;
-      cropHost.append(h('div', { class: 'calc-chosen' },
-        h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, emoji(selected)),
-        h('div', { class: 'calc-chosen-copy' }, h('strong', null, selected.name),
-          h('small', null, [shortGroup(selected), hasDensity ? 'Densidad ' + fmt(selected.density) + ' ' + (selected.unit || 'kg') + '/ha' : 'Sin densidad documentada'].filter(Boolean).join(' · '))),
-        h('button', { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': 'crop' }, 'Cambiar cultivo')));
+      cropHost.append(
+        h(
+          'div',
+          { class: 'calc-chosen' },
+          h('span', { class: 'calc-chosen-ico', 'aria-hidden': 'true' }, emoji(selected)),
+          h(
+            'div',
+            { class: 'calc-chosen-copy' },
+            h('strong', null, selected.name),
+            h(
+              'small',
+              null,
+              [
+                shortGroup(selected),
+                hasDensity
+                  ? 'Densidad ' + fmt(selected.density) + ' ' + (selected.unit || 'kg') + '/ha'
+                  : 'Sin densidad documentada',
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            ),
+          ),
+          h('button', { class: 'btn-ghost-agro btn-sm', type: 'button', 'data-change': 'crop' }, 'Cambiar cultivo'),
+        ),
+      );
       return;
     }
 
@@ -187,26 +293,57 @@
     const fill = () => {
       const query = norm(view.cropQuery);
       grid.replaceChildren();
-      const list = choices.filter((crop) => (view.cropFilter === 'all' || shortGroup(crop) === view.cropFilter) &&
-        (!query || norm(crop.name + ' ' + crop.group).includes(query)));
-      list.forEach((crop) => grid.append(h('button', {
-        class: 'calc-opt', type: 'button', 'data-crop': crop.id, 'aria-pressed': String(String(crop.id) === cropSelect.value),
-      },
-      h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, emoji(crop)),
-      h('span', { class: 'calc-opt-copy' }, h('strong', null, crop.name), h('small', null, shortGroup(crop))))));
+      const list = choices.filter(
+        (crop) =>
+          (view.cropFilter === 'all' || shortGroup(crop) === view.cropFilter) &&
+          (!query || norm(crop.name + ' ' + crop.group).includes(query)),
+      );
+      list.forEach((crop) =>
+        grid.append(
+          h(
+            'button',
+            {
+              class: 'calc-opt',
+              type: 'button',
+              'data-crop': crop.id,
+              'aria-pressed': String(String(crop.id) === cropSelect.value),
+            },
+            h('span', { class: 'calc-opt-ico', 'aria-hidden': 'true' }, emoji(crop)),
+            h('span', { class: 'calc-opt-copy' }, h('strong', null, crop.name), h('small', null, shortGroup(crop))),
+          ),
+        ),
+      );
       if (!list.length) grid.append(h('p', { class: 'calc-opts-empty' }, 'Ningún cultivo coincide con la búsqueda.'));
     };
 
     if (many) {
       const tools = h('div', { class: 'calc-picker-tools' });
-      const search = h('input', { class: 'calc-search', type: 'search', placeholder: 'Buscar cultivo…', 'aria-label': 'Buscar cultivo', value: view.cropQuery });
-      search.addEventListener('input', () => { view.cropQuery = search.value; fill(); });
+      const search = h('input', {
+        class: 'calc-search',
+        type: 'search',
+        placeholder: 'Buscar cultivo…',
+        'aria-label': 'Buscar cultivo',
+        value: view.cropQuery,
+      });
+      search.addEventListener('input', () => {
+        view.cropQuery = search.value;
+        fill();
+      });
       tools.append(search);
       const groups = Array.from(new Set(choices.map(shortGroup))).filter(Boolean);
       if (groups.length > 1) {
         const filters = h('div', { class: 'calc-filters', role: 'group', 'aria-label': 'Filtrar por categoría' });
         ['all'].concat(groups).forEach((name) => {
-          const chip = h('button', { class: 'calc-chip' + (view.cropFilter === name ? ' is-active' : ''), type: 'button', 'data-filter': name, 'aria-pressed': String(view.cropFilter === name) }, name === 'all' ? 'Todos' : name);
+          const chip = h(
+            'button',
+            {
+              class: 'calc-chip' + (view.cropFilter === name ? ' is-active' : ''),
+              type: 'button',
+              'data-filter': name,
+              'aria-pressed': String(view.cropFilter === name),
+            },
+            name === 'all' ? 'Todos' : name,
+          );
           filters.append(chip);
         });
         filters.addEventListener('click', (event) => {
@@ -223,11 +360,26 @@
         tools.append(filters);
       }
       cropHost.append(tools);
-      const frequent = (hints.frequent || []).map((id) => choices.find((crop) => String(crop.id) === String(id))).filter(Boolean);
+      const frequent = (hints.frequent || [])
+        .map((id) => choices.find((crop) => String(crop.id) === String(id)))
+        .filter(Boolean);
       if (frequent.length) {
-        cropHost.append(h('p', { class: 'calc-freq-label' }, hints.frequentBasis === 'used' ? 'Frecuentes en tus potreros' : 'Sugeridos'));
-        cropHost.append(h('div', { class: 'calc-freq' }, frequent.map((crop) =>
-          h('button', { class: 'calc-chip', type: 'button', 'data-crop': crop.id }, emoji(crop) + ' ' + crop.name))));
+        cropHost.append(
+          h(
+            'p',
+            { class: 'calc-freq-label' },
+            hints.frequentBasis === 'used' ? 'Frecuentes en tus potreros' : 'Sugeridos',
+          ),
+        );
+        cropHost.append(
+          h(
+            'div',
+            { class: 'calc-freq' },
+            frequent.map((crop) =>
+              h('button', { class: 'calc-chip', type: 'button', 'data-crop': crop.id }, emoji(crop) + ' ' + crop.name),
+            ),
+          ),
+        );
       }
     }
     fill();
@@ -236,7 +388,12 @@
 
   plotHost.addEventListener('click', (event) => {
     const change = event.target.closest('[data-change="plot"]');
-    if (change) { view.plotChoosing = true; view.plotQuery = ''; update(latest); return; }
+    if (change) {
+      view.plotChoosing = true;
+      view.plotQuery = '';
+      update(latest);
+      return;
+    }
     const option = event.target.closest('[data-plot]');
     if (!option) return;
     view.plotChoosing = false;
@@ -246,7 +403,13 @@
   });
   cropHost.addEventListener('click', (event) => {
     const change = event.target.closest('[data-change="crop"]');
-    if (change) { view.cropChoosing = true; view.cropQuery = ''; view.cropFilter = 'all'; update(latest); return; }
+    if (change) {
+      view.cropChoosing = true;
+      view.cropQuery = '';
+      view.cropFilter = 'all';
+      update(latest);
+      return;
+    }
     const option = event.target.closest('[data-crop]');
     if (!option) return;
     view.cropChoosing = false;
@@ -259,10 +422,16 @@
   // ---------- Pasos, bloqueos y estado ----------
   function updateSteps(state) {
     const ok = {};
-    state.items.forEach((item) => { ok[item.key] = item.ok; });
+    state.items.forEach((item) => {
+      ok[item.key] = item.ok;
+    });
     const done = {
-      plot: ok.plot, crop: ok.crop, area: ok.area,
-      dose: ok.dose && ok.product !== false, unit: ok.unit, go: state.saved,
+      plot: ok.plot,
+      crop: ok.crop,
+      area: ok.area,
+      dose: ok.dose && ok.product !== false,
+      unit: ok.unit,
+      go: state.saved,
     };
     const current = STEP_ORDER.find((key) => !done[key] && key !== 'go') || 'go';
     // Sin potrero no se puede elegir cultivo; sin cultivo no tiene sentido pedir superficie, dosis ni unidad.
@@ -279,18 +448,21 @@
       const body = node.querySelector('.calc-step-body');
       if (body) {
         body.toggleAttribute('inert', locked);
-        if (locked) body.setAttribute('aria-disabled', 'true'); else body.removeAttribute('aria-disabled');
+        if (locked) body.setAttribute('aria-disabled', 'true');
+        else body.removeAttribute('aria-disabled');
       }
     });
     submit.disabled = !state.ready;
     pdf.disabled = !state.ready;
     if (reportsLink) {
       reportsLink.setAttribute('aria-disabled', String(!state.saved));
-      if (state.saved) reportsLink.removeAttribute('tabindex'); else reportsLink.setAttribute('tabindex', '-1');
+      if (state.saved) reportsLink.removeAttribute('tabindex');
+      else reportsLink.setAttribute('tabindex', '-1');
     }
     const ctx = Boolean(ok.plot && ok.crop);
     coverLink.setAttribute('aria-disabled', String(!ctx));
-    if (!ctx) coverLink.setAttribute('tabindex', '-1'); else coverLink.removeAttribute('tabindex');
+    if (!ctx) coverLink.setAttribute('tabindex', '-1');
+    else coverLink.removeAttribute('tabindex');
   }
 
   function statusFor(state) {
@@ -299,7 +471,10 @@
     if (state.saved) return state.simulation ? ['sim', 'Simulación guardada'] : ['done', 'Cálculo guardado'];
     if (state.ready) return ['ready', 'Listo para calcular'];
     const missing = state.missing;
-    return ['pending', missing.length === 1 ? 'Falta: ' + missing[0].label.toLowerCase() : 'Faltan ' + missing.length + ' datos'];
+    return [
+      'pending',
+      missing.length === 1 ? 'Falta: ' + missing[0].label.toLowerCase() : 'Faltan ' + missing.length + ' datos',
+    ];
   }
 
   function updateStatus(state) {
@@ -310,8 +485,10 @@
     const hint = $('calc-submit-hint');
     if (!plots.length) hint.textContent = 'Necesitas al menos un potrero registrado para calcular.';
     else if (!crops.length) hint.textContent = 'Sin cultivos activos en el catálogo no se puede calcular.';
-    else if (state.saved) hint.textContent = 'Cálculo guardado. Puedes descargarlo en PDF o ajustar los datos y volver a calcular.';
-    else if (state.ready) hint.textContent = 'Todo listo. «Calcular ahora» valida el cálculo con el catálogo y lo guarda en tu cuenta.';
+    else if (state.saved)
+      hint.textContent = 'Cálculo guardado. Puedes descargarlo en PDF o ajustar los datos y volver a calcular.';
+    else if (state.ready)
+      hint.textContent = 'Todo listo. «Calcular ahora» valida el cálculo con el catálogo y lo guarda en tu cuenta.';
     else hint.textContent = 'Te falta: ' + state.missing.map((item) => item.label.toLowerCase()).join(', ') + '.';
   }
 
@@ -323,7 +500,13 @@
     host.replaceChildren();
     if (!plot) return;
     if (!Number.isFinite(area) || Math.abs(area - plot.areaHa) > 1e-6) {
-      host.append(h('button', { class: 'calc-chip', type: 'button', 'data-use-all': '1' }, 'Usar todo el potrero (' + fmt(plot.areaHa, 2) + ' ha)'));
+      host.append(
+        h(
+          'button',
+          { class: 'calc-chip', type: 'button', 'data-use-all': '1' },
+          'Usar todo el potrero (' + fmt(plot.areaHa, 2) + ' ha)',
+        ),
+      );
     }
   }
   $('calc-area-tools').addEventListener('click', (event) => {
@@ -349,18 +532,36 @@
       ].filter((row) => row[1]);
       let next = null;
       if (!plot.crop) {
-        next = h('p', { class: 'calc-mini-next' }, h('strong', null, 'Siguiente paso: '),
+        next = h(
+          'p',
+          { class: 'calc-mini-next' },
+          h('strong', null, 'Siguiente paso: '),
           'este potrero no tiene cultivo. Asígnalo para planificar la siembra; mientras tanto puedes simular con otro cultivo. ',
-          plot.editUrl ? h('a', { href: plot.editUrl }, 'Asignar cultivo') : null);
+          plot.editUrl ? h('a', { href: plot.editUrl }, 'Asignar cultivo') : null,
+        );
       } else if (!plot.sowing) {
-        next = h('p', { class: 'calc-mini-next' }, h('strong', null, 'Siguiente paso: '),
-          'registra la fecha de siembra de este potrero. ', plot.editUrl ? h('a', { href: plot.editUrl }, 'Definir siembra') : null);
+        next = h(
+          'p',
+          { class: 'calc-mini-next' },
+          h('strong', null, 'Siguiente paso: '),
+          'registra la fecha de siembra de este potrero. ',
+          plot.editUrl ? h('a', { href: plot.editUrl }, 'Definir siembra') : null,
+        );
       }
-      plotSummary.append(h('div', { class: 'calc-mini' },
-        h('p', { class: 'calc-mini-kicker' }, 'Potrero'),
-        h('div', { class: 'calc-mini-head' }, h('h3', null, plot.name)),
-        h('dl', null, rows.map((row) => [h('dt', null, row[0]), h('dd', null, row[1])])),
-        next));
+      plotSummary.append(
+        h(
+          'div',
+          { class: 'calc-mini' },
+          h('p', { class: 'calc-mini-kicker' }, 'Potrero'),
+          h('div', { class: 'calc-mini-head' }, h('h3', null, plot.name)),
+          h(
+            'dl',
+            null,
+            rows.map((row) => [h('dt', null, row[0]), h('dd', null, row[1])]),
+          ),
+          next,
+        ),
+      );
     }
     summary.hidden = !plot && notes.hidden;
   }
@@ -397,13 +598,15 @@
   });
 
   // «Continuar como simulación» (aviso de catálogo incompleto): lleva al formulario sin inventar datos.
-  document.querySelectorAll('[data-calc-jump]').forEach((link) => link.addEventListener('click', (event) => {
-    event.preventDefault();
-    if (window.AgroDecisiones) window.AgroDecisiones.showTool('llevar');
-    const form = $('calc-form');
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (form) form.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-  }));
+  document.querySelectorAll('[data-calc-jump]').forEach((link) =>
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (window.AgroDecisiones) window.AgroDecisiones.showTool('llevar');
+      const form = $('calc-form');
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (form) form.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    }),
+  );
 
   update(latest);
 })();

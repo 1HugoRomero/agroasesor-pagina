@@ -1,19 +1,19 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contraseña actualizada · AgroAsesor</title>
-    <link rel="stylesheet" href="{% static 'css/login.css' %}">
-</head>
-<body class="access-body">
-    <main class="access-shell recovery-shell">
-        <section class="access-panel">
-            <h1>Contraseña actualizada</h1>
-            <p class="lead">Tu nueva contraseña quedó guardada. Ya puedes ingresar a tu cuenta.</p>
-            <p class="switch"><a href="{% url 'login' %}">Iniciar sesión</a></p>
-        </section>
-    </main>
-</body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Contraseña actualizada · AgroAsesor</title>
+        <link rel="stylesheet" href="{% static 'css/login.css' %}">
+    </head>
+    <body class="access-body">
+        <main class="access-shell recovery-shell">
+            <section class="access-panel">
+                <h1>Contraseña actualizada</h1>
+                <p class="lead">Tu nueva contraseña quedó guardada. Ya puedes ingresar a tu cuenta.</p>
+                <p class="switch"><a href="{% url 'login' %}">Iniciar sesión</a></p>
+            </section>
+        </main>
+    </body>
 </html>

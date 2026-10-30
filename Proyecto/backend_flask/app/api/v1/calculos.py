@@ -1,4 +1,5 @@
 """Borrador de endpoints de calculos. Sin acceso a datos reales."""
+
 from flask import Blueprint, g, jsonify, request
 
 from app.api.v1.responses import pendiente
@@ -13,7 +14,9 @@ bp = Blueprint("calculos", __name__)
 def historial():
     """Historial de cálculos del usuario (lectura). Filtro opcional ?potrero_id=."""
     limite = min(max(request.args.get("limite", 50, type=int), 1), 200)
-    return jsonify({"calculos": terreno.historial_calculos(g.usuario, request.args.get("potrero_id", type=int), limite)})
+    return jsonify(
+        {"calculos": terreno.historial_calculos(g.usuario, request.args.get("potrero_id", type=int), limite)}
+    )
 
 
 @bp.route("/calculos/semillas", methods=['POST'])

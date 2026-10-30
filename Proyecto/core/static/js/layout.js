@@ -53,8 +53,20 @@
   const userNode = document.getElementById('agro-user-id');
   const selKey = 'agroasesor.potrero.' + (userNode ? userNode.textContent.trim() : '');
   window.AgroSel = {
-    get() { try { return window.localStorage.getItem(selKey) || ''; } catch (error) { return ''; } },
-    set(id) { try { window.localStorage.setItem(selKey, String(id)); } catch (error) { /* sin almacenamiento */ } },
+    get() {
+      try {
+        return window.localStorage.getItem(selKey) || '';
+      } catch (error) {
+        return '';
+      }
+    },
+    set(id) {
+      try {
+        window.localStorage.setItem(selKey, String(id));
+      } catch (error) {
+        /* sin almacenamiento */
+      }
+    },
   };
 
   // Sesión vencida o cookies borradas: si el servidor avisa en una llamada de la página (fetch), se muestra un aviso y se
@@ -63,7 +75,10 @@
   if (fetchOriginal) {
     window.fetch = async function (...args) {
       const respuesta = await fetchOriginal(...args);
-      if ((respuesta.status === 401 || respuesta.status === 403) && (respuesta.headers.get('content-type') || '').includes('json')) {
+      if (
+        (respuesta.status === 401 || respuesta.status === 403) &&
+        (respuesta.headers.get('content-type') || '').includes('json')
+      ) {
         try {
           const datos = await respuesta.clone().json();
           if (datos && datos.codigo === 'sesion_vencida') {
@@ -72,12 +87,15 @@
             aviso.setAttribute('role', 'alert');
             aviso.textContent = datos.error + ' Te llevamos al inicio de sesión…';
             document.querySelector('.page-container')?.prepend(aviso);
-            setTimeout(() => { window.location.assign((datos.login_url || '/login/') + '?vencida=1'); }, 1800);
+            setTimeout(() => {
+              window.location.assign((datos.login_url || '/login/') + '?vencida=1');
+            }, 1800);
           }
-        } catch (error) { /* respuesta sin JSON válido: se deja pasar */ }
+        } catch (error) {
+          /* respuesta sin JSON válido: se deja pasar */
+        }
       }
       return respuesta;
     };
   }
-
 })();

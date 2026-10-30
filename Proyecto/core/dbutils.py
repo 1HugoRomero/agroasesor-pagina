@@ -4,6 +4,7 @@ Regla del proyecto: existe una sola base de datos oficial, el archivo SQLite que
 volumen persistente de Docker (/data/db.sqlite3). Todo lo demás (db.sqlite3 sueltos, respaldos
 viejos) es solo archivo o copia de seguridad.
 """
+
 import hashlib
 import os
 import sqlite3
@@ -71,7 +72,13 @@ def verificar_respaldo(ruta):
             usuarios = None
     finally:
         con.close()
-    return {'integridad': integridad, 'tablas': tablas, 'usuarios': usuarios, 'sha256': _sha256(ruta), 'ok': integridad == 'ok'}
+    return {
+        'integridad': integridad,
+        'tablas': tablas,
+        'usuarios': usuarios,
+        'sha256': _sha256(ruta),
+        'ok': integridad == 'ok',
+    }
 
 
 def respaldar(prefijo='db', mantener=20, directorio=None):

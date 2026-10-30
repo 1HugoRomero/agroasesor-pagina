@@ -2,25 +2,29 @@
 <nav class="journey no-print" aria-label="Ruta de trabajo">
     <ol class="journey-steps">
         {% for step in journey.steps %}
-        <li class="journey-step is-{{ step.state }}{% if step.here %} is-here{% endif %}">
-            <a href="{{ step.url }}"{% if step.here %} aria-current="step"{% endif %}>
-                <span class="journey-dot" aria-hidden="true">{% if step.state == 'done' %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
-                <span class="journey-label">{{ step.label }}{% if step.state == 'done' %}<span class="sr-only"> (hecho)</span>{% endif %}</span>
-            </a>
-        </li>
+            <li class="journey-step is-{{ step.state }}{% if step.here %} is-here{% endif %}">
+                <a href="{{ step.url }}"
+                   {% if step.here %} aria-current="step"{% endif %}>
+                    <span class="journey-dot"
+                          aria-hidden="true">{% if step.state == "done" %}✓{% else %}{{ forloop.counter }}{% endif %}</span>
+                    <span class="journey-label">{{ step.label }}{% if step.state == "done" %}<span class="sr-only"> (hecho)</span>{% endif %}</span>
+                </a>
+            </li>
         {% endfor %}
     </ol>
     {% if journey.next %}
-    <div class="journey-next">
-        {% if journey.next.status %}<p class="journey-status"><span aria-hidden="true">✓</span> {{ journey.next.status }}</p>{% endif %}
-        <div class="journey-row">
-            <span class="journey-kicker">Siguiente paso</span>
-            <span class="journey-copy"><strong>{{ journey.next.title }}</strong> <small>{{ journey.next.text }}</small></span>
-            <span class="journey-actions">
-                {% for item in journey.next.actions %}{% if item.post %}<form method="post" action="{{ item.url }}" class="journey-form">{% csrf_token %}<button type="submit" class="journey-btn{% if item.primary %} is-primary{% endif %}">{{ item.label }}</button></form>{% else %}<a class="journey-btn{% if item.primary %} is-primary{% endif %}" href="{{ item.url }}">{{ item.label }}{% if forloop.last and forloop.counter == 1 %} →{% endif %}</a>{% endif %}{% endfor %}
-            </span>
+        <div class="journey-next">
+            {% if journey.next.status %}<p class="journey-status"><span aria-hidden="true">✓</span> {{ journey.next.status }}</p>{% endif %}
+            <div class="journey-row">
+                <span class="journey-kicker">Siguiente paso</span>
+                <span class="journey-copy"><strong>{{ journey.next.title }}</strong> <small>{{ journey.next.text }}</small></span>
+                <span class="journey-actions">
+                    {% for item in journey.next.actions %}{% if item.post %}<form method="post" action="{{ item.url }}" class="journey-form">{% csrf_token %}<button type="submit"
+        class="journey-btn{% if item.primary %} is-primary{% endif %}">{{ item.label }}</button></form>{% else %}<a class="journey-btn{% if item.primary %} is-primary{% endif %}"
+   href="{{ item.url }}">{{ item.label }}{% if forloop.last and forloop.counter == 1 %} →{% endif %}</a>{% endif %}{% endfor %}
+                </span>
+            </div>
         </div>
-    </div>
     {% endif %}
     {% if journey.note %}<p class="journey-note">{{ journey.note }}</p>{% endif %}
 </nav>

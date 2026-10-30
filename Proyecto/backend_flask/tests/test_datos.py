@@ -25,7 +25,10 @@ def test_predio_ajeno_es_404(client_bd):
 
 
 def test_predio_inexistente_igual_que_ajeno(client_bd):
-    assert pedir(client_bd, "/api/v1/predios/999", usuario=1).get_json() == pedir(client_bd, "/api/v1/predios/2", usuario=1).get_json()
+    assert (
+        pedir(client_bd, "/api/v1/predios/999", usuario=1).get_json()
+        == pedir(client_bd, "/api/v1/predios/2", usuario=1).get_json()
+    )
 
 
 def test_admin_no_ve_predios_ajenos_por_este_camino(client_bd):
@@ -98,6 +101,9 @@ def test_metodos_de_escritura_siguen_sin_implementar(client_bd):
 def test_base_inexistente_da_503(tmp_path):
     from app import create_app
     from tests.helpers import SECRETO
-    app = create_app({"TESTING": True, "AGROASESOR_DB_PATH": str(tmp_path / "no.sqlite3"), "AGROASESOR_INTERNAL_SECRET": SECRETO})
+
+    app = create_app(
+        {"TESTING": True, "AGROASESOR_DB_PATH": str(tmp_path / "no.sqlite3"), "AGROASESOR_INTERNAL_SECRET": SECRETO}
+    )
     r = pedir(app.test_client(), "/api/v1/predios")
     assert r.status_code == 503 and r.get_json()["error"]["codigo"] == "BASE_NO_DISPONIBLE"

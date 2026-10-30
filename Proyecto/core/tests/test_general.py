@@ -11,11 +11,26 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings, Client
 from django.utils import timezone
 from ..geometry import polygon_area, polygon_perimeter
-from ..models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, TipoInsumo, Zona, ProblemaAgricola
+from ..models import (
+    AceptacionPoliticas,
+    ActividadAgricola,
+    CalculoAgricola,
+    ConfiguracionAgronomica,
+    Cultivo,
+    Insumo,
+    Predio,
+    PredioHistorial,
+    Potrero,
+    ReferenciaAgronomica,
+    TemporadaCultivo,
+    TipoInsumo,
+    Zona,
+    ProblemaAgricola,
+)
 
 User = get_user_model()
 PASSWORD = 'Campo-Seguro-2026!'
-POLYGON = [[-71.215,-33.686],[-71.214,-33.686],[-71.214,-33.685],[-71.215,-33.685]]
+POLYGON = [[-71.215, -33.686], [-71.214, -33.686], [-71.214, -33.685], [-71.215, -33.685]]
 
 
 class AuthenticationTests(TestCase):
@@ -24,15 +39,15 @@ class AuthenticationTests(TestCase):
 
     def registration_data(self, **values):
         return {
-            'mode':'register',
-            'nombre_completo':'maría soto',
-            'email':'maria@example.com',
-            'telefono':'+56 9 1234 5678',
-            'comuna':'melipilla',
-            'rut':'',
-            'password1':PASSWORD,
-            'password2':PASSWORD,
-            'acepta_politicas':'on',
+            'mode': 'register',
+            'nombre_completo': 'maría soto',
+            'email': 'maria@example.com',
+            'telefono': '+56 9 1234 5678',
+            'comuna': 'melipilla',
+            'rut': '',
+            'password1': PASSWORD,
+            'password2': PASSWORD,
+            'acepta_politicas': 'on',
             **values,
         }
 
@@ -44,7 +59,9 @@ class AuthenticationTests(TestCase):
         self.assertEqual(user.first_name, 'María')
         self.assertEqual(user.last_name, 'Soto')
         ficha = user.agricultor
-        self.assertEqual((ficha.nombre, ficha.telefono, ficha.comuna, ficha.rut), ('María Soto', '+56912345678', 'Melipilla', None))
+        self.assertEqual(
+            (ficha.nombre, ficha.telefono, ficha.comuna, ficha.rut), ('María Soto', '+56912345678', 'Melipilla', None)
+        )
         self.assertTrue(user.check_password(PASSWORD))
         self.assertNotEqual(user.password, PASSWORD)
         self.assertFalse(user.is_staff)
@@ -95,12 +112,12 @@ class AuthenticationTests(TestCase):
 
     def test_login_logout_and_invalid_credentials(self):
         self.assertEqual(self.client.get('/').status_code, 302)
-        self.assertContains(self.client.post('/login/', {'email':self.user.email,'password':'wrong'}), 'incorrectos')
+        self.assertContains(self.client.post('/login/', {'email': self.user.email, 'password': 'wrong'}), 'incorrectos')
         self.assertContains(
-            self.client.post('/login/', {'username':'cuenta-inexistente','password':PASSWORD}),
+            self.client.post('/login/', {'username': 'cuenta-inexistente', 'password': PASSWORD}),
             'incorrectos',
         )
-        self.assertRedirects(self.client.post('/login/', {'username':'farmer@example.com','password':PASSWORD}), '/')
+        self.assertRedirects(self.client.post('/login/', {'username': 'farmer@example.com', 'password': PASSWORD}), '/')
         self.assertEqual(self.client.get('/logout/').status_code, 405)
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertEqual(self.client.get('/predios/').status_code, 302)
@@ -109,12 +126,12 @@ class AuthenticationTests(TestCase):
         self.client.post('/login/', self.registration_data())
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertRedirects(
-            self.client.post('/login/', {'username':'maria@example.com','password':PASSWORD}),
+            self.client.post('/login/', {'username': 'maria@example.com', 'password': PASSWORD}),
             '/',
         )
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertRedirects(
-            self.client.post('/login/', {'username':'MARIA@example.com','password':PASSWORD}),
+            self.client.post('/login/', {'username': 'MARIA@example.com', 'password': PASSWORD}),
             '/',
         )
 
@@ -132,26 +149,29 @@ class AuthenticationTests(TestCase):
         self.assertEqual(empty_farms.context['predios_list'].count(), 0)
         self.assertNotContains(empty_farms, existing_farm.nombre)
 
-        boundary = [[-71.215,-33.686],[-71.214,-33.686],[-71.214,-33.685],[-71.215,-33.685]]
+        boundary = [[-71.215, -33.686], [-71.214, -33.686], [-71.214, -33.685], [-71.215, -33.685]]
         feature = {
-            'type':'Feature',
-            'properties':{},
-            'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
         }
-        response = self.client.post('/predios/nuevo/', {
-            'nombre':'Campo de María',
-            'ubicacion':'Melipilla',
-            'superficie_ha':'',
-            'geojson':json.dumps(feature),
-            'perimetro_aceptado':'on',
-        })
+        response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Campo de María',
+                'ubicacion': 'Melipilla',
+                'superficie_ha': '',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+            },
+        )
         farm = Predio.objects.get(nombre='Campo de María')
         self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         self.assertEqual(farm.propietario, registered_user)
 
         self.assertRedirects(self.client.post('/logout/'), '/login/')
         self.assertRedirects(
-            self.client.post('/login/', {'username':'maria@example.com','password':PASSWORD}),
+            self.client.post('/login/', {'username': 'maria@example.com', 'password': PASSWORD}),
             '/',
         )
         owned_farms = self.client.get('/predios/')
@@ -163,7 +183,7 @@ class AuthenticationTests(TestCase):
     def test_inactive_user_cannot_login(self):
         self.user.is_active = False
         self.user.save()
-        self.client.post('/login/', {'email':self.user.email, 'password':PASSWORD})
+        self.client.post('/login/', {'email': self.user.email, 'password': PASSWORD})
         self.assertEqual(self.client.get('/').status_code, 302)
 
     def test_admin_shortcut_cannot_escalate_privileges(self):
@@ -193,53 +213,83 @@ class AuthenticationTests(TestCase):
         self.assertEqual(client.post('/logout/').status_code, 302)
         self.assertIn('_auth_user_id', client.session)  # sin token, el cierre de sesión NO se ejecutó
 
-    @override_settings(MAILERS={'default':{'BACKEND':'django.core.mail.backends.locmem.EmailBackend'}})
+    @override_settings(MAILERS={'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}})
     def test_reset_requires_verified_single_use_token(self):
-        self.assertRedirects(self.client.post('/cuenta/recuperar/', {'email':self.user.email}), '/cuenta/enviado/')
+        self.assertRedirects(self.client.post('/cuenta/recuperar/', {'email': self.user.email}), '/cuenta/enviado/')
         self.assertEqual(len(mail.outbox), 1)
         url = re.search(r'http://testserver(/cuenta/restablecer/\S+)', mail.outbox[0].body).group(1)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 302)
         password = 'Nueva-Clave-Segura-2026!'
-        self.assertRedirects(self.client.post(response.url, {'new_password1':password,'new_password2':password}), '/cuenta/restablecida/')
+        self.assertRedirects(
+            self.client.post(response.url, {'new_password1': password, 'new_password2': password}),
+            '/cuenta/restablecida/',
+        )
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(password))
         another = Client()
         self.assertContains(another.get(url), 'inválido')
 
     def test_old_reset_flow_cannot_change_password(self):
-        self.client.post('/login/', {'mode':'reset','email':self.user.email,'password':'hacked','password2':'hacked'})
+        self.client.post(
+            '/login/', {'mode': 'reset', 'email': self.user.email, 'password': 'hacked', 'password2': 'hacked'}
+        )
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(PASSWORD))
 
 
 class TerrainTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user('a',email='a@example.com',password=PASSWORD)
-        self.other = User.objects.create_user('b',email='b@example.com',password=PASSWORD)
+        self.user = User.objects.create_user('a', email='a@example.com', password=PASSWORD)
+        self.other = User.objects.create_user('b', email='b@example.com', password=PASSWORD)
         self.crop = Cultivo.objects.create(nombre='Cultivo de prueba')
-        self.predio = Predio.objects.create(propietario=self.user,nombre='Mi campo',ubicacion='Melipilla',superficie_ha=10)
+        self.predio = Predio.objects.create(
+            propietario=self.user, nombre='Mi campo', ubicacion='Melipilla', superficie_ha=10
+        )
         self.client.force_login(self.user)
         self.url = f'/predios/{self.predio.pk}/potreros/nuevo/'
 
     def plot_data(self, **values):
-        return {'nombre':'Potrero norte','cultivo':self.crop.pk,'variedad':'','superficie_ha':'2',
-                'fecha_siembra':'2026-10-02','fecha_cosecha':'2027-03-01','latitud':'','longitud':'','perimetro':'[]', **values}
+        return {
+            'nombre': 'Potrero norte',
+            'cultivo': self.crop.pk,
+            'variedad': '',
+            'superficie_ha': '2',
+            'fecha_siembra': '2026-10-02',
+            'fecha_cosecha': '2027-03-01',
+            'latitud': '',
+            'longitud': '',
+            'perimetro': '[]',
+            **values,
+        }
 
     def test_new_predio_and_potrero_appear_in_siembra(self):
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
-        feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
+        }
         self.assertNotContains(self.client.get('/calendario/'), 'Campo en siembra')
-        response = self.client.post('/predios/nuevo/', {
-            'nombre':'Campo en siembra','ubicacion':'Paine','superficie_ha':'5',
-            'geojson':json.dumps(feature),'perimetro_aceptado':'on',
-        }, follow=True)
+        response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Campo en siembra',
+                'ubicacion': 'Paine',
+                'superficie_ha': '5',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+            },
+            follow=True,
+        )
         self.assertContains(response, 'ya aparece en Siembra')
         p = Predio.objects.get(nombre='Campo en siembra')
         page = self.client.get('/calendario/')
         self.assertContains(page, 'Campo en siembra')
         self.assertContains(page, 'aún no tiene potreros')
-        response = self.client.post(f'/predios/{p.pk}/potreros/nuevo/', self.plot_data(nombre='Potrero siembra'), follow=True)
+        response = self.client.post(
+            f'/predios/{p.pk}/potreros/nuevo/', self.plot_data(nombre='Potrero siembra'), follow=True
+        )
         self.assertContains(response, 'Ya aparece en Siembra')
         page = self.client.get('/calendario/?anio=2026')
         self.assertContains(page, 'Potrero siembra')
@@ -250,6 +300,7 @@ class TerrainTests(TestCase):
     def test_siembra_next_steps_guide_the_farmer(self):
         from datetime import timedelta
         from django.utils import timezone
+
         today = timezone.localdate()
         page = self.client.get('/calendario/?anio=2026')
         self.assertContains(page, 'Lo que sigue en tus potreros')
@@ -258,8 +309,12 @@ class TerrainTests(TestCase):
         bare = Potrero.objects.create(predio=self.predio, nombre='Lote sin cultivo', superficie_ha=1)
         nodate = Potrero.objects.create(predio=self.predio, nombre='Lote sin fecha', superficie_ha=1, cultivo=self.crop)
         soon = Potrero.objects.create(
-            predio=self.predio, nombre='Lote por sembrar', superficie_ha=2, cultivo=self.crop,
-            fecha_siembra=today + timedelta(days=10), fecha_cosecha=today + timedelta(days=120),
+            predio=self.predio,
+            nombre='Lote por sembrar',
+            superficie_ha=2,
+            cultivo=self.crop,
+            fecha_siembra=today + timedelta(days=10),
+            fecha_cosecha=today + timedelta(days=120),
         )
         page = self.client.get('/calendario/?anio=2026')
         self.assertContains(page, 'Asigna un cultivo a «Lote sin cultivo»')
@@ -267,8 +322,11 @@ class TerrainTests(TestCase):
         self.assertContains(page, 'Programa la labor de siembra de «Lote por sembrar»')
         self.assertContains(page, f'/actividades/nueva/?potrero={soon.pk}')
         ActividadAgricola.objects.create(
-            usuario=self.user, potrero=soon, nombre='Sembrar lote',
-            tipo=ActividadAgricola.Tipo.SIEMBRA, fecha_programada=today - timedelta(days=2),
+            usuario=self.user,
+            potrero=soon,
+            nombre='Sembrar lote',
+            tipo=ActividadAgricola.Tipo.SIEMBRA,
+            fecha_programada=today - timedelta(days=2),
         )
         page = self.client.get('/calendario/?anio=2026')
         self.assertContains(page, 'Sembrar lote')
@@ -280,11 +338,15 @@ class TerrainTests(TestCase):
     def test_siembra_next_steps_never_show_other_users_data(self):
         from datetime import timedelta
         from django.utils import timezone
+
         other_farm = Predio.objects.create(propietario=self.other, nombre='Campo ajeno', superficie_ha=5)
         other_plot = Potrero.objects.create(predio=other_farm, nombre='Lote ajeno', superficie_ha=1)
         ActividadAgricola.objects.create(
-            usuario=self.other, potrero=other_plot, nombre='Labor ajena',
-            tipo=ActividadAgricola.Tipo.RIEGO, fecha_programada=timezone.localdate() + timedelta(days=1),
+            usuario=self.other,
+            potrero=other_plot,
+            nombre='Labor ajena',
+            tipo=ActividadAgricola.Tipo.RIEGO,
+            fecha_programada=timezone.localdate() + timedelta(days=1),
         )
         page = self.client.get('/calendario/')
         for text in ('Campo ajeno', 'Lote ajeno', 'Labor ajena'):
@@ -300,26 +362,42 @@ class TerrainTests(TestCase):
 
     def test_sidebar_menu_follows_design_and_all_links_work(self):
         import re as regex
+
         page = self.client.get('/calendario/')
         html = page.content.decode()
-        aside = html[html.index('<aside'):html.index('</aside>')]
+        aside = html[html.index('<aside') : html.index('</aside>')]
         self.assertNotIn('id="sidebar-quick-links"', html)  # el diseño nuevo no tiene «Accesos rápidos»
-        nav = html[html.index('aria-label="Principal"'):html.index('</nav>', html.index('aria-label="Principal"'))]
+        nav = html[html.index('aria-label="Principal"') : html.index('</nav>', html.index('aria-label="Principal"'))]
         etiquetas = regex.findall(r'<span>([^<]+)</span>', nav)
-        self.assertEqual(etiquetas, [
-            'Inicio', 'Mis predios', 'Mapa', 'Catálogo agrícola', 'Calculadoras', 'Semillas', 'Fertilizantes',
-            '¿Me alcanza?', 'Actividades', 'Toma de decisiones', 'Reportes', 'Calendario', 'Buscar',
-        ])
+        self.assertEqual(
+            etiquetas,
+            [
+                'Inicio',
+                'Mis predios',
+                'Mapa',
+                'Catálogo agrícola',
+                'Calculadoras',
+                'Semillas',
+                'Fertilizantes',
+                '¿Me alcanza?',
+                'Actividades',
+                'Toma de decisiones',
+                'Reportes',
+                'Calendario',
+                'Buscar',
+            ],
+        )
         for href in regex.findall(r'href="([^"#]+)', nav):
             response = self.client.get(href.replace('&amp;', '&'))
             self.assertEqual(response.status_code, 200, f'{href} no abre')
         self.assertEqual(aside.count('is-active'), 1)  # solo «Calendario» queda marcado en esta página
-        self.assertIn('<a href="/calendario/" class="nav-link is-active">', aside)
+        self.assertIn('<a href="/calendario/" class="nav-link is-active">', re.sub(r'\s+', ' ', aside))
         for url in ('/actividades/', '/actividades/nueva/'):
             self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_crop_selector_is_grouped_and_base_crops_load_safely(self):
         from ..catalog import crop_group_name, ensure_base_crops, CROP_GROUPS
+
         self.assertEqual(crop_group_name('Maíz'), 'Cereales y granos')
         self.assertEqual(crop_group_name('maiz grano'), 'Cereales y granos')
         self.assertEqual(crop_group_name('Palto Hass'), 'Frutales')
@@ -331,8 +409,8 @@ class TerrainTests(TestCase):
         self.assertEqual(ensure_base_crops(), 0)
         self.assertEqual(Cultivo.objects.get(nombre='Trigo').densidad_siembra, Decimal('160'))
         html = self.client.get(self.url).content.decode()
-        select = html[html.index('name="cultivo"'):]
-        select = select[:select.index('</select>')]
+        select = html[html.index('name="cultivo"') :]
+        select = select[: select.index('</select>')]
         self.assertIn('Sin cultivo por ahora', select)
         for group in ('Cereales y granos', 'Hortalizas', 'Frutales', 'Forrajes y praderas'):
             self.assertIn(f'<optgroup label="{group}">', select)
@@ -377,8 +455,16 @@ class TerrainTests(TestCase):
 
     def test_perimeter_confirmation_lives_in_right_column_without_duplicate_actions(self):
         html = self.client.get('/predios/nuevo/').content.decode()
-        for element_id in ('perimeter-confirmation', 'confirm-and-continue', 'return-to-edit', 'confirm-area', 'confirm-m2',
-                           'confirm-perimeter', 'confirm-vertices', 'step-indicator'):
+        for element_id in (
+            'perimeter-confirmation',
+            'confirm-and-continue',
+            'return-to-edit',
+            'confirm-area',
+            'confirm-m2',
+            'confirm-perimeter',
+            'confirm-vertices',
+            'step-indicator',
+        ):
             self.assertEqual(html.count(f'id="{element_id}"'), 1, element_id)
         self.assertEqual(html.count('Confirmar y continuar'), 1)
         self.assertEqual(html.count('Volver a editar'), 1)
@@ -404,7 +490,13 @@ class TerrainTests(TestCase):
         self.assertLess(html.index('Agregar más detalles'), html.index('Notas del predio (opcional)'))
         for hidden in ('superficie_ha', 'latitud', 'longitud'):
             self.assertIn(f'type="hidden" name="{hidden}"', html)
-        for gone in ('Superficie total (ha)', 'Fecha de creación', 'Se asignará automáticamente', 'Observaciones (opcional)', 'Descripción (opcional)'):
+        for gone in (
+            'Superficie total (ha)',
+            'Fecha de creación',
+            'Se asignará automáticamente',
+            'Observaciones (opcional)',
+            'Descripción (opcional)',
+        ):
             self.assertNotIn(gone, html)
         self.assertIn('Tu predio mide', html)
         self.assertIn('Ver detalles técnicos', html)
@@ -416,17 +508,29 @@ class TerrainTests(TestCase):
 
     def test_zone_is_required_only_when_zones_exist_and_notes_are_unified(self):
         from ..forms import PredioForm
+
         Zona.objects.all().delete()
         self.assertFalse(PredioForm().fields['zona'].required)
         zone = Zona.objects.create(nombre='Zona obligatoria')
         self.assertTrue(PredioForm().fields['zona'].required)
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
-        feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
-        data = {'nombre':'Predio notas','ubicacion':'Camino','geojson':json.dumps(feature),'perimetro_aceptado':'on',
-                'latitud':'-33.687','longitud':'-71.216','notas':'Sector de hortalizas'}
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
+        }
+        data = {
+            'nombre': 'Predio notas',
+            'ubicacion': 'Camino',
+            'geojson': json.dumps(feature),
+            'perimetro_aceptado': 'on',
+            'latitud': '-33.687',
+            'longitud': '-71.216',
+            'notas': 'Sector de hortalizas',
+        }
         self.assertContains(self.client.post('/predios/nuevo/', data), 'Este campo es obligatorio')
         self.assertFalse(Predio.objects.filter(nombre='Predio notas').exists())
-        response = self.client.post('/predios/nuevo/', {**data, 'zona':zone.pk})
+        response = self.client.post('/predios/nuevo/', {**data, 'zona': zone.pk})
         farm = Predio.objects.get(nombre='Predio notas')
         self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         self.assertEqual((farm.descripcion, farm.observaciones, farm.zona_id), ('Sector de hortalizas', '', zone.pk))
@@ -436,14 +540,23 @@ class TerrainTests(TestCase):
 
     def test_edit_shows_old_description_and_observations_inside_notes(self):
         from ..forms import PredioForm
-        farm = Predio.objects.create(propietario=self.user, nombre='Con notas', ubicacion='X', superficie_ha=Decimal('1'),
-                                     descripcion='Descripción vieja', observaciones='Observación vieja')
+
+        farm = Predio.objects.create(
+            propietario=self.user,
+            nombre='Con notas',
+            ubicacion='X',
+            superficie_ha=Decimal('1'),
+            descripcion='Descripción vieja',
+            observaciones='Observación vieja',
+        )
         notes = PredioForm(instance=farm).initial['notas']
         self.assertIn('Descripción vieja', notes)
         self.assertIn('Observación vieja', notes)
 
     def test_new_predio_detail_offers_next_steps_only_once(self):
-        farm = Predio.objects.create(propietario=self.user, nombre='Recién creado', ubicacion='X', superficie_ha=Decimal('1'))
+        farm = Predio.objects.create(
+            propietario=self.user, nombre='Recién creado', ubicacion='X', superficie_ha=Decimal('1')
+        )
         response = self.client.get(f'/predios/{farm.pk}/?nuevo=1')
         self.assertContains(response, 'Predio registrado correctamente')
         self.assertContains(response, 'Dividir mi predio')
@@ -464,40 +577,58 @@ class TerrainTests(TestCase):
         self.assertNotContains(page, 'is-muted')
 
     def test_create_and_edit_predio(self):
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
-        feature = {'type':'Feature','properties':{},'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]}}
-        response = self.client.post('/predios/nuevo/', {
-            'nombre':'Campo nuevo','ubicacion':'Paine','superficie_ha':'5',
-            'geojson':json.dumps(feature),'perimetro_aceptado':'on',
-            'propietario':self.other.pk,
-        })
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
+        feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
+        }
+        response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Campo nuevo',
+                'ubicacion': 'Paine',
+                'superficie_ha': '5',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+                'propietario': self.other.pk,
+            },
+        )
         self.assertEqual(response.status_code, 302)
         p = Predio.objects.get(nombre='Campo nuevo')
         self.assertRedirects(response, f'/predios/{p.pk}/?nuevo=1')
-        self.assertEqual(p.propietario,self.user)
-        self.assertRedirects(self.client.post(f'/predios/{p.pk}/editar/',{'nombre':'Actualizado','ubicacion':'Paine','superficie_ha':'6'}), f'/predios/{p.pk}/')
+        self.assertEqual(p.propietario, self.user)
+        self.assertRedirects(
+            self.client.post(
+                f'/predios/{p.pk}/editar/', {'nombre': 'Actualizado', 'ubicacion': 'Paine', 'superficie_ha': '6'}
+            ),
+            f'/predios/{p.pk}/',
+        )
         p.refresh_from_db()
-        self.assertEqual(p.nombre,'Actualizado')
+        self.assertEqual(p.nombre, 'Actualizado')
         self.assertEqual(p.geojson, feature)
         self.assertEqual(p.historial.count(), 2)
 
     def test_predio_drawn_geojson_is_closed_and_server_recalculates_area(self):
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
         feature = {
-            'type':'Feature',
-            'properties':{},
-            'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
         }
-        response = self.client.post('/predios/nuevo/', {
-            'nombre':'Campo delimitado',
-            'ubicacion':'Melipilla',
-            'superficie_ha':'999',
-            'geojson':json.dumps(feature),
-            'perimetro_aceptado':'on',
-            'latitud':'',
-            'longitud':'',
-            'zona':'',
-        })
+        response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Campo delimitado',
+                'ubicacion': 'Melipilla',
+                'superficie_ha': '999',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+                'latitud': '',
+                'longitud': '',
+                'zona': '',
+            },
+        )
         self.assertEqual(response.status_code, 302)
         farm = Predio.objects.get(nombre='Campo delimitado')
         self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
@@ -514,11 +645,16 @@ class TerrainTests(TestCase):
 
     def test_new_predio_requires_an_explicit_accepted_closed_polygon(self):
         form_data = {
-            'nombre':'Sin aceptación', 'ubicacion':'Melipilla', 'superficie_ha':'',
-            'geojson':json.dumps({
-                'type':'Feature','properties':{},
-                'geometry':{'type':'Polygon','coordinates':[POLYGON + [POLYGON[0]]]},
-            }),
+            'nombre': 'Sin aceptación',
+            'ubicacion': 'Melipilla',
+            'superficie_ha': '',
+            'geojson': json.dumps(
+                {
+                    'type': 'Feature',
+                    'properties': {},
+                    'geometry': {'type': 'Polygon', 'coordinates': [POLYGON + [POLYGON[0]]]},
+                }
+            ),
         }
         response = self.client.post('/predios/nuevo/', form_data)
         self.assertEqual(response.status_code, 200)
@@ -530,12 +666,17 @@ class TerrainTests(TestCase):
         self.assertEqual(farm.historial.get().accion, PredioHistorial.Accion.CREADO)
 
         invalid_data = {
-            'nombre':'Anillo abierto', 'ubicacion':'Melipilla', 'superficie_ha':'',
-            'geojson':json.dumps({
-                'type':'Feature','properties':{},
-                'geometry':{'type':'Polygon','coordinates':[POLYGON]},
-            }),
-            'perimetro_aceptado':'on',
+            'nombre': 'Anillo abierto',
+            'ubicacion': 'Melipilla',
+            'superficie_ha': '',
+            'geojson': json.dumps(
+                {
+                    'type': 'Feature',
+                    'properties': {},
+                    'geometry': {'type': 'Polygon', 'coordinates': [POLYGON]},
+                }
+            ),
+            'perimetro_aceptado': 'on',
         }
         self.assertEqual(self.client.post('/predios/nuevo/', invalid_data).status_code, 200)
         self.assertFalse(Predio.objects.filter(nombre='Anillo abierto').exists())
@@ -543,26 +684,41 @@ class TerrainTests(TestCase):
     def test_perimeter_edits_recalculate_surface_and_keep_immutable_history_snapshots(self):
         old_points = POLYGON
         old_feature = {
-            'type':'Feature','properties':{},
-            'geometry':{'type':'Polygon','coordinates':[old_points + [old_points[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [old_points + [old_points[0]]]},
         }
-        create_response = self.client.post('/predios/nuevo/', {
-            'nombre':'Trazable','ubicacion':'Melipilla','superficie_ha':'',
-            'geojson':json.dumps(old_feature),'perimetro_aceptado':'on',
-        })
+        create_response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Trazable',
+                'ubicacion': 'Melipilla',
+                'superficie_ha': '',
+                'geojson': json.dumps(old_feature),
+                'perimetro_aceptado': 'on',
+            },
+        )
         self.assertEqual(create_response.status_code, 302)
         farm = Predio.objects.get(nombre='Trazable')
         old_area = farm.superficie_ha
-        new_points = [[-71.215,-33.686],[-71.2135,-33.686],[-71.2135,-33.6845],[-71.215,-33.6845]]
+        new_points = [[-71.215, -33.686], [-71.2135, -33.686], [-71.2135, -33.6845], [-71.215, -33.6845]]
         new_feature = {
-            'type':'Feature','properties':{},
-            'geometry':{'type':'Polygon','coordinates':[new_points + [new_points[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [new_points + [new_points[0]]]},
         }
-        response = self.client.post(f'/predios/{farm.pk}/editar/', {
-            'nombre':farm.nombre,'ubicacion':farm.ubicacion,'superficie_ha':str(old_area),
-            'descripcion':'Actualizada','observaciones':'Revisión anual',
-            'geojson':json.dumps(new_feature),'perimetro_aceptado':'on',
-        })
+        response = self.client.post(
+            f'/predios/{farm.pk}/editar/',
+            {
+                'nombre': farm.nombre,
+                'ubicacion': farm.ubicacion,
+                'superficie_ha': str(old_area),
+                'descripcion': 'Actualizada',
+                'observaciones': 'Revisión anual',
+                'geojson': json.dumps(new_feature),
+                'perimetro_aceptado': 'on',
+            },
+        )
         self.assertRedirects(response, f'/predios/{farm.pk}/')
         farm.refresh_from_db()
         self.assertEqual(
@@ -591,9 +747,9 @@ class TerrainTests(TestCase):
 
     def test_predio_ficha_shows_persistent_history_and_agricultural_totals(self):
         self.predio.geojson = {
-            'type':'Feature',
-            'properties':{},
-            'geometry':{'type':'Polygon','coordinates':[POLYGON + [POLYGON[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [POLYGON + [POLYGON[0]]]},
         }
         self.predio.save()
         history = PredioHistorial.objects.create(
@@ -619,14 +775,14 @@ class TerrainTests(TestCase):
         self.assertTrue(PredioHistorial.objects.filter(pk=history.pk).exists())
 
     def test_create_plot_and_associate_crop_persist_across_sessions(self):
-        self.assertRedirects(self.client.post(self.url,self.plot_data()), f'/predios/{self.predio.pk}/')
+        self.assertRedirects(self.client.post(self.url, self.plot_data()), f'/predios/{self.predio.pk}/')
         plot = Potrero.objects.get()
-        self.assertEqual(plot.cultivo,self.crop)
+        self.assertEqual(plot.cultivo, self.crop)
         self.client.logout()
         self.client.force_login(self.user)
         response = self.client.get('/predios/')
-        self.assertContains(response,'Potrero norte')
-        self.assertEqual(response.context['farm_data']['plots'][0]['id'],str(plot.pk))
+        self.assertContains(response, 'Potrero norte')
+        self.assertEqual(response.context['farm_data']['plots'][0]['id'], str(plot.pk))
         event = self.predio.historial.get(accion=PredioHistorial.Accion.POTRERO_CREADO)
         self.assertEqual(event.superficie_nueva_ha, plot.superficie_ha)
         self.assertEqual(event.potrero, plot)
@@ -634,7 +790,7 @@ class TerrainTests(TestCase):
         self.assertContains(response, 'POTREROS DE ESTE PREDIO')
         self.assertContains(response, 'HISTORIAL DE POTREROS')
         self.assertContains(response, f'data-select-plot="{plot.pk}"')
-        selected_response = self.client.get('/predios/', {'predio':str(self.predio.pk)})
+        selected_response = self.client.get('/predios/', {'predio': str(self.predio.pk)})
         self.assertContains(selected_response, f'data-initial-farm="{self.predio.pk}"')
 
     def test_predios_page_lists_all_owned_farms_and_filters_potrero_history(self):
@@ -689,18 +845,21 @@ class TerrainTests(TestCase):
         self.assertNotContains(response, 'Potrero ajeno')
         self.assertEqual(response.context['potrero_history_page'].paginator.count, 2)
 
-        selected = self.client.get('/predios/', {'predio':str(self.predio.pk)})
+        selected = self.client.get('/predios/', {'predio': str(self.predio.pk)})
         self.assertEqual(selected.context['selected_predio'], self.predio)
         self.assertContains(selected, f'data-farm-plots="{self.predio.pk}"')
         self.assertContains(selected, f'?potrero={first_plot.pk}#predio-history')
         self.assertContains(selected, 'data-select-plot="' + str(first_plot.pk) + '"')
 
-        filtered = self.client.get('/predios/', {
-            'q':'norte',
-            'filtro_predio':str(self.predio.pk),
-            'cultivo':str(self.crop.pk),
-            'orden':'nombre',
-        })
+        filtered = self.client.get(
+            '/predios/',
+            {
+                'q': 'norte',
+                'filtro_predio': str(self.predio.pk),
+                'cultivo': str(self.crop.pk),
+                'orden': 'nombre',
+            },
+        )
         self.assertEqual(filtered.context['potrero_history_page'].paginator.count, 1)
         self.assertEqual(filtered.context['potrero_history_page'].object_list[0], first_plot)
 
@@ -711,11 +870,14 @@ class TerrainTests(TestCase):
                 nombre=f'Potrero {number:02}',
                 superficie_ha=Decimal('0.1'),
             )
-        response = self.client.get('/predios/', {
-            'q':'Potrero',
-            'filtro_predio':str(self.predio.pk),
-            'orden':'nombre',
-        })
+        response = self.client.get(
+            '/predios/',
+            {
+                'q': 'Potrero',
+                'filtro_predio': str(self.predio.pk),
+                'orden': 'nombre',
+            },
+        )
         page = response.context['potrero_history_page']
         self.assertEqual(page.paginator.count, 26)
         self.assertEqual(page.paginator.num_pages, 2)
@@ -741,85 +903,107 @@ class TerrainTests(TestCase):
         self.assertNotContains(empty_response, 'Aún no hay potreros ubicados en el mapa.')
 
     def test_polygon_area_is_calculated_on_server(self):
-        self.assertRedirects(self.client.post(self.url,self.plot_data(perimetro=json.dumps(POLYGON),superficie_ha='9')), f'/predios/{self.predio.pk}/')
+        self.assertRedirects(
+            self.client.post(self.url, self.plot_data(perimetro=json.dumps(POLYGON), superficie_ha='9')),
+            f'/predios/{self.predio.pk}/',
+        )
         plot = Potrero.objects.get()
-        self.assertEqual(plot.perimetro,POLYGON)
-        self.assertEqual(plot.superficie_ha,(polygon_area(POLYGON)/10000).quantize(Decimal('0.0001')))
-        self.assertNotEqual(plot.superficie_ha,Decimal('9'))
+        self.assertEqual(plot.perimetro, POLYGON)
+        self.assertEqual(plot.superficie_ha, (polygon_area(POLYGON) / 10000).quantize(Decimal('0.0001')))
+        self.assertNotEqual(plot.superficie_ha, Decimal('9'))
 
     def test_polygon_does_not_need_manual_area(self):
-        self.assertRedirects(self.client.post(self.url,self.plot_data(perimetro=json.dumps(POLYGON),superficie_ha='')), f'/predios/{self.predio.pk}/')
+        self.assertRedirects(
+            self.client.post(self.url, self.plot_data(perimetro=json.dumps(POLYGON), superficie_ha='')),
+            f'/predios/{self.predio.pk}/',
+        )
 
     def test_edit_plot_crop_and_coordinates(self):
-        self.client.post(self.url,self.plot_data())
+        self.client.post(self.url, self.plot_data())
         plot = Potrero.objects.get()
-        url=f'/predios/{self.predio.pk}/potreros/{plot.pk}/editar/'
-        self.assertRedirects(self.client.post(url,self.plot_data(nombre='Sur',cultivo='',latitud='-33.5',longitud='-71.2')), f'/predios/{self.predio.pk}/')
+        url = f'/predios/{self.predio.pk}/potreros/{plot.pk}/editar/'
+        self.assertRedirects(
+            self.client.post(url, self.plot_data(nombre='Sur', cultivo='', latitud='-33.5', longitud='-71.2')),
+            f'/predios/{self.predio.pk}/',
+        )
         plot.refresh_from_db()
         self.assertIsNone(plot.cultivo)
-        self.assertEqual(plot.latitud,-33.5)
-        self.assertEqual(plot.nombre,'Sur')
+        self.assertEqual(plot.latitud, -33.5)
+        self.assertEqual(plot.nombre, 'Sur')
         event = self.predio.historial.get(accion=PredioHistorial.Accion.POTRERO_ACTUALIZADO)
         self.assertEqual(event.superficie_anterior_ha, Decimal('2'))
         self.assertEqual(event.superficie_nueva_ha, Decimal('2'))
         self.assertEqual(event.potrero, plot)
         self.assertIn('Nombre: Potrero norte → Sur', event.resumen)
-        filtered_history = self.client.get(f'/predios/{self.predio.pk}/', {'potrero':plot.pk})
+        filtered_history = self.client.get(f'/predios/{self.predio.pk}/', {'potrero': plot.pk})
         self.assertContains(filtered_history, 'Historial de Sur')
         self.assertContains(filtered_history, 'Se modificó el potrero')
         self.assertNotContains(filtered_history, 'Predio creado')
 
     def test_owners_cannot_see_or_modify_other_terrain(self):
-        self.client.post(self.url,self.plot_data())
-        plot=Potrero.objects.get()
+        self.client.post(self.url, self.plot_data())
+        plot = Potrero.objects.get()
         self.client.force_login(self.other)
-        self.assertNotContains(self.client.get('/predios/'),'Mi campo')
-        self.assertEqual(self.client.get('/').context['farm_data']['plots'],[])
-        for url in [f'/predios/{self.predio.pk}/editar/',self.url,f'/predios/{self.predio.pk}/potreros/{plot.pk}/editar/']:
-            self.assertEqual(self.client.get(url).status_code,404)
-            self.assertEqual(self.client.post(url,self.plot_data()).status_code,404)
+        self.assertNotContains(self.client.get('/predios/'), 'Mi campo')
+        self.assertEqual(self.client.get('/').context['farm_data']['plots'], [])
+        for url in [
+            f'/predios/{self.predio.pk}/editar/',
+            self.url,
+            f'/predios/{self.predio.pk}/potreros/{plot.pk}/editar/',
+        ]:
+            self.assertEqual(self.client.get(url).status_code, 404)
+            self.assertEqual(self.client.post(url, self.plot_data()).status_code, 404)
 
     def test_reject_invalid_dates_areas_and_coordinates(self):
-        for data in [self.plot_data(superficie_ha='-1'),self.plot_data(superficie_ha='0'),self.plot_data(superficie_ha='11'),
-                     self.plot_data(fecha_cosecha='2026-01-01'),self.plot_data(latitud='91',longitud='1'),
-                     self.plot_data(latitud='-33'),self.plot_data(latitud='nan',longitud='1'),self.plot_data(perimetro='not-json')]:
+        for data in [
+            self.plot_data(superficie_ha='-1'),
+            self.plot_data(superficie_ha='0'),
+            self.plot_data(superficie_ha='11'),
+            self.plot_data(fecha_cosecha='2026-01-01'),
+            self.plot_data(latitud='91', longitud='1'),
+            self.plot_data(latitud='-33'),
+            self.plot_data(latitud='nan', longitud='1'),
+            self.plot_data(perimetro='not-json'),
+        ]:
             with self.subTest(data=data):
-                self.assertEqual(self.client.post(self.url,data).status_code,200)
-        self.assertEqual(Potrero.objects.count(),0)
+                self.assertEqual(self.client.post(self.url, data).status_code, 200)
+        self.assertEqual(Potrero.objects.count(), 0)
 
     def test_total_plot_area_and_predio_reduction(self):
-        self.client.post(self.url,self.plot_data(superficie_ha='8'))
-        response=self.client.post(self.url,self.plot_data(superficie_ha='3'))
-        self.assertContains(response,'superar')
-        self.assertEqual(Potrero.objects.count(),1)
-        response=self.client.post(f'/predios/{self.predio.pk}/editar/',{'nombre':'Mi campo','ubicacion':'Melipilla','superficie_ha':'7'})
-        self.assertContains(response,'menor')
+        self.client.post(self.url, self.plot_data(superficie_ha='8'))
+        response = self.client.post(self.url, self.plot_data(superficie_ha='3'))
+        self.assertContains(response, 'superar')
+        self.assertEqual(Potrero.objects.count(), 1)
+        response = self.client.post(
+            f'/predios/{self.predio.pk}/editar/', {'nombre': 'Mi campo', 'ubicacion': 'Melipilla', 'superficie_ha': '7'}
+        )
+        self.assertContains(response, 'menor')
 
     def test_inactive_or_unknown_crop_rejected(self):
-        self.crop.activo=False
+        self.crop.activo = False
         self.crop.save()
-        self.assertEqual(self.client.post(self.url,self.plot_data()).status_code,200)
-        self.assertEqual(self.client.post(self.url,self.plot_data(cultivo='9999')).status_code,200)
-        self.assertEqual(Potrero.objects.count(),0)
+        self.assertEqual(self.client.post(self.url, self.plot_data()).status_code, 200)
+        self.assertEqual(self.client.post(self.url, self.plot_data(cultivo='9999')).status_code, 200)
+        self.assertEqual(Potrero.objects.count(), 0)
 
     def test_empty_catalog_stays_empty(self):
         Cultivo.objects.all().delete()
-        response=self.client.get('/')
-        self.assertEqual(response.context['catalog']['cultivos'],[])
-        self.assertEqual(response.context['catalog']['semillas'],[])
+        response = self.client.get('/')
+        self.assertEqual(response.context['catalog']['cultivos'], [])
+        self.assertEqual(response.context['catalog']['semillas'], [])
 
     @override_settings(MAP_TILE_URL='https://tiles.example/test-</script><script>bad()</script>/{z}/{x}/{y}.png')
     def test_map_configuration_is_safely_serialized(self):
-        response=self.client.get('/predios/')
-        self.assertNotContains(response,'test-</script>')
-        self.assertContains(response,'\\u003C/script\\u003E')
+        response = self.client.get('/predios/')
+        self.assertNotContains(response, 'test-</script>')
+        self.assertContains(response, '\\u003C/script\\u003E')
 
     def test_map_uses_leaflet_and_keeps_manual_registration(self):
         response = self.client.get(self.url)
-        self.assertContains(response,'leaflet-geoman')
-        self.assertContains(response,'Dibujar mi potrero')
-        self.assertContains(response,'Medir una línea')
-        self.assertRedirects(self.client.post(self.url,self.plot_data()),f'/predios/{self.predio.pk}/')
+        self.assertContains(response, 'leaflet-geoman')
+        self.assertContains(response, 'Dibujar mi potrero')
+        self.assertContains(response, 'Medir una línea')
+        self.assertRedirects(self.client.post(self.url, self.plot_data()), f'/predios/{self.predio.pk}/')
         predio_form = self.client.get('/predios/nuevo/')
         self.assertContains(predio_form, 'id="map-form-summary"')
         self.assertContains(predio_form, 'id="map-summary-area"')
@@ -830,7 +1014,7 @@ class TerrainTests(TestCase):
         self.assertContains(predio_form, 'id="terrain-form" hidden')
 
     def test_potrero_geojson_is_saved_and_recovered(self):
-        self.client.post(self.url,self.plot_data(perimetro=json.dumps(POLYGON)))
+        self.client.post(self.url, self.plot_data(perimetro=json.dumps(POLYGON)))
         plot = Potrero.objects.get()
         self.assertEqual(plot.geojson['type'], 'Feature')
         self.assertEqual(plot.geojson['geometry']['type'], 'Polygon')
@@ -862,23 +1046,25 @@ class TerrainTests(TestCase):
         self.assertNotContains(form, 'turf.min.js')
 
     def test_potrero_must_stay_inside_predio_boundary(self):
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
         self.predio.geojson = {
-            'type':'Feature', 'properties':{},
-            'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
         }
         self.predio.save()
-        outside = [[-71.219,-33.686],[-71.218,-33.686],[-71.218,-33.685],[-71.219,-33.685]]
+        outside = [[-71.219, -33.686], [-71.218, -33.686], [-71.218, -33.685], [-71.219, -33.685]]
         response = self.client.post(self.url, self.plot_data(perimetro=json.dumps(outside)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'debe quedar dentro del predio')
         self.assertFalse(Potrero.objects.exists())
 
     def test_potrero_form_shows_remaining_area_and_focuses_parent_boundary(self):
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
         self.predio.geojson = {
-            'type':'Feature', 'properties':{},
-            'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
         }
         self.predio.save()
         Potrero.objects.create(
@@ -920,101 +1106,117 @@ class TerrainTests(TestCase):
     def test_icons_script_loads_async_so_menus_work_before_it_arrives(self):
         html = self.client.get('/predios/').content.decode()
         icons = html.index('unpkg.com/lucide')
-        self.assertIn('async src="https://unpkg.com/lucide', html)
+        self.assertIn('async src="https://unpkg.com/lucide', re.sub(r'\s+', ' ', html))
         self.assertLess(html.index('js/row-menu.js'), icons)
         self.assertLess(html.index('js/layout.js'), icons)
 
     def test_potrero_overlap_with_same_farm_is_rejected(self):
-        first = [[-71.215,-33.686],[-71.214,-33.686],[-71.214,-33.685],[-71.215,-33.685]]
-        self.client.post(self.url,self.plot_data(perimetro=json.dumps(first)))
-        second = [[-71.2145,-33.686],[-71.2135,-33.686],[-71.2135,-33.685],[-71.2145,-33.685]]
-        response = self.client.post(self.url,self.plot_data(nombre='Potrero sur',perimetro=json.dumps(second)))
+        first = [[-71.215, -33.686], [-71.214, -33.686], [-71.214, -33.685], [-71.215, -33.685]]
+        self.client.post(self.url, self.plot_data(perimetro=json.dumps(first)))
+        second = [[-71.2145, -33.686], [-71.2135, -33.686], [-71.2135, -33.685], [-71.2145, -33.685]]
+        response = self.client.post(self.url, self.plot_data(nombre='Potrero sur', perimetro=json.dumps(second)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'se superpone')
         self.assertEqual(Potrero.objects.count(), 1)
 
     def test_all_existing_module_routes_render(self):
         urls = [
-            '/', '/predios/', '/predios/nuevo/', f'/predios/{self.predio.pk}/',
-            f'/predios/{self.predio.pk}/editar/', '/decisiones/', '/productos/',
-            '/calendario/', '/actividades/', '/actividades/nueva/', '/reportes/', '/busqueda/',
+            '/',
+            '/predios/',
+            '/predios/nuevo/',
+            f'/predios/{self.predio.pk}/',
+            f'/predios/{self.predio.pk}/editar/',
+            '/decisiones/',
+            '/productos/',
+            '/calendario/',
+            '/actividades/',
+            '/actividades/nueva/',
+            '/reportes/',
+            '/busqueda/',
         ]
         for url in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
                 main_nav = response.content.decode().split('aria-label="Principal"', 1)[1].split('</nav>', 1)[0]
-                for href in ('/', '/predios/', '/calendario/', '/decisiones/', '/busqueda/', '/reportes/', '/actividades/',
-                             '/productos/', '/calculadoras/semillas/'):
+                for href in (
+                    '/',
+                    '/predios/',
+                    '/calendario/',
+                    '/decisiones/',
+                    '/busqueda/',
+                    '/reportes/',
+                    '/actividades/',
+                    '/productos/',
+                ):
                     self.assertIn(f'href="{href}"', main_nav)
 
     def test_decision_center_tools_and_single_sidebar_link(self):
         response = self.client.get('/decisiones/')
         self.assertContains(response, 'Centro de decisiones')
         self.assertContains(response, 'Calcula, planifica y optimiza los recursos de tus predios')
-        for text in ('Cuánto llevar', '¿Me alcanza?', 'Cosecha', 'Ficha de insumo'):
+        for text in ('Cuánto llevar', '¿Me alcanza?'):
             self.assertContains(response, text)
         enlaces = [item for item in response.context['menu'] if item.get('href') == '/decisiones/']
-        self.assertEqual([item['label'] for item in enlaces], ['Toma de decisiones'])  # un solo enlace al centro de decisiones
-
-    def test_legacy_calculator_routes_redirect_to_integrated_tools(self):
-        expected = {
-            '/calculadora/?modo=insumos&plot=3': '/decisiones/?herramienta=llevar&tipo=insumos&plot=3',
-            '/calculadora/': '/decisiones/?herramienta=llevar&tipo=semillas',
-            '/cobertura/': '/decisiones/?herramienta=alcanza',
-            '/predictor/': '/decisiones/?herramienta=cosecha',
-            '/asesor/?crop=2': '/decisiones/?herramienta=ficha&crop=2',
-        }
-        for url, target in expected.items():
-            with self.subTest(url=url):
-                self.assertRedirects(self.client.get(url), target, fetch_redirect_response=False)
+        self.assertEqual(
+            [item['label'] for item in enlaces], ['Toma de decisiones']
+        )  # un solo enlace al centro de decisiones
 
     def test_csrf_required_to_save_terrain(self):
-        client=Client(enforce_csrf_checks=True)
+        client = Client(enforce_csrf_checks=True)
         client.force_login(self.user)
         potreros, predios = Potrero.objects.count(), Predio.objects.count()
-        self.assertEqual(client.post(self.url,self.plot_data()).status_code,302)
-        self.assertEqual(client.post('/predios/nuevo/', {}).status_code,302)
+        self.assertEqual(client.post(self.url, self.plot_data()).status_code, 302)
+        self.assertEqual(client.post('/predios/nuevo/', {}).status_code, 302)
         self.assertEqual((Potrero.objects.count(), Predio.objects.count()), (potreros, predios))  # no se guardó nada
 
 
 class GeometryTests(TestCase):
     def test_area_reference_and_orientation(self):
         # Approximately a 111 m x 93 m rectangle at latitude 33.686° S.
-        area=polygon_area(POLYGON)
-        self.assertGreater(area,Decimal('10200'))
-        self.assertLess(area,Decimal('10500'))
-        self.assertEqual(area,polygon_area(list(reversed(POLYGON))))
+        area = polygon_area(POLYGON)
+        self.assertGreater(area, Decimal('10200'))
+        self.assertLess(area, Decimal('10500'))
+        self.assertEqual(area, polygon_area(list(reversed(POLYGON))))
 
     def test_invalid_polygons(self):
-        examples=[[],POLYGON[:2],[POLYGON[0]]*3,[POLYGON[0],POLYGON[2],POLYGON[1],POLYGON[3]],
-                  [[0,0],[1,1],[2,2]],[[0,0],[1,float('nan')],[2,1]],[[True,0],[1,0],[1,1]],
-                  [[181,0],[1,0],[1,1]],[[0,0],[1,0],[1,1]]*100,{'coordinates':POLYGON}]
+        examples = [
+            [],
+            POLYGON[:2],
+            [POLYGON[0]] * 3,
+            [POLYGON[0], POLYGON[2], POLYGON[1], POLYGON[3]],
+            [[0, 0], [1, 1], [2, 2]],
+            [[0, 0], [1, float('nan')], [2, 1]],
+            [[True, 0], [1, 0], [1, 1]],
+            [[181, 0], [1, 0], [1, 1]],
+            [[0, 0], [1, 0], [1, 1]] * 100,
+            {'coordinates': POLYGON},
+        ]
         for points in examples:
-            with self.subTest(points=points),self.assertRaises(ValidationError):
+            with self.subTest(points=points), self.assertRaises(ValidationError):
                 polygon_area(points)
 
 
 class CatalogSliceTests(TestCase):
-    def test_existing_seed_command_and_catalog_contract(self):
-        # Legacy demonstration data is used only in this isolated test database.
-        call_command('seed_catalog',verbosity=0)
-        user=User.objects.create_user('catalog',password=PASSWORD)
+    def test_catalog_contract_exposes_seed_densities(self):
+        for nombre, densidad in (('Maíz', '25'), ('Trigo', '160')):
+            Cultivo.objects.create(nombre=nombre, densidad_siembra=Decimal(densidad), unidad_siembra='kg')
+        user = User.objects.create_user('catalog', password=PASSWORD)
         self.client.force_login(user)
-        response=self.client.get('/decisiones/')
+        response = self.client.get('/decisiones/')
         self.assertTrue(response.context['catalog']['fromDb'])
-        seeds={item['crop']:item['density'] for item in response.context['catalog']['semillas']}
-        self.assertEqual(seeds['Maíz'],25.0)
-        self.assertEqual(seeds['Trigo'],160.0)
+        seeds = {item['crop']: item['density'] for item in response.context['catalog']['semillas']}
+        self.assertEqual(seeds['Maíz'], 25.0)
+        self.assertEqual(seeds['Trigo'], 160.0)
         maize_seed = next(item for item in response.context['catalog']['semillas'] if item['crop'] == 'Maíz')
         self.assertEqual(maize_seed['densitySource'], Cultivo.objects.get(nombre='Maíz').densidad_fuente)
 
     def test_catalog_does_not_invent_missing_seed_density(self):
         Cultivo.objects.create(nombre='Cultivo sin dosis')
-        user=User.objects.create_user('catalog-empty',email='catalog-empty@example.com',password=PASSWORD)
+        user = User.objects.create_user('catalog-empty', email='catalog-empty@example.com', password=PASSWORD)
         self.client.force_login(user)
-        response=self.client.get('/decisiones/')
-        self.assertEqual(response.context['catalog']['semillas'],[])
+        response = self.client.get('/decisiones/')
+        self.assertEqual(response.context['catalog']['semillas'], [])
 
 
 class ServerCalculationTests(TestCase):
@@ -1025,9 +1227,7 @@ class ServerCalculationTests(TestCase):
         self.farm = Predio.objects.create(
             propietario=self.user, nombre='Campo de cálculo', ubicacion='Melipilla', superficie_ha=10
         )
-        self.plot = Potrero.objects.create(
-            predio=self.farm, nombre='Lote 1', cultivo=self.crop, superficie_ha=4
-        )
+        self.plot = Potrero.objects.create(predio=self.farm, nombre='Lote 1', cultivo=self.crop, superficie_ha=4)
         self.client.force_login(self.user)
 
     def calculate(self, **payload):
@@ -1037,77 +1237,21 @@ class ServerCalculationTests(TestCase):
             content_type='application/json',
         )
 
-    def test_yield_calculation_uses_server_area_and_validates_values(self):
+    def test_yield_estimation_is_no_longer_offered(self):
         response = self.calculate(
-            operation='yield',
-            plot_id=self.plot.pk,
-            crop=self.crop.nombre,
-            area='2.5',
-            rate='6',
-            source='Fuente técnica ingresada',
+            operation='yield', plot_id=self.plot.pk, crop=self.crop.nombre, area='1', rate='4', source='x'
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['production'], 15)
-        self.assertFalse(response.json()['source_verified'])
-        self.assertEqual(
-            self.calculate(
-                operation='yield',
-                plot_id=self.plot.pk,
-                crop=self.crop.nombre,
-                area='-1',
-                rate='6',
-                source='Fuente técnica',
-            ).status_code,
-            400,
-        )
-        self.assertEqual(
-            self.calculate(
-                operation='yield',
-                plot_id=self.plot.pk,
-                crop=self.crop.nombre,
-                area='2',
-                rate='6',
-            ).status_code,
-            400,
-        )
-
-    def test_yield_prefers_verified_crop_zone_and_variety_reference(self):
-        zone = Zona.objects.create(nombre='Zona rendimiento')
-        self.farm.zona = zone
-        self.farm.save(update_fields=['zona'])
-        reference = ReferenciaAgronomica.objects.create(
-            cultivo=self.crop,
-            zona=zone,
-            variedad='Híbrido A',
-            rendimiento_ton_ha=Decimal('8.50'),
-            institucion_fuente='Centro técnico',
-            documento_fuente='Ensayo regional',
-            url_fuente='https://example.org/yield',
-            fecha_consulta_fuente='2026-10-01',
-            estado=ReferenciaAgronomica.Estado.VERIFICADA,
-        )
-        self.plot.variedad = reference.variedad
-        self.plot.save(update_fields=['variedad'])
-        response = self.calculate(
-            operation='yield',
-            calculation_type='rendimiento',
-            plot_id=self.plot.pk,
-            crop=self.crop.nombre,
-            area='2.5',
-            rate='6',
-            source='Fuente enviada por cliente',
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['rate'], 8.5)
-        self.assertEqual(response.json()['production'], 21.25)
-        self.assertTrue(response.json()['source_verified'])
-        self.assertEqual(response.json()['source'], 'Centro técnico · Ensayo regional')
-        self.assertEqual(response.json()['source_url'], 'https://example.org/yield')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(CalculoAgricola.objects.exists())
 
     def test_standard_dose_calculation_keeps_area_times_dose_formula(self):
         response = self.calculate(
-            operation='dose', plot_id=self.plot.pk, crop=self.crop.nombre,
-            area='2.5', dose='12', unit='kg',
+            operation='dose',
+            plot_id=self.plot.pk,
+            crop=self.crop.nombre,
+            area='2.5',
+            dose='12',
+            unit='kg',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['amount'], 30)
@@ -1115,17 +1259,27 @@ class ServerCalculationTests(TestCase):
 
     def test_seed_population_uses_explicit_parameters_and_source(self):
         response = self.calculate(
-            operation='seed_population', plot_id=self.plot.pk, area='1',
-            plants_m2='100', thousand_seed_weight_g='300',
-            germination_pct='90', purity_pct='95', source='Ficha de semilla',
+            operation='seed_population',
+            plot_id=self.plot.pk,
+            area='1',
+            plants_m2='100',
+            thousand_seed_weight_g='300',
+            germination_pct='90',
+            purity_pct='95',
+            source='Ficha de semilla',
         )
         self.assertEqual(response.status_code, 200)
         self.assertAlmostEqual(response.json()['rate'], 100 * 300 / (100 * 0.9 * 0.95))
         self.assertEqual(
             self.calculate(
-                operation='seed_population', plot_id=self.plot.pk, area='1',
-                plants_m2='100', thousand_seed_weight_g='300',
-                germination_pct='101', purity_pct='95', source='Ficha de semilla',
+                operation='seed_population',
+                plot_id=self.plot.pk,
+                area='1',
+                plants_m2='100',
+                thousand_seed_weight_g='300',
+                germination_pct='101',
+                purity_pct='95',
+                source='Ficha de semilla',
             ).status_code,
             400,
         )
@@ -1134,8 +1288,13 @@ class ServerCalculationTests(TestCase):
         kind = TipoInsumo.objects.create(nombre='Fertilizante')
         product = Insumo.objects.create(tipo=kind, nombre='Producto sin unidad')
         response = self.calculate(
-            operation='coverage', plot_id=self.plot.pk, crop=self.crop.nombre,
-            product_id=product.pk, area='2', dose='3', stock='3',
+            operation='coverage',
+            plot_id=self.plot.pk,
+            crop=self.crop.nombre,
+            product_id=product.pk,
+            area='2',
+            dose='3',
+            stock='3',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['needed'], 6)
@@ -1148,7 +1307,7 @@ class ServerCalculationTests(TestCase):
         )
         other_plot = Potrero.objects.create(predio=other_farm, nombre='Privado', superficie_ha=1)
         response = self.calculate(
-            operation='yield', plot_id=other_plot.pk, crop=self.crop.nombre, area='1', rate='4'
+            operation='dose', plot_id=other_plot.pk, crop=self.crop.nombre, area='1', dose='4', unit='kg'
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn('no pertenece', response.json()['error'])
@@ -1188,8 +1347,8 @@ class ServerCalculationTests(TestCase):
             usuario=self.other,
             potrero=other_plot,
             operacion=CalculoAgricola.Operacion.RENDIMIENTO,
-            entrada={'calculation_type':'rendimiento'},
-            resultado={'production':10},
+            entrada={'calculation_type': 'rendimiento'},
+            resultado={'production': 10},
         )
         report = self.client.get('/reportes/')
         self.assertEqual(
@@ -1215,17 +1374,30 @@ class ServerCalculationTests(TestCase):
     def test_phytosanitary_coverage_requires_verified_authorized_target(self):
         kind = TipoInsumo.objects.create(nombre='Herbicida')
         product = Insumo.objects.create(
-            tipo=kind, cultivo=self.crop, nombre='Producto autorizado',
-            dosis_hectarea=Decimal('1.5'), unidad_dosis='L/ha',
-            estado_verificacion='verified', fuente_nombre='Etiqueta',
-            fuente_url='https://example.com/source', fecha_verificacion='2026-01-01',
-            dosis_verificada=True, dosis_fuente='Etiqueta',
-            etiqueta_url='https://example.com/label', numero_autorizacion_sag='REG-1',
-            cultivos_autorizados=[self.crop.nombre], objetivos_control=['Maleza A'],
+            tipo=kind,
+            cultivo=self.crop,
+            nombre='Producto autorizado',
+            dosis_hectarea=Decimal('1.5'),
+            unidad_dosis='L/ha',
+            estado_verificacion='verified',
+            fuente_nombre='Etiqueta',
+            fuente_url='https://example.com/source',
+            fecha_verificacion='2026-01-01',
+            dosis_verificada=True,
+            dosis_fuente='Etiqueta',
+            etiqueta_url='https://example.com/label',
+            numero_autorizacion_sag='REG-1',
+            cultivos_autorizados=[self.crop.nombre],
+            objetivos_control=['Maleza A'],
         )
         payload = {
-            'operation':'coverage', 'plot_id':self.plot.pk, 'crop':self.crop.nombre,
-            'product_id':product.pk, 'area':'2', 'dose':'99', 'stock':'3',
+            'operation': 'coverage',
+            'plot_id': self.plot.pk,
+            'crop': self.crop.nombre,
+            'product_id': product.pk,
+            'area': '2',
+            'dose': '99',
+            'stock': '3',
         }
         invalid = self.calculate(**payload)
         self.assertEqual(invalid.status_code, 400)
@@ -1284,22 +1456,35 @@ class ServerCalculationTests(TestCase):
     def test_fertilizer_nutrition_requires_verified_composition_and_need_source(self):
         kind = TipoInsumo.objects.create(nombre='Fertilizante')
         product = Insumo.objects.create(
-            tipo=kind, nombre='Fertilizante N', unidad_dosis='kg/ha',
-            estado_verificacion='verified', fuente_nombre='Ficha técnica',
-            fuente_url='https://example.com/fertilizer', fecha_verificacion='2026-01-01',
-            composicion_nutricional='10% N', nitrogeno_pct=Decimal('10'),
+            tipo=kind,
+            nombre='Fertilizante N',
+            unidad_dosis='kg/ha',
+            estado_verificacion='verified',
+            fuente_nombre='Ficha técnica',
+            fuente_url='https://example.com/fertilizer',
+            fecha_verificacion='2026-01-01',
+            composicion_nutricional='10% N',
+            nitrogeno_pct=Decimal('10'),
         )
         response = self.calculate(
-            operation='fertilizer_nutrition', plot_id=self.plot.pk, area='2',
-            product_id=product.pk, nutrient='N', need_per_ha='5',
+            operation='fertilizer_nutrition',
+            plot_id=self.plot.pk,
+            area='2',
+            product_id=product.pk,
+            nutrient='N',
+            need_per_ha='5',
             need_source='Análisis de suelo',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['amount'], 100)
         self.assertEqual(
             self.calculate(
-                operation='fertilizer_nutrition', plot_id=self.plot.pk, area='2',
-                product_id=product.pk, nutrient='N', need_per_ha='5',
+                operation='fertilizer_nutrition',
+                plot_id=self.plot.pk,
+                area='2',
+                product_id=product.pk,
+                nutrient='N',
+                need_per_ha='5',
             ).status_code,
             400,
         )
@@ -1309,7 +1494,9 @@ class ServerCalculationTests(TestCase):
         client.force_login(self.user)
         response = client.post(
             '/calculos/ejecutar/',
-            data=json.dumps({'operation':'yield', 'plot_id':self.plot.pk, 'area':'1', 'rate':'4', 'crop':'Maíz'}),
+            data=json.dumps(
+                {'operation': 'dose', 'plot_id': self.plot.pk, 'area': '1', 'dose': '4', 'unit': 'kg', 'crop': 'Maíz'}
+            ),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 403)
@@ -1354,12 +1541,12 @@ class ActividadAgricolaTests(TestCase):
 
     def activity_data(self, **values):
         return {
-            'nombre':'Aplicar riego',
-            'tipo':'riego',
-            'potrero':self.potrero.pk,
-            'fecha_programada':'2026-11-05',
-            'estado':'pendiente',
-            'observaciones':'Revisar humedad del suelo.',
+            'nombre': 'Aplicar riego',
+            'tipo': 'riego',
+            'potrero': self.potrero.pk,
+            'fecha_programada': '2026-11-05',
+            'estado': 'pendiente',
+            'observaciones': 'Revisar humedad del suelo.',
             **values,
         }
 
@@ -1412,19 +1599,30 @@ class ActividadAgricolaTests(TestCase):
         self.assertEqual(stats['cultivos'], 0)
         self.assertNotContains(response, 'Campo ajeno')
 
-        boundary = [[-71.216,-33.687],[-71.213,-33.687],[-71.213,-33.684],[-71.216,-33.684]]
+        boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
         feature = {
-            'type':'Feature','properties':{},
-            'geometry':{'type':'Polygon','coordinates':[boundary + [boundary[0]]]},
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
         }
-        create_response = self.client.post('/predios/nuevo/', {
-            'nombre':'Nuevo dashboard','ubicacion':'Paine','superficie_ha':'',
-            'geojson':json.dumps(feature),'perimetro_aceptado':'on',
-        })
+        create_response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Nuevo dashboard',
+                'ubicacion': 'Paine',
+                'superficie_ha': '',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+            },
+        )
         self.assertEqual(create_response.status_code, 302)
         dashboard = self.client.get('/')
         self.assertEqual(dashboard.context['farm_data']['stats']['predios'], 2)
-        self.assertAlmostEqual(dashboard.context['farm_data']['stats']['superficie_predios'], 8 + float(polygon_area(boundary) / 10000), places=3)
+        self.assertAlmostEqual(
+            dashboard.context['farm_data']['stats']['superficie_predios'],
+            8 + float(polygon_area(boundary) / 10000),
+            places=3,
+        )
         self.assertContains(dashboard, 'Nuevo dashboard')
 
     def test_dashboard_refreshes_assigned_area_and_active_crop_after_registering_plot(self):
@@ -1432,15 +1630,15 @@ class ActividadAgricolaTests(TestCase):
         response = self.client.post(
             f'/predios/{self.predio.pk}/potreros/nuevo/',
             {
-                'nombre':'Lote nuevo',
-                'cultivo':crop.pk,
-                'variedad':'',
-                'fecha_siembra':'',
-                'fecha_cosecha':'',
-                'superficie_ha':'1.5',
-                'latitud':'',
-                'longitud':'',
-                'perimetro':'[]',
+                'nombre': 'Lote nuevo',
+                'cultivo': crop.pk,
+                'variedad': '',
+                'fecha_siembra': '',
+                'fecha_cosecha': '',
+                'superficie_ha': '1.5',
+                'latitud': '',
+                'longitud': '',
+                'perimetro': '[]',
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -1464,11 +1662,13 @@ class ActividadAgricolaTests(TestCase):
         self.assertNotContains(response, 'Aún no hay historial persistente de cálculos')
         self.assertContains(response, 'Centro de decisiones')
 
-        self.client.force_login(User.objects.create_user(
-            'dashboard-empty@example.com',
-            email='dashboard-empty@example.com',
-            password=PASSWORD,
-        ))
+        self.client.force_login(
+            User.objects.create_user(
+                'dashboard-empty@example.com',
+                email='dashboard-empty@example.com',
+                password=PASSWORD,
+            )
+        )
         empty_response = self.client.get('/')
         self.assertEqual(empty_response.context['farm_data']['stats']['predios'], 0)
         self.assertEqual(empty_response.context['farm_data']['stats']['potreros'], 0)
@@ -1504,7 +1704,7 @@ class ActividadAgricolaTests(TestCase):
         self.assertContains(dashboard, 'Pendiente')
         response = self.client.post(
             f'/actividades/{activity.pk}/estado/',
-            {'estado':'completada', 'next':'dashboard'},
+            {'estado': 'completada', 'next': 'dashboard'},
         )
         self.assertRedirects(response, '/')
         activity.refresh_from_db()
@@ -1537,7 +1737,7 @@ class ActividadAgricolaTests(TestCase):
         for url in [detail_url, f'/actividades/{activity.pk}/editar/', f'/actividades/{activity.pk}/eliminar/']:
             self.assertEqual(self.client.get(url).status_code, 404)
         self.assertEqual(
-            self.client.post(f'/actividades/{activity.pk}/estado/', {'estado':'completada'}).status_code,
+            self.client.post(f'/actividades/{activity.pk}/estado/', {'estado': 'completada'}).status_code,
             404,
         )
         self.assertNotContains(self.client.get('/actividades/'), 'Actividad privada')
@@ -1571,7 +1771,7 @@ class ActividadAgricolaTests(TestCase):
         )
         response = self.client.post(
             f'/actividades/{activity.pk}/estado/',
-            {'estado':'inventado'},
+            {'estado': 'inventado'},
         )
         self.assertRedirects(response, f'/actividades/{activity.pk}/')
         activity.refresh_from_db()
@@ -1599,7 +1799,7 @@ class ActividadAgricolaTests(TestCase):
         client.force_login(self.user)
         response = client.post(
             f'/actividades/{activity.pk}/estado/',
-            {'estado':'completada'},
+            {'estado': 'completada'},
         )
         # Sin token CSRF nada se ejecuta: se vuelve a la página con un aviso (no la pantalla de error de Django).
         self.assertEqual(response.status_code, 302)
@@ -1620,22 +1820,22 @@ class AgronomicCalendarTests(TestCase):
 
     def create_reference(self, **values):
         data = {
-            'cultivo':self.crop,
-            'zona':self.zone,
-            'siembra_inicio_mes':2,
-            'siembra_inicio_dia':1,
-            'siembra_fin_mes':2,
-            'siembra_fin_dia':10,
-            'cosecha_inicio_mes':7,
-            'cosecha_inicio_dia':1,
-            'cosecha_fin_mes':8,
-            'cosecha_fin_dia':31,
-            'duracion_ciclo_dias':120,
-            'institucion_fuente':'Institución técnica',
-            'documento_fuente':'Manual agronómico',
-            'url_fuente':'https://example.org/manual',
-            'fecha_consulta_fuente':'2026-10-01',
-            'estado':ReferenciaAgronomica.Estado.VERIFICADA,
+            'cultivo': self.crop,
+            'zona': self.zone,
+            'siembra_inicio_mes': 2,
+            'siembra_inicio_dia': 1,
+            'siembra_fin_mes': 2,
+            'siembra_fin_dia': 10,
+            'cosecha_inicio_mes': 7,
+            'cosecha_inicio_dia': 1,
+            'cosecha_fin_mes': 8,
+            'cosecha_fin_dia': 31,
+            'duracion_ciclo_dias': 120,
+            'institucion_fuente': 'Institución técnica',
+            'documento_fuente': 'Manual agronómico',
+            'url_fuente': 'https://example.org/manual',
+            'fecha_consulta_fuente': '2026-10-01',
+            'estado': ReferenciaAgronomica.Estado.VERIFICADA,
         }
         data.update(values)
         return ReferenciaAgronomica.objects.create(**data)
@@ -1643,13 +1843,15 @@ class AgronomicCalendarTests(TestCase):
     def evaluate(self, **values):
         return self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({
-                'evaluation':'sowing',
-                'crop_id':self.crop.pk,
-                'zone_id':self.zone.pk,
-                'proposed_date':'2026-02-05',
-                **values,
-            }),
+            data=json.dumps(
+                {
+                    'evaluation': 'sowing',
+                    'crop_id': self.crop.pk,
+                    'zone_id': self.zone.pk,
+                    'proposed_date': '2026-02-05',
+                    **values,
+                }
+            ),
             content_type='application/json',
         )
 
@@ -1769,13 +1971,15 @@ class AgronomicCalendarTests(TestCase):
         reference = self.create_reference()
         response = self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({
-                'evaluation':'harvest',
-                'crop_id':self.crop.pk,
-                'zone_id':self.zone.pk,
-                'sowing_date':'2026-03-01',
-                'proposed_date':'2026-07-01',
-            }),
+            data=json.dumps(
+                {
+                    'evaluation': 'harvest',
+                    'crop_id': self.crop.pk,
+                    'zone_id': self.zone.pk,
+                    'sowing_date': '2026-03-01',
+                    'proposed_date': '2026-07-01',
+                }
+            ),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 200)
@@ -1787,21 +1991,21 @@ class AgronomicCalendarTests(TestCase):
     def test_harvest_reports_near_and_cycle_outside_states(self):
         self.create_reference()
         base_payload = {
-            'evaluation':'harvest',
-            'crop_id':self.crop.pk,
-            'zone_id':self.zone.pk,
-            'sowing_date':'2026-03-01',
+            'evaluation': 'harvest',
+            'crop_id': self.crop.pk,
+            'zone_id': self.zone.pk,
+            'sowing_date': '2026-03-01',
         }
         near = self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({**base_payload, 'proposed_date':'2026-06-16'}),
+            data=json.dumps({**base_payload, 'proposed_date': '2026-06-16'}),
             content_type='application/json',
         )
         self.assertEqual(near.status_code, 200)
         self.assertEqual(near.json()['status'], 'near')
         outside_cycle = self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({**base_payload, 'proposed_date':'2026-08-31'}),
+            data=json.dumps({**base_payload, 'proposed_date': '2026-08-31'}),
             content_type='application/json',
         )
         self.assertEqual(outside_cycle.status_code, 200)
@@ -1811,13 +2015,15 @@ class AgronomicCalendarTests(TestCase):
         self.create_reference()
         invalid_order = self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({
-                'evaluation':'harvest',
-                'crop_id':self.crop.pk,
-                'zone_id':self.zone.pk,
-                'sowing_date':'2026-07-01',
-                'proposed_date':'2026-03-01',
-            }),
+            data=json.dumps(
+                {
+                    'evaluation': 'harvest',
+                    'crop_id': self.crop.pk,
+                    'zone_id': self.zone.pk,
+                    'sowing_date': '2026-07-01',
+                    'proposed_date': '2026-03-01',
+                }
+            ),
             content_type='application/json',
         )
         self.assertEqual(invalid_order.status_code, 400)
@@ -1847,17 +2053,19 @@ class AgronomicCalendarTests(TestCase):
 
     def test_evaluator_rejects_non_json_and_invalid_catalog_ids(self):
         self.assertEqual(
-            self.client.post('/calendario/evaluar/', {'evaluation':'sowing'}).status_code,
+            self.client.post('/calendario/evaluar/', {'evaluation': 'sowing'}).status_code,
             415,
         )
         response = self.client.post(
             '/calendario/evaluar/',
-            data=json.dumps({
-                'evaluation':'sowing',
-                'crop_id':99999,
-                'zone_id':self.zone.pk,
-                'proposed_date':'2026-02-05',
-            }),
+            data=json.dumps(
+                {
+                    'evaluation': 'sowing',
+                    'crop_id': 99999,
+                    'zone_id': self.zone.pk,
+                    'proposed_date': '2026-02-05',
+                }
+            ),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 400)
@@ -1867,12 +2075,14 @@ class AgronomicCalendarTests(TestCase):
         client.force_login(self.user)
         response = client.post(
             '/calendario/evaluar/',
-            data=json.dumps({
-                'evaluation':'sowing',
-                'crop_id':self.crop.pk,
-                'zone_id':self.zone.pk,
-                'proposed_date':'2026-02-05',
-            }),
+            data=json.dumps(
+                {
+                    'evaluation': 'sowing',
+                    'crop_id': self.crop.pk,
+                    'zone_id': self.zone.pk,
+                    'proposed_date': '2026-02-05',
+                }
+            ),
             content_type='application/json',
         )
         self.assertEqual(response.status_code, 403)
@@ -1908,18 +2118,16 @@ class TemporadaCultivoTests(TestCase):
             superficie_ha=2,
         )
         self.client.force_login(self.user)
-        self.create_url = (
-            f'/predios/{self.predio.pk}/potreros/{self.potrero.pk}/temporadas/nueva/'
-        )
+        self.create_url = f'/predios/{self.predio.pk}/potreros/{self.potrero.pk}/temporadas/nueva/'
 
     def season_data(self, **values):
         return {
-            'cultivo':self.new_crop.pk,
-            'variedad':'Variedad nueva',
-            'fecha_siembra':'2026-09-15',
-            'fecha_cosecha':'2027-02-10',
-            'estado':TemporadaCultivo.Estado.PLANIFICADA,
-            'observaciones':'Rotación de este ciclo.',
+            'cultivo': self.new_crop.pk,
+            'variedad': 'Variedad nueva',
+            'fecha_siembra': '2026-09-15',
+            'fecha_cosecha': '2027-02-10',
+            'estado': TemporadaCultivo.Estado.PLANIFICADA,
+            'observaciones': 'Rotación de este ciclo.',
             **values,
         }
 
@@ -1955,7 +2163,7 @@ class TemporadaCultivoTests(TestCase):
         self.assertRedirects(
             self.client.post(
                 '/login/',
-                {'username':'season-user', 'password':PASSWORD},
+                {'username': 'season-user', 'password': PASSWORD},
             ),
             '/',
         )
@@ -2014,13 +2222,8 @@ class TemporadaCultivoTests(TestCase):
             cultivo=self.new_crop,
             fecha_siembra='2026-09-15',
         )
-        create_other_url = (
-            f'/predios/{other_farm.pk}/potreros/{other_plot.pk}/temporadas/nueva/'
-        )
-        edit_other_url = (
-            f'/predios/{other_farm.pk}/potreros/{other_plot.pk}/'
-            f'temporadas/{other_season.pk}/editar/'
-        )
+        create_other_url = f'/predios/{other_farm.pk}/potreros/{other_plot.pk}/temporadas/nueva/'
+        edit_other_url = f'/predios/{other_farm.pk}/potreros/{other_plot.pk}/' f'temporadas/{other_season.pk}/editar/'
         self.assertEqual(self.client.get(create_other_url).status_code, 404)
         self.assertEqual(self.client.post(create_other_url, self.season_data()).status_code, 404)
         self.assertEqual(self.client.get(edit_other_url).status_code, 404)
@@ -2072,8 +2275,10 @@ from datetime import date as _date
 
 def _verified_source():
     return dict(
-        institucion_fuente='Institución de prueba', documento_fuente='Documento de prueba',
-        url_fuente='https://example.org/prueba', fecha_consulta_fuente=_date(2026, 10, 1),
+        institucion_fuente='Institución de prueba',
+        documento_fuente='Documento de prueba',
+        url_fuente='https://example.org/prueba',
+        fecha_consulta_fuente=_date(2026, 10, 1),
         estado=ReferenciaAgronomica.Estado.VERIFICADA,
     )
 
@@ -2086,7 +2291,9 @@ class IntegrationBase(TestCase):
         self.zone2 = Zona.objects.create(nombre='Zona prueba 2')
         self.maize = Cultivo.objects.create(nombre='Maíz prueba')
         self.wheat = Cultivo.objects.create(nombre='Trigo prueba')
-        self.farm = Predio.objects.create(propietario=self.user, nombre='Campo', ubicacion='X', superficie_ha=10, zona=self.zone)
+        self.farm = Predio.objects.create(
+            propietario=self.user, nombre='Campo', ubicacion='X', superficie_ha=10, zona=self.zone
+        )
         self.plot = Potrero.objects.create(predio=self.farm, nombre='Lote A', superficie_ha=4)
         self.other_farm = Predio.objects.create(propietario=self.other, nombre='Ajeno', ubicacion='Y', superficie_ha=5)
         self.other_plot = Potrero.objects.create(predio=self.other_farm, nombre='Lote ajeno', superficie_ha=1)
@@ -2101,10 +2308,18 @@ class CropAssignmentTests(IntegrationBase):
         return f'/api/potreros/{(plot or self.plot).pk}/cultivo/'
 
     def test_assign_creates_season_updates_snapshot_and_history(self):
-        response = self.post_json(self.url(), {
-            'crop_id': self.maize.pk, 'variety': 'H1', 'season': '2026-2027',
-            'sowing_date': '2026-10-10', 'harvest_date': '2027-03-30', 'status': 'sown', 'notes': 'Nota',
-        })
+        response = self.post_json(
+            self.url(),
+            {
+                'crop_id': self.maize.pk,
+                'variety': 'H1',
+                'season': '2026-2027',
+                'sowing_date': '2026-10-10',
+                'harvest_date': '2027-03-30',
+                'status': 'sown',
+                'notes': 'Nota',
+            },
+        )
         self.assertEqual(response.status_code, 200, response.content)
         self.plot.refresh_from_db()
         self.assertEqual(self.plot.cultivo, self.maize)
@@ -2135,23 +2350,34 @@ class CropAssignmentTests(IntegrationBase):
     def test_update_dates_mode_keeps_crop_and_requires_same_crop(self):
         self.post_json(self.url(), {'crop_id': self.maize.pk})
         season = self.plot.temporadas.get()
-        response = self.post_json(self.url(), {
-            'mode': 'update_dates', 'season_id': season.pk, 'crop_id': self.maize.pk,
-            'sowing_date': '2026-10-05', 'harvest_date': '2027-03-01', 'status': 'planned',
-        })
+        response = self.post_json(
+            self.url(),
+            {
+                'mode': 'update_dates',
+                'season_id': season.pk,
+                'crop_id': self.maize.pk,
+                'sowing_date': '2026-10-05',
+                'harvest_date': '2027-03-01',
+                'status': 'planned',
+            },
+        )
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(self.plot.temporadas.count(), 1)
         season.refresh_from_db()
         self.assertEqual(season.fecha_siembra, _date(2026, 10, 5))
         self.plot.refresh_from_db()
         self.assertEqual(self.plot.fecha_cosecha, _date(2027, 3, 1))
-        response = self.post_json(self.url(), {'mode': 'update_dates', 'season_id': season.pk, 'crop_id': self.wheat.pk})
+        response = self.post_json(
+            self.url(), {'mode': 'update_dates', 'season_id': season.pk, 'crop_id': self.wheat.pk}
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_validation_and_isolation(self):
         self.assertEqual(self.post_json(self.url(self.other_plot), {'crop_id': self.maize.pk}).status_code, 404)
         self.assertEqual(self.other_plot.temporadas.count(), 0)
-        bad_dates = self.post_json(self.url(), {'crop_id': self.maize.pk, 'sowing_date': '2026-10-10', 'harvest_date': '2026-01-01'})
+        bad_dates = self.post_json(
+            self.url(), {'crop_id': self.maize.pk, 'sowing_date': '2026-10-10', 'harvest_date': '2026-01-01'}
+        )
         self.assertEqual(bad_dates.status_code, 400)
         self.assertIn('cosecha', bad_dates.json()['error'])
         self.maize.activo = False
@@ -2169,7 +2395,16 @@ class CropAssignmentTests(IntegrationBase):
 
     def test_potrero_form_crop_change_preserves_traceability(self):
         url = f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/editar/'
-        base = {'nombre': 'Lote A', 'superficie_ha': '4', 'perimetro': '[]', 'variedad': '', 'fecha_siembra': '', 'fecha_cosecha': '', 'latitud': '', 'longitud': ''}
+        base = {
+            'nombre': 'Lote A',
+            'superficie_ha': '4',
+            'perimetro': '[]',
+            'variedad': '',
+            'fecha_siembra': '',
+            'fecha_cosecha': '',
+            'latitud': '',
+            'longitud': '',
+        }
         self.client.post(url, {**base, 'cultivo': self.wheat.pk})
         self.client.post(url, {**base, 'cultivo': self.maize.pk})
         self.assertEqual([s.cultivo for s in self.plot.temporadas.order_by('creado', 'pk')], [self.wheat, self.maize])
@@ -2187,12 +2422,29 @@ class CalendarIntegrationTests(IntegrationBase):
     def setUp(self):
         super().setUp()
         self.ref = ReferenciaAgronomica.objects.create(
-            cultivo=self.maize, zona=self.zone, siembra_inicio_mes=9, siembra_inicio_dia=15,
-            siembra_fin_mes=11, siembra_fin_dia=30, cosecha_inicio_mes=3, cosecha_inicio_dia=1,
-            cosecha_fin_mes=5, cosecha_fin_dia=15, duracion_ciclo_dias=170, **_verified_source(),
+            cultivo=self.maize,
+            zona=self.zone,
+            siembra_inicio_mes=9,
+            siembra_inicio_dia=15,
+            siembra_fin_mes=11,
+            siembra_fin_dia=30,
+            cosecha_inicio_mes=3,
+            cosecha_inicio_dia=1,
+            cosecha_fin_mes=5,
+            cosecha_fin_dia=15,
+            duracion_ciclo_dias=170,
+            **_verified_source(),
         )
-        ReferenciaAgronomica.objects.create(cultivo=self.wheat, zona=self.zone2, variedad='Invernal', siembra_inicio_mes=5,
-            siembra_inicio_dia=1, siembra_fin_mes=7, siembra_fin_dia=15, **_verified_source())
+        ReferenciaAgronomica.objects.create(
+            cultivo=self.wheat,
+            zona=self.zone2,
+            variedad='Invernal',
+            siembra_inicio_mes=5,
+            siembra_inicio_dia=1,
+            siembra_fin_mes=7,
+            siembra_fin_dia=15,
+            **_verified_source(),
+        )
 
     def evaluate(self, **payload):
         return self.post_json('/calendario/evaluar/', payload)
@@ -2213,19 +2465,41 @@ class CalendarIntegrationTests(IntegrationBase):
             self.assertContains(response, marker)
 
     def test_year_specific_reference_has_priority(self):
-        ReferenciaAgronomica.objects.create(cultivo=self.maize, zona=self.zone, anio_referencia=2027,
-            siembra_inicio_mes=10, siembra_inicio_dia=20, siembra_fin_mes=10, siembra_fin_dia=31, **_verified_source())
-        within_recurring = self.evaluate(evaluation='sowing', crop_id=self.maize.pk, zone_id=self.zone.pk, proposed_date='2026-10-01')
+        ReferenciaAgronomica.objects.create(
+            cultivo=self.maize,
+            zona=self.zone,
+            anio_referencia=2027,
+            siembra_inicio_mes=10,
+            siembra_inicio_dia=20,
+            siembra_fin_mes=10,
+            siembra_fin_dia=31,
+            **_verified_source(),
+        )
+        within_recurring = self.evaluate(
+            evaluation='sowing', crop_id=self.maize.pk, zone_id=self.zone.pk, proposed_date='2026-10-01'
+        )
         self.assertEqual(within_recurring.json()['status'], 'within')
-        specific = self.evaluate(evaluation='sowing', crop_id=self.maize.pk, zone_id=self.zone.pk, proposed_date='2027-10-10')
+        specific = self.evaluate(
+            evaluation='sowing', crop_id=self.maize.pk, zone_id=self.zone.pk, proposed_date='2027-10-10'
+        )
         self.assertEqual(specific.json()['status'], 'near')
         self.assertEqual(specific.json()['reference_context']['year'], 2027)
 
     def test_harvest_across_years_and_leap_year(self):
-        normal = self.evaluate(evaluation='harvest', crop_id=self.maize.pk, zone_id=self.zone.pk,
-                               sowing_date='2026-10-01', proposed_date='2027-03-20').json()
-        leap = self.evaluate(evaluation='harvest', crop_id=self.maize.pk, zone_id=self.zone.pk,
-                             sowing_date='2027-10-01', proposed_date='2028-03-19').json()
+        normal = self.evaluate(
+            evaluation='harvest',
+            crop_id=self.maize.pk,
+            zone_id=self.zone.pk,
+            sowing_date='2026-10-01',
+            proposed_date='2027-03-20',
+        ).json()
+        leap = self.evaluate(
+            evaluation='harvest',
+            crop_id=self.maize.pk,
+            zone_id=self.zone.pk,
+            sowing_date='2027-10-01',
+            proposed_date='2028-03-19',
+        ).json()
         self.assertEqual(normal['elapsed_days'], 170)
         self.assertEqual(leap['elapsed_days'], 170)
         self.assertEqual(normal['status'], 'within')
@@ -2234,13 +2508,23 @@ class CalendarIntegrationTests(IntegrationBase):
     def test_harvest_without_documented_cycle_uses_window_only_and_insufficient_without_data(self):
         self.ref.duracion_ciclo_dias = None
         self.ref.save()
-        result = self.evaluate(evaluation='harvest', crop_id=self.maize.pk, zone_id=self.zone.pk,
-                               sowing_date='2026-10-01', proposed_date='2027-04-01').json()
+        result = self.evaluate(
+            evaluation='harvest',
+            crop_id=self.maize.pk,
+            zone_id=self.zone.pk,
+            sowing_date='2026-10-01',
+            proposed_date='2027-04-01',
+        ).json()
         self.assertEqual(result['status'], 'within')
         self.assertIsNone(result['expected_cycle_days'])
         self.assertIn('no documenta la duración', result['explanation'])
-        none = self.evaluate(evaluation='harvest', crop_id=self.wheat.pk, zone_id=self.zone.pk,
-                             sowing_date='2026-05-01', proposed_date='2026-12-01').json()
+        none = self.evaluate(
+            evaluation='harvest',
+            crop_id=self.wheat.pk,
+            zone_id=self.zone.pk,
+            sowing_date='2026-05-01',
+            proposed_date='2026-12-01',
+        ).json()
         self.assertEqual(none['status'], 'insufficient')
         self.assertNotIn('100', none['explanation'])
 
@@ -2252,11 +2536,25 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         self.plot.save()
         self.seed_type = TipoInsumo.objects.create(nombre='Semilla')
         self.fert_type = TipoInsumo.objects.create(nombre='Fertilizante')
-        verified = dict(estado_verificacion='verified', fuente_nombre='Fuente', fuente_url='https://example.org/f',
-                        fecha_verificacion=_date(2026, 10, 1))
-        self.seed = Insumo.objects.create(nombre='Semilla P', tipo=self.seed_type, cultivo=self.maize, dosis_hectarea=Decimal('22'),
-            unidad_dosis='kg/ha', dosis_verificada=True, dosis_fuente='Ficha', presentacion_cantidad=Decimal('20'),
-            presentacion_unidad='kg', variedad_semilla='V1', **verified)
+        verified = dict(
+            estado_verificacion='verified',
+            fuente_nombre='Fuente',
+            fuente_url='https://example.org/f',
+            fecha_verificacion=_date(2026, 10, 1),
+        )
+        self.seed = Insumo.objects.create(
+            nombre='Semilla P',
+            tipo=self.seed_type,
+            cultivo=self.maize,
+            dosis_hectarea=Decimal('22'),
+            unidad_dosis='kg/ha',
+            dosis_verificada=True,
+            dosis_fuente='Ficha',
+            presentacion_cantidad=Decimal('20'),
+            presentacion_unidad='kg',
+            variedad_semilla='V1',
+            **verified,
+        )
         self.fert = Insumo.objects.create(nombre='Fert P', tipo=self.fert_type, cultivo=self.maize)
         self.wheat_fert = Insumo.objects.create(nombre='Fert trigo', tipo=self.fert_type, cultivo=self.wheat)
 
@@ -2264,7 +2562,9 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         return self.post_json('/calculos/ejecutar/', {'plot_id': self.plot.pk, 'crop': 'Maíz prueba', **payload})
 
     def test_seed_dose_marks_documented_source_and_packages(self):
-        data = self.calc(operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk).json()
+        data = self.calc(
+            operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk
+        ).json()
         self.assertEqual(data['amount'], 66)
         self.assertTrue(data['verified'])
         self.assertFalse(data['simulation'])
@@ -2272,55 +2572,112 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         self.assertEqual(data['source'], 'Ficha')
 
     def test_modified_or_undocumented_dose_is_simulation(self):
-        data = self.calc(operation='dose', calculation_type='semillas', area='3', dose='30', unit='kg/ha', product_id=self.seed.pk).json()
+        data = self.calc(
+            operation='dose', calculation_type='semillas', area='3', dose='30', unit='kg/ha', product_id=self.seed.pk
+        ).json()
         self.assertTrue(data['simulation'])
-        manual = self.calc(operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk).json()
+        manual = self.calc(
+            operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk
+        ).json()
         self.assertTrue(manual['simulation'])
 
     def test_changing_a_catalog_dose_marks_the_result_as_adjusted_manually(self):
         from ..views import describe_calculation
-        same = self.calc(operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk).json()
+
+        same = self.calc(
+            operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk
+        ).json()
         self.assertTrue(same['verified'])
         self.assertFalse(same['adjusted'])
-        changed = self.calc(operation='dose', calculation_type='semillas', area='3', dose='30', unit='kg/ha', product_id=self.seed.pk).json()
+        changed = self.calc(
+            operation='dose', calculation_type='semillas', area='3', dose='30', unit='kg/ha', product_id=self.seed.pk
+        ).json()
         self.assertTrue(changed['adjusted'])
         self.assertTrue(changed['simulation'])
         self.assertEqual((changed['catalog_dose'], changed['catalog_unit']), (22, 'kg/ha'))
         # Sin dato en el catálogo no hay nada que «ajustar»: es una simulación ingresada a mano.
-        manual = self.calc(operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk).json()
+        manual = self.calc(
+            operation='dose', calculation_type='insumos', area='1', dose='100', unit='kg/ha', product_id=self.fert.pk
+        ).json()
         self.assertFalse(manual['adjusted'])
         self.assertTrue(manual['simulation'])
         origin = describe_calculation(CalculoAgricola.objects.get(pk=changed['calculation_id']))['origin']
         self.assertIn('Ajustado manualmente', origin)
         self.assertIn('kg/ha', origin)
         self.assertNotIn('Documentado', origin)
-        self.assertEqual((same['origin'], changed['origin'], manual['origin']), ('documented', 'adjusted', 'simulation'))
+        self.assertEqual(
+            (same['origin'], changed['origin'], manual['origin']), ('documented', 'adjusted', 'simulation')
+        )
 
     def test_catalog_value_without_full_support_is_labelled_catalog_not_documented(self):
         from ..views import describe_calculation
+
         kind = TipoInsumo.objects.create(nombre='Otros')
-        loose = Insumo.objects.create(tipo=kind, nombre='Producto de catálogo sin fuente', dosis_hectarea=Decimal('4'), unidad_dosis='kg/ha')
-        data = self.calc(operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk).json()
+        loose = Insumo.objects.create(
+            tipo=kind, nombre='Producto de catálogo sin fuente', dosis_hectarea=Decimal('4'), unidad_dosis='kg/ha'
+        )
+        data = self.calc(
+            operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk
+        ).json()
         self.assertEqual(data['origin'], 'catalog')
         self.assertFalse(data['verified'])
         self.assertFalse(data['above_max'])
         self.assertEqual(data['amount'], 8)
-        self.assertIn('Dato de catálogo', describe_calculation(CalculoAgricola.objects.get(pk=data['calculation_id']))['origin'])
+        self.assertIn(
+            'Dato de catálogo', describe_calculation(CalculoAgricola.objects.get(pk=data['calculation_id']))['origin']
+        )
         # Un valor máximo sin fuente no genera advertencias: solo se advierte contra referencias documentadas.
-        loose.dosis_maxima_hectarea = Decimal('3'); loose.unidad_dosis_maxima = 'kg/ha'; loose.save()
-        again = self.calc(operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk).json()
+        loose.dosis_maxima_hectarea = Decimal('3')
+        loose.unidad_dosis_maxima = 'kg/ha'
+        loose.save()
+        again = self.calc(
+            operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk
+        ).json()
         self.assertFalse(again['above_max'])
 
     def test_category_and_crop_mismatches_are_rejected(self):
-        self.assertEqual(self.calc(operation='dose', calculation_type='semillas', area='1', dose='5', unit='kg/ha', product_id=self.fert.pk).status_code, 400)
-        self.assertEqual(self.calc(operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.seed.pk).status_code, 400)
-        self.assertEqual(self.calc(operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.wheat_fert.pk).status_code, 400)
+        self.assertEqual(
+            self.calc(
+                operation='dose', calculation_type='semillas', area='1', dose='5', unit='kg/ha', product_id=self.fert.pk
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.calc(
+                operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.seed.pk
+            ).status_code,
+            400,
+        )
+        self.assertEqual(
+            self.calc(
+                operation='dose',
+                calculation_type='insumos',
+                area='1',
+                dose='5',
+                unit='kg/ha',
+                product_id=self.wheat_fert.pk,
+            ).status_code,
+            400,
+        )
         self.fert.estado_verificacion = 'restricted'
         self.fert.save()
-        self.assertEqual(self.calc(operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.fert.pk).status_code, 400)
+        self.assertEqual(
+            self.calc(
+                operation='dose', calculation_type='insumos', area='1', dose='5', unit='kg/ha', product_id=self.fert.pk
+            ).status_code,
+            400,
+        )
 
     def test_coverage_is_simulation_without_inventory(self):
-        data = self.calc(operation='coverage', calculation_type='coverage', area='4', dose='22', unit='kg/ha', stock='44', product_id=self.seed.pk).json()
+        data = self.calc(
+            operation='coverage',
+            calculation_type='coverage',
+            area='4',
+            dose='22',
+            unit='kg/ha',
+            stock='44',
+            product_id=self.seed.pk,
+        ).json()
         self.assertEqual(data['coveredHa'], 2)
         self.assertEqual(data['missingQty'], 44)
         self.assertEqual(data['inventory'], 'simulation')
@@ -2333,7 +2690,7 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         self.assertFalse(catalog['stats']['inventoryTracked'])
         self.assertEqual({item['category'] for item in catalog['insumos']}, {'seed', 'fertilizer'})
         self.assertEqual(catalog['varieties'][str(self.maize.pk)], ['V1'])
-        for tool in ('data-tool="llevar"', 'data-tool="alcanza"', 'data-tool="cosecha"', 'data-tool="ficha"', 'Cálculo avanzado'):
+        for tool in ('data-tool="llevar"', 'data-tool="alcanza"', 'Cálculo avanzado'):
             self.assertContains(response, tool)
 
     def test_calculator_panel_and_initial_tool_come_from_the_url(self):
@@ -2342,7 +2699,7 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         for marker in ('id="calc-form"', 'id="calc-modes"', 'id="calc-result"', 'calc-panel.js'):
             self.assertContains(response, marker)
         self.assertEqual(self.client.get('/decisiones/?herramienta=alcanza').context['initial_tool'], 'alcanza')
-        self.assertEqual(self.client.get('/decisiones/?modo=ficha').context['initial_tool'], 'ficha')
+        self.assertEqual(self.client.get('/decisiones/?herramienta=ficha').context['initial_tool'], 'llevar')
         self.assertEqual(self.client.get('/decisiones/?herramienta=<script>').context['initial_tool'], 'llevar')
 
     def test_empty_catalog_is_reported_without_fake_options(self):
@@ -2355,6 +2712,7 @@ class DecisionCenterIntegrationTests(IntegrationBase):
 class CatalogImportCommandTests(TestCase):
     def write(self, data):
         import tempfile
+
         handle = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False, encoding='utf-8')
         json.dump(data, handle)
         handle.close()
@@ -2369,16 +2727,21 @@ class CatalogImportCommandTests(TestCase):
 
     def test_verified_reference_without_source_rolls_back_everything(self):
         from django.core.management.base import CommandError
-        path = self.write({
-            'zonas': [{'nombre': 'Z'}], 'cultivos': [{'nombre': 'C'}],
-            'referencias': [{'cultivo': 'C', 'zona': 'Z', 'estado': 'verified'}],
-        })
+
+        path = self.write(
+            {
+                'zonas': [{'nombre': 'Z'}],
+                'cultivos': [{'nombre': 'C'}],
+                'referencias': [{'cultivo': 'C', 'zona': 'Z', 'estado': 'verified'}],
+            }
+        )
         with self.assertRaises(CommandError):
             call_command('importar_catalogo', path, '--aplicar', stdout=open(os.devnull, 'w', encoding='utf-8'))
         self.assertFalse(Zona.objects.filter(nombre='Z').exists())
 
     def test_template_has_no_agronomic_values(self):
         import tempfile
+
         path = tempfile.mktemp(suffix='.json')
         call_command('importar_catalogo', '--plantilla', path, stdout=open(os.devnull, 'w', encoding='utf-8'))
         data = json.load(open(path, encoding='utf-8'))
@@ -2396,20 +2759,37 @@ class ProfessionalModulesTests(IntegrationBase):
         self.insect_type = TipoInsumo.objects.create(nombre='Insecticida')
         self.fert_type = TipoInsumo.objects.create(nombre='Fertilizante')
         self.insecticide = Insumo.objects.create(
-            nombre='Insecticida X', tipo=self.insect_type, cultivo=self.maize, periodo_carencia='21 días',
-            dosis_hectarea=Decimal('0.5'), unidad_dosis='L/ha',
+            nombre='Insecticida X',
+            tipo=self.insect_type,
+            cultivo=self.maize,
+            periodo_carencia='21 días',
+            dosis_hectarea=Decimal('0.5'),
+            unidad_dosis='L/ha',
         )
         self.fert = Insumo.objects.create(nombre='Fert trigo', tipo=self.fert_type, cultivo=self.wheat)
 
     def activity(self, **values):
-        data = {'nombre': 'Aplicación', 'tipo': 'control_fitosanitario', 'potrero': self.plot.pk,
-                'fecha_programada': '2026-10-05', 'estado': 'pendiente', 'prioridad': 'alta'}
+        data = {
+            'nombre': 'Aplicación',
+            'tipo': 'control_fitosanitario',
+            'potrero': self.plot.pk,
+            'fecha_programada': '2026-10-05',
+            'estado': 'pendiente',
+            'prioridad': 'alta',
+        }
         data.update(values)
         return self.client.post('/actividades/nueva/', data)
 
     def test_field_log_record_with_product_dose_total_and_withholding_alert(self):
-        response = self.activity(insumo=self.insecticide.pk, dosis='0.5', unidad_dosis='L/ha', superficie_ha='2',
-                                 estado='completada', fecha_realizada='2026-10-05', responsable='Juan')
+        response = self.activity(
+            insumo=self.insecticide.pk,
+            dosis='0.5',
+            unidad_dosis='L/ha',
+            superficie_ha='2',
+            estado='completada',
+            fecha_realizada='2026-10-05',
+            responsable='Juan',
+        )
         self.assertEqual(response.status_code, 302, response.content.decode()[:3000])
         item = ActividadAgricola.objects.get()
         self.assertEqual(item.cantidad_total, Decimal('1.000'))
@@ -2433,20 +2813,31 @@ class ProfessionalModulesTests(IntegrationBase):
         self.assertContains(response, 'Riego norte')
         self.assertEqual(response.context['activity_stats']['pendientes'], 1)
         self.assertEqual(list(self.client.get('/actividades/?tipo=siembra').context['activities']), [])
-        form = self.client.get(f'/actividades/nueva/?potrero={self.plot.pk}&tipo=control_fitosanitario&insumo={self.insecticide.pk}&dosis=0.5&unidad=L/ha')
+        form = self.client.get(
+            f'/actividades/nueva/?potrero={self.plot.pk}&tipo=control_fitosanitario&insumo={self.insecticide.pk}&dosis=0.5&unidad=L/ha'
+        )
         self.assertEqual(form.context['form'].initial['insumo'], self.insecticide.pk)
         self.assertEqual(form.context['form'].initial['unidad_dosis'], 'L/ha')
 
     def test_season_plan_uses_registered_dates_without_duplicates(self):
-        payload = {'potrero': self.plot.pk, 'incluir_preparacion': '1', 'dias_preparacion': '10',
-                   'incluir_siembra': '1', 'incluir_monitoreo': '1', 'frecuencia_monitoreo': '7', 'incluir_cosecha': '1'}
+        payload = {
+            'potrero': self.plot.pk,
+            'incluir_preparacion': '1',
+            'dias_preparacion': '10',
+            'incluir_siembra': '1',
+            'incluir_monitoreo': '1',
+            'frecuencia_monitoreo': '7',
+            'incluir_cosecha': '1',
+        }
         self.client.post('/actividades/plan/', payload)
         types = sorted(ActividadAgricola.objects.values_list('tipo', flat=True))
         self.assertEqual(types, ['cosecha', 'monitoreo', 'monitoreo', 'preparacion', 'siembra'])
         self.assertEqual(ActividadAgricola.objects.get(tipo='preparacion').fecha_programada, _date(2026, 9, 21))
         self.client.post('/actividades/plan/', payload)
         self.assertEqual(ActividadAgricola.objects.count(), 5)
-        self.assertEqual(self.client.post('/actividades/plan/', {**payload, 'potrero': self.other_plot.pk}).status_code, 404)
+        self.assertEqual(
+            self.client.post('/actividades/plan/', {**payload, 'potrero': self.other_plot.pk}).status_code, 404
+        )
 
     def test_product_catalog_filters_and_sheet(self):
         names = lambda url: [item.nombre for item in self.client.get(url).context['products_page']]
@@ -2460,10 +2851,24 @@ class ProfessionalModulesTests(IntegrationBase):
         self.assertNotContains(sheet, 'Calcular cantidad</a>')
 
     def test_reports_types_csv_and_isolation(self):
-        self.activity(insumo=self.insecticide.pk, dosis='0.5', unidad_dosis='L/ha', superficie_ha='2',
-                      estado='completada', fecha_realizada='2026-10-05', responsable='Juan')
-        ActividadAgricola.objects.create(usuario=self.other, potrero=self.other_plot, nombre='Ajena', tipo='riego',
-                                         fecha_programada=_date(2026, 10, 1), estado='completada', fecha_realizada=_date(2026, 10, 1))
+        self.activity(
+            insumo=self.insecticide.pk,
+            dosis='0.5',
+            unidad_dosis='L/ha',
+            superficie_ha='2',
+            estado='completada',
+            fecha_realizada='2026-10-05',
+            responsable='Juan',
+        )
+        ActividadAgricola.objects.create(
+            usuario=self.other,
+            potrero=self.other_plot,
+            nombre='Ajena',
+            tipo='riego',
+            fecha_programada=_date(2026, 10, 1),
+            estado='completada',
+            fecha_realizada=_date(2026, 10, 1),
+        )
         for kind in ('resumen', 'cuaderno', 'cultivos', 'calculos'):
             with self.subTest(kind=kind):
                 response = self.client.get(f'/reportes/?tipo={kind}')
@@ -2487,6 +2892,7 @@ class CatalogCsvAndUsoTests(TestCase):
     def folder(self, files):
         import tempfile
         from pathlib import Path
+
         base = Path(tempfile.mkdtemp())
         for name, text in files.items():
             (base / name).write_text(text, encoding='utf-8')
@@ -2522,6 +2928,7 @@ class CatalogCsvAndUsoTests(TestCase):
         self.run_import(folder, '--aplicar')
         self.run_import(folder, '--aplicar', '--actualizar')
         from ..models import UsoInsumoCultivo
+
         crop = Cultivo.objects.get(nombre='Cultivo TEST')
         self.assertEqual(crop.densidad_siembra, Decimal('1.5'))
         self.assertEqual(ReferenciaAgronomica.objects.count(), 1)
@@ -2534,6 +2941,7 @@ class CatalogCsvAndUsoTests(TestCase):
     def test_initial_csv_loads_only_crop_names_and_zone_without_invented_technical_data(self):
         from pathlib import Path
         from django.conf import settings
+
         data_dir = Path(settings.BASE_DIR) / 'data'
         self.run_import(str(data_dir), '--aplicar')
         self.run_import(str(data_dir), '--aplicar')  # repetir no duplica ni modifica
@@ -2547,6 +2955,7 @@ class CatalogCsvAndUsoTests(TestCase):
 
     def test_invalid_csv_value_is_rejected_and_rolls_back(self):
         from django.core.management.base import CommandError
+
         files = self.files()
         files['rendimientos.csv'] = 'cultivo;zona;rendimiento_ton_ha\nCultivo TEST;Zona TEST;mucho\n'
         with self.assertRaises(CommandError):
@@ -2557,6 +2966,7 @@ class CatalogCsvAndUsoTests(TestCase):
         from datetime import date
         from django.core.exceptions import ValidationError
         from ..models import UsoInsumoCultivo
+
         self.run_import('--categorias')
         self.run_import(self.folder(self.files()), '--aplicar')
         uso = UsoInsumoCultivo.objects.get()
@@ -2583,11 +2993,22 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         self.b = User.objects.create_user('ub', email='ub@example.com', password=PASSWORD)
         self.client.force_login(self.a)
         self.ring = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
-        self.feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]}}
+        self.feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]},
+        }
 
     def create_predio(self, **extra):
-        data = {'nombre': 'Predio A', 'ubicacion': 'Melipilla', 'geojson': json.dumps(self.feature),
-                'perimetro_aceptado': 'on', 'latitud': '-33.687', 'longitud': '-71.216', **extra}
+        data = {
+            'nombre': 'Predio A',
+            'ubicacion': 'Melipilla',
+            'geojson': json.dumps(self.feature),
+            'perimetro_aceptado': 'on',
+            'latitud': '-33.687',
+            'longitud': '-71.216',
+            **extra,
+        }
         response = self.client.post('/predios/nuevo/', data)
         return Predio.objects.get(nombre=data['nombre']), response
 
@@ -2598,7 +3019,10 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         self.assertNotIn('consent-box', html)
         self.assertNotIn('type="checkbox"', html)
         self.assertIn('Tus datos se guardan de forma privada en tu cuenta.', html)
-        self.assertIn('Registra únicamente predios que administras o tienes autorización para gestionar. Este trazado no acredita propiedad legal.', html)
+        self.assertIn(
+            'Registra únicamente predios que administras o tienes autorización para gestionar. Este trazado no acredita propiedad legal.',
+            html,
+        )
         self.assertNotIn('Propiedad verificada', html)
         self.assertLess(html.index('id="map-form-summary"'), html.index('Guardar predio'))
         self.assertLess(html.index('Guardar predio'), html.index('Registra únicamente predios'))
@@ -2618,8 +3042,20 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
     def test_map_tools_grouped_and_help_accordion_is_closed_with_five_steps(self):
         html = self.client.get('/predios/nuevo/').content.decode()
         self.assertIn('map-toolbar is-predio', html)
-        for button in ('draw-perimeter', 'measure-line', 'undo-point', 'finish-perimeter', 'edit-perimeter', 'locate-me', 'center-map',
-                       'accept-perimeter', 'cancel-perimeter', 'cancel-drawing', 'finish-line', 'clear-measurement'):
+        for button in (
+            'draw-perimeter',
+            'measure-line',
+            'undo-point',
+            'finish-perimeter',
+            'edit-perimeter',
+            'locate-me',
+            'center-map',
+            'accept-perimeter',
+            'cancel-perimeter',
+            'cancel-drawing',
+            'finish-line',
+            'clear-measurement',
+        ):
             self.assertEqual(html.count(f'id="{button}"'), 1, button)  # el JS del mapa los necesita: no se eliminan
         # Un solo botón principal al empezar; las herramientas secundarias van plegadas.
         self.assertIn('Dibujar mi campo', html)
@@ -2632,7 +3068,16 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         self.assertNotIn('id="map-confirmed-line"', html)  # la medida no se repite bajo el mapa
         self.assertNotIn('id="confirm-location"', html)
         self.assertNotIn('<details class="more-details" open', html)
-        order = [html.index(x) for x in ('Nombre del predio', 'Referencia de ubicación', 'Notas del predio (opcional)', 'id="map-form-summary"', 'Guardar predio')]
+        order = [
+            html.index(x)
+            for x in (
+                'Nombre del predio',
+                'Referencia de ubicación',
+                'Notas del predio (opcional)',
+                'id="map-form-summary"',
+                'Guardar predio',
+            )
+        ]
         self.assertEqual(order, sorted(order))
 
     def test_predio_hides_zone_when_there_is_only_one_and_shows_it_when_there_are_several(self):
@@ -2676,7 +3121,8 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         norte, _ = self.create_predio(nombre='Predio Norte')
         sur_feature = self.sur_feature()
         sur, response = self.create_predio(
-            nombre='Predio Sur', geojson=json.dumps(sur_feature), latitud='-33.800', longitud='-71.300')
+            nombre='Predio Sur', geojson=json.dumps(sur_feature), latitud='-33.800', longitud='-71.300'
+        )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Predio.objects.filter(propietario=self.a).count(), 2)
         norte.refresh_from_db()
@@ -2690,13 +3136,14 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
 
     def test_editing_shows_only_that_predios_geometry(self):
         norte, _ = self.create_predio(nombre='Predio Norte')
-        sur, _ = self.create_predio(nombre='Predio Sur', geojson=json.dumps(self.sur_feature()),
-                                    latitud='-33.800', longitud='-71.300')
+        sur, _ = self.create_predio(
+            nombre='Predio Sur', geojson=json.dumps(self.sur_feature()), latitud='-33.800', longitud='-71.300'
+        )
         response = self.client.get(f'/predios/{sur.pk}/editar/')
         html = response.content.decode()
         self.assertContains(response, 'data-mode="edit"')
-        self.assertIn('-71.3', html)           # su propia geometría llega por el formulario
-        self.assertNotIn('-71.216', html)      # la del otro predio no
+        self.assertIn('-71.3', html)  # su propia geometría llega por el formulario
+        self.assertNotIn('-71.216', html)  # la del otro predio no
         for item in response.context['farm_data']['predios']:
             self.assertIsNone(item['geojson'])
 
@@ -2708,17 +3155,22 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         self.assertEqual(response.context['farm_data']['predios'], [])
         self.assertNotIn('-71.216', html)
         self.assertNotIn('Predio Norte', html)
-        self.assertEqual(self.client.get(f'/predios/{Predio.objects.get(nombre="Predio Norte").pk}/editar/').status_code, 404)
+        self.assertEqual(
+            self.client.get(f'/predios/{Predio.objects.get(nombre="Predio Norte").pk}/editar/').status_code, 404
+        )
 
     def test_map_script_resets_state_uses_overview_zoom_and_fits_new_polygon(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(
+            encoding='utf-8'
+        )
         self.assertIn('NEW_PREDIO_ZOOM = 12', source)
         self.assertIn('MY_LOCATION_ZOOM = 16', source)
         self.assertIn('resetNewPredioState', source)
         self.assertIn("if (!form || isPredioForm) return;", source)
         self.assertIn("fitBounds(layerBounds(currentLayer), { padding: [56, 56], maxZoom: 17 })", source)
-        self.assertIn("['Normal', normalTiles], ['Satélite', satelliteTiles]", source)
+        self.assertIn("['Normal', normalTiles], ['Satélite', satelliteTiles]", re.sub(r'\s+', ' ', source))
         self.assertNotIn('localStorage', source)
         self.assertNotIn('sessionStorage', source)
 
@@ -2726,8 +3178,15 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         farm, response = self.create_predio()
         self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         page = self.client.get(f'/predios/{farm.pk}/?nuevo=1')
-        for text in ('Predio registrado correctamente', 'Ya registraste el límite completo de tu predio', 'Un solo potrero',
-                     'Utilizar todo el predio', 'Dividir en potreros', 'Dividir mi predio', 'Lo haré más tarde'):
+        for text in (
+            'Predio registrado correctamente',
+            'Ya registraste el límite completo de tu predio',
+            'Un solo potrero',
+            'Utilizar todo el predio',
+            'Dividir en potreros',
+            'Dividir mi predio',
+            'Lo haré más tarde',
+        ):
             self.assertContains(page, text)
         response = self.client.post(f'/predios/{farm.pk}/usar-completo/', {'nombre': ''})
         plot = Potrero.objects.get(predio=farm)
@@ -2757,14 +3216,27 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         west = [[-71.216, -33.687], [-71.2145, -33.687], [-71.2145, -33.684], [-71.216, -33.684]]
         east = [[-71.2144, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.2144, -33.684]]
         for name, ring in (('Oeste', west), ('Este', east)):
-            response = self.client.post(f'/predios/{farm.pk}/potreros/nuevo/', {
-                'nombre': name, 'cultivo': '', 'variedad': '', 'superficie_ha': '', 'fecha_siembra': '', 'fecha_cosecha': '',
-                'latitud': '', 'longitud': '', 'perimetro': json.dumps(ring)})
+            response = self.client.post(
+                f'/predios/{farm.pk}/potreros/nuevo/',
+                {
+                    'nombre': name,
+                    'cultivo': '',
+                    'variedad': '',
+                    'superficie_ha': '',
+                    'fecha_siembra': '',
+                    'fecha_cosecha': '',
+                    'latitud': '',
+                    'longitud': '',
+                    'perimetro': json.dumps(ring),
+                },
+            )
             self.assertRedirects(response, f'/predios/{farm.pk}/')
         self.assertEqual(set(farm.potreros.values_list('nombre', flat=True)), {'Oeste', 'Este'})
         outside = [[-71.3, -33.7], [-71.29, -33.7], [-71.29, -33.69], [-71.3, -33.69]]
-        response = self.client.post(f'/predios/{farm.pk}/potreros/nuevo/', {
-            'nombre': 'Afuera', 'superficie_ha': '', 'latitud': '', 'longitud': '', 'perimetro': json.dumps(outside)})
+        response = self.client.post(
+            f'/predios/{farm.pk}/potreros/nuevo/',
+            {'nombre': 'Afuera', 'superficie_ha': '', 'latitud': '', 'longitud': '', 'perimetro': json.dumps(outside)},
+        )
         self.assertContains(response, 'debe quedar dentro del predio')
         self.assertFalse(Potrero.objects.filter(nombre='Afuera').exists())
 
@@ -2779,29 +3251,56 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
         self.client.post(f'/predios/{farm.pk}/usar-completo/', {'nombre': 'Lote secreto'})
         plot = farm.potreros.get()
         crop = Cultivo.objects.create(nombre='Cultivo privado')
-        act = ActividadAgricola.objects.create(usuario=self.a, potrero=plot, nombre='Labor privada', tipo='riego', fecha_programada=_date(2026, 5, 1))
+        act = ActividadAgricola.objects.create(
+            usuario=self.a, potrero=plot, nombre='Labor privada', tipo='riego', fecha_programada=_date(2026, 5, 1)
+        )
         client_b = self.client_class()
         client_b.force_login(self.b)
         get_urls = [
-            f'/predios/{farm.pk}/', f'/predios/{farm.pk}/editar/', f'/predios/{farm.pk}/potreros/nuevo/',
-            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/', f'/predios/{farm.pk}/potreros/{plot.pk}/temporadas/nueva/',
-            f'/api/potreros/{plot.pk}/', f'/actividades/{act.pk}/', f'/actividades/{act.pk}/editar/', f'/actividades/{act.pk}/eliminar/',
+            f'/predios/{farm.pk}/',
+            f'/predios/{farm.pk}/editar/',
+            f'/predios/{farm.pk}/potreros/nuevo/',
+            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/',
+            f'/predios/{farm.pk}/potreros/{plot.pk}/temporadas/nueva/',
+            f'/api/potreros/{plot.pk}/',
+            f'/actividades/{act.pk}/',
+            f'/actividades/{act.pk}/editar/',
+            f'/actividades/{act.pk}/eliminar/',
         ]
         for url in get_urls:
             self.assertIn(client_b.get(url).status_code, (403, 404), url)
         post_urls = [
-            f'/predios/{farm.pk}/usar-completo/', f'/predios/{farm.pk}/editar/', f'/predios/{farm.pk}/potreros/nuevo/',
-            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/', f'/api/potreros/{plot.pk}/cultivo/',
-            f'/actividades/{act.pk}/estado/', f'/actividades/{act.pk}/eliminar/',
+            f'/predios/{farm.pk}/usar-completo/',
+            f'/predios/{farm.pk}/editar/',
+            f'/predios/{farm.pk}/potreros/nuevo/',
+            f'/predios/{farm.pk}/potreros/{plot.pk}/editar/',
+            f'/api/potreros/{plot.pk}/cultivo/',
+            f'/actividades/{act.pk}/estado/',
+            f'/actividades/{act.pk}/eliminar/',
         ]
         for url in post_urls:
             self.assertIn(client_b.post(url, {'estado': 'completada', 'cultivo': crop.pk}).status_code, (403, 404), url)
-        self.assertEqual(client_b.post('/calculos/ejecutar/', json.dumps({'operation': 'yield', 'plot_id': plot.pk, 'area': '1'}),
-                                       content_type='application/json').status_code, 400)
+        self.assertEqual(
+            client_b.post(
+                '/calculos/ejecutar/',
+                json.dumps({'operation': 'dose', 'plot_id': plot.pk, 'area': '1'}),
+                content_type='application/json',
+            ).status_code,
+            400,
+        )
         # Nada de A llega a las páginas de B: ni HTML, ni JSON embebido, ni reportes.
         lat_text = '-33.687'
-        for url in ('/', '/predios/', '/calendario/', '/actividades/', '/decisiones/', '/reportes/', '/reportes/?tipo=resumen&formato=csv',
-                    '/busqueda/?q=privado', '/panel-admin/'):
+        for url in (
+            '/',
+            '/predios/',
+            '/calendario/',
+            '/actividades/',
+            '/decisiones/',
+            '/reportes/',
+            '/reportes/?tipo=resumen&formato=csv',
+            '/busqueda/?q=privado',
+            '/panel-admin/',
+        ):
             response = client_b.get(url)
             body = response.content.decode()
             for secret in ('Predio privado A', 'Lote secreto', 'Labor privada', lat_text):
@@ -2826,6 +3325,7 @@ class DemoCatalogEndToEndTests(TestCase):
     def setUpTestData(cls):
         from io import StringIO
         from pathlib import Path
+
         out = StringIO()
         call_command('importar_catalogo', '--categorias', stdout=out)
         cls.demo_dir = Path(__file__).resolve().parent.parent.parent / 'data_demo'
@@ -2834,20 +3334,31 @@ class DemoCatalogEndToEndTests(TestCase):
 
     def setUp(self):
         from ..models import Zona
+
         self.user = User.objects.create_user('demo-user', email='demo@example.com', password=PASSWORD)
         self.client.force_login(self.user)
         self.papa = Cultivo.objects.get(nombre='PAPA DEMO')
         self.predio = Predio.objects.create(
-            propietario=self.user, nombre='Predio DEMO', ubicacion='DEMO', superficie_ha=5,
-            zona=Zona.objects.get(nombre='ZONA DEMO MELIPILLA'))
-        self.potrero = Potrero.objects.create(predio=self.predio, nombre='Potrero Norte DEMO', superficie_ha=2, cultivo=self.papa)
+            propietario=self.user,
+            nombre='Predio DEMO',
+            ubicacion='DEMO',
+            superficie_ha=5,
+            zona=Zona.objects.get(nombre='ZONA DEMO MELIPILLA'),
+        )
+        self.potrero = Potrero.objects.create(
+            predio=self.predio, nombre='Potrero Norte DEMO', superficie_ha=2, cultivo=self.papa
+        )
 
     def calc(self, **payload):
-        return self.client.post('/calculos/ejecutar/', data=json.dumps(
-            {'plot_id': self.potrero.pk, 'crop': 'PAPA DEMO', 'area': '2', **payload}), content_type='application/json')
+        return self.client.post(
+            '/calculos/ejecutar/',
+            data=json.dumps({'plot_id': self.potrero.pk, 'crop': 'PAPA DEMO', 'area': '2', **payload}),
+            content_type='application/json',
+        )
 
     def test_import_counts_and_demo_labels(self):
         from ..models import ProblemaAgricola, UsoInsumoCultivo, Zona
+
         self.assertEqual(Zona.objects.filter(activo=True).count(), 2)
         self.assertEqual(Cultivo.objects.count(), 3)
         self.assertEqual(ProblemaAgricola.objects.count(), 3)
@@ -2864,15 +3375,19 @@ class DemoCatalogEndToEndTests(TestCase):
         self.assertFalse(Insumo.objects.filter(nombre='SEMILLA DEMO PAPA').exclude(numero_autorizacion_sag='').exists())
         # Reimportar no duplica nada.
         from io import StringIO
+
         call_command('importar_catalogo', str(self.demo_dir), '--aplicar', stdout=StringIO())
         self.assertEqual(Insumo.objects.count(), 4)
         self.assertEqual(ReferenciaAgronomica.objects.count(), 3)
 
     def test_catalog_counters_are_no_longer_zero(self):
         from ..catalog import catalog_payload
+
         stats = catalog_payload()['stats']
         self.assertEqual((stats['crops'], stats['zones'], stats['seeds'], stats['cropsWithDensity']), (3, 2, 1, 3))
-        self.assertEqual((stats['fertilizers'], stats['otherInputs'], stats['products'], stats['problems']), (1, 2, 4, 3))
+        self.assertEqual(
+            (stats['fertilizers'], stats['otherInputs'], stats['products'], stats['problems']), (1, 2, 4, 3)
+        )
 
     def test_seed_calculation_two_ha_by_2500(self):
         data = self.calc(operation='dose', calculation_type='semillas', dose='2500', unit='kg').json()
@@ -2883,18 +3398,29 @@ class DemoCatalogEndToEndTests(TestCase):
 
     def test_insecticide_quantity_and_coverage(self):
         product = Insumo.objects.get(nombre='INSUMO DEMO INSECTICIDA')
-        need = self.calc(operation='dose', calculation_type='proteccion', product_id=product.pk, target='PLAGA DEMO A').json()
+        need = self.calc(
+            operation='dose', calculation_type='proteccion', product_id=product.pk, target='PLAGA DEMO A'
+        ).json()
         self.assertEqual((need['amount'], need['unit'], need['dose']), (4, 'L', 2))
         self.assertEqual(need['package'], {'size': 5.0, 'unit': 'L', 'count': 1})
-        coverage = self.calc(operation='coverage', calculation_type='coverage', product_id=product.pk,
-                             target='PLAGA DEMO A', stock='3').json()
-        self.assertEqual((coverage['needed'], coverage['percent'], coverage['missingQty'], coverage['missingHa']), (4, 75, 1, 0.5))
+        coverage = self.calc(
+            operation='coverage', calculation_type='coverage', product_id=product.pk, target='PLAGA DEMO A', stock='3'
+        ).json()
+        self.assertEqual(
+            (coverage['needed'], coverage['percent'], coverage['missingQty'], coverage['missingHa']), (4, 75, 1, 0.5)
+        )
 
     def test_dose_limits_and_fungicide_belongs_to_other_crop(self):
         insecticide = Insumo.objects.get(nombre='INSUMO DEMO INSECTICIDA')
         # En fitosanitarios la dosis sale de la ficha: una dosis escrita a mano (4 L/ha) se ignora.
-        forced = self.calc(operation='dose', calculation_type='proteccion', product_id=insecticide.pk,
-                           target='PLAGA DEMO A', dose='4', unit='L/ha').json()
+        forced = self.calc(
+            operation='dose',
+            calculation_type='proteccion',
+            product_id=insecticide.pk,
+            target='PLAGA DEMO A',
+            dose='4',
+            unit='L/ha',
+        ).json()
         self.assertEqual(forced['dose'], 2)
         # En el fertilizante, superar el máximo de 150 kg/ha calcula igual pero con advertencia.
         fert = Insumo.objects.get(nombre='FERTILIZANTE DEMO NPK')
@@ -2902,26 +3428,28 @@ class DemoCatalogEndToEndTests(TestCase):
         self.assertEqual(over.status_code, 200)
         self.assertTrue(over.json()['above_max'])
         self.assertEqual(over.json()['origin'], 'adjusted')
-        ok = self.calc(operation='dose', calculation_type='insumos', product_id=fert.pk, dose='100', unit='kg/ha').json()
+        ok = self.calc(
+            operation='dose', calculation_type='insumos', product_id=fert.pk, dose='100', unit='kg/ha'
+        ).json()
         self.assertEqual((ok['amount'], ok['package']['count']), (200, 8))
         fungicide = Insumo.objects.get(nombre='INSUMO DEMO FUNGICIDA')
-        wrong = self.calc(operation='dose', calculation_type='proteccion', product_id=fungicide.pk, target='ENFERMEDAD DEMO B')
+        wrong = self.calc(
+            operation='dose', calculation_type='proteccion', product_id=fungicide.pk, target='ENFERMEDAD DEMO B'
+        )
         self.assertEqual(wrong.status_code, 400)
 
-    def test_harvest_estimate_uses_verified_demo_reference(self):
-        data = self.calc(operation='yield').json()
-        self.assertEqual(data['production'], 40)
-        self.assertEqual(data['rate'], 20)
-        self.assertTrue(data['source_verified'])
-        self.assertIn('FUENTE DEMO AGROASESOR', data['source'])
-
-    def test_ficha_lists_insecticide_for_papa_and_pest(self):
+    def test_catalog_lists_insecticide_for_papa_and_pest(self):
         from ..catalog import catalog_payload
+
         catalog = catalog_payload()
         problem = next(item for item in catalog['problemas'] if item['name'] == 'PLAGA DEMO A')
-        matches = [item['name'] for item in catalog['insumos']
-                   if item['cropId'] == str(self.papa.pk) and str(problem['id']) in item['problemIds']
-                   and item['type'] == 'Insecticida']
+        matches = [
+            item['name']
+            for item in catalog['insumos']
+            if item['cropId'] == str(self.papa.pk)
+            and str(problem['id']) in item['problemIds']
+            and item['type'] == 'Insecticida'
+        ]
         self.assertEqual(matches, ['INSUMO DEMO INSECTICIDA'])
 
 
@@ -2932,11 +3460,16 @@ class ButtonHierarchyAndNextStepTests(TestCase):
         self.user = User.objects.create_user('jerarquia', email='jerarquia@example.com', password=PASSWORD)
         self.client.force_login(self.user)
         self.ring = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
-        self.feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]}}
+        self.feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [self.ring + [self.ring[0]]]},
+        }
 
     def farm(self, **extra):
-        return Predio.objects.create(propietario=self.user, nombre='Predio flujo', ubicacion='Melipilla',
-                                     superficie_ha=Decimal('2'), **extra)
+        return Predio.objects.create(
+            propietario=self.user, nombre='Predio flujo', ubicacion='Melipilla', superficie_ha=Decimal('2'), **extra
+        )
 
     def page(self, url):
         # Solo el HTML visible: los JSON de los <script> no cuentan como contenido de la pantalla.
@@ -2957,7 +3490,9 @@ class ButtonHierarchyAndNextStepTests(TestCase):
         listing = self.page(f'/predios/?predio={farm.pk}')
         self.assertEqual(listing.count('Registrar predio</a>'), 1)  # solo la cabecera (el menú lateral queda aparte)
         self.assertIn('id="register-selected-plot"', listing)
-        self.assertRegex(listing, r'id="register-selected-plot"\s+hidden')  # sin potreros, el estado vacío tiene el único CTA
+        self.assertRegex(
+            listing, r'id="register-selected-plot"\s+hidden'
+        )  # sin potreros, el estado vacío tiene el único CTA
         self.assertEqual(listing.count('Configurar potrero'), 1)
         self.assertNotIn('Registrar primer potrero', listing)
         detail = self.page(f'/predios/{farm.pk}/')
@@ -2976,12 +3511,16 @@ class ButtonHierarchyAndNextStepTests(TestCase):
         detail = self.page(f'/predios/{farm.pk}/')
         self.assertIn('Siguiente paso', detail)
         self.assertIn('Asigna un cultivo a «Lote sin cultivo»', detail)
-        self.assertNotIn('class="btn-primary-agro"', detail.split('<main>')[1])  # el siguiente paso es una llamada discreta
-        self.assertEqual(detail.count('Agregar potrero'), 1)  # cabecera: un solo «Agregar potrero» una vez que hay potreros
+        self.assertNotIn(
+            'class="btn-primary-agro"', detail.split('<main>')[1]
+        )  # el siguiente paso es una llamada discreta
+        self.assertEqual(
+            detail.count('Agregar potrero'), 1
+        )  # cabecera: un solo «Agregar potrero» una vez que hay potreros
         listing = self.page(f'/predios/?predio={farm.pk}')
-        self.assertRegex(listing, r'data-assign-crop="\d+" data-quick\s*>')  # acción rápida visible sin cultivo
+        self.assertRegex(listing, r'data-assign-crop="\d+"\s+data-quick\s*>')  # acción rápida visible sin cultivo
         calendar = self.page('/calendario/')
-        self.assertIn('btn-primary-agro btn-sm" href', calendar)
+        self.assertIn('btn-primary-agro btn-sm" href', re.sub(r'\s+', ' ', calendar))
         self.assertIn('Asignar cultivo', calendar)
         self.assertIn('Predio registrado', calendar)  # checklist informativo
         self.assertIn('class="check-mark"', calendar)
@@ -2989,9 +3528,14 @@ class ButtonHierarchyAndNextStepTests(TestCase):
     def test_4_potrero_with_crop_recommends_planning_and_labor(self):
         farm = self.farm()
         crop = Cultivo.objects.create(nombre='Cultivo jerarquía')
-        plot = Potrero.objects.create(predio=farm, nombre='Lote con cultivo', superficie_ha=Decimal('1'), cultivo=crop,
-                                      fecha_siembra=timezone.localdate() + timedelta(days=30),
-                                      fecha_cosecha=timezone.localdate() + timedelta(days=150))
+        plot = Potrero.objects.create(
+            predio=farm,
+            nombre='Lote con cultivo',
+            superficie_ha=Decimal('1'),
+            cultivo=crop,
+            fecha_siembra=timezone.localdate() + timedelta(days=30),
+            fecha_cosecha=timezone.localdate() + timedelta(days=150),
+        )
         detail = self.page(f'/predios/{farm.pk}/')
         self.assertIn('→ Calcula lo que necesitas para «Lote con cultivo»', detail)
         self.assertNotIn('Asignar cultivo', detail)
@@ -3003,9 +3547,13 @@ class ButtonHierarchyAndNextStepTests(TestCase):
         self.assertNotIn('Asignar cultivo', calendar)
         # Sin labores: solo el CTA dentro del estado vacío; con labores: «Programar labor» arriba.
         self.assertIn('Programar primera labor', calendar)
-        ActividadAgricola.objects.create(usuario=self.user, potrero=plot, nombre='Riego flujo',
-                                         tipo=ActividadAgricola.Tipo.RIEGO,
-                                         fecha_programada=timezone.localdate() + timedelta(days=2))
+        ActividadAgricola.objects.create(
+            usuario=self.user,
+            potrero=plot,
+            nombre='Riego flujo',
+            tipo=ActividadAgricola.Tipo.RIEGO,
+            fecha_programada=timezone.localdate() + timedelta(days=2),
+        )
         calendar = self.page('/calendario/')
         self.assertNotIn('Programar primera labor', calendar)
         self.assertIn('Programar labor</a>', calendar)
@@ -3033,15 +3581,30 @@ class ButtonHierarchyAndNextStepTests(TestCase):
 
     def test_selected_panel_is_informative_and_script_has_no_duplicate_actions(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
-        for old_label in ("'Registrar potrero'", "'Registrar primer potrero'", "'Ficha e historial del predio'", "'Editar predio'"):
+
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(
+            encoding='utf-8'
+        )
+        for old_label in (
+            "'Registrar potrero'",
+            "'Registrar primer potrero'",
+            "'Ficha e historial del predio'",
+            "'Editar predio'",
+        ):
             self.assertNotIn(old_label, source)
         self.assertIn('createPlotLink.hidden = farmPlots.length === 0', source)
 
     def test_button_system_classes_exist_in_css(self):
         from pathlib import Path
+
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'body.css').read_text(encoding='utf-8')
-        for name in ('.btn-primary-agro', '.btn-secondary-agro', '.btn-ghost-agro', '.btn-danger-agro', '.btn-disabled'):
+        for name in (
+            '.btn-primary-agro',
+            '.btn-secondary-agro',
+            '.btn-ghost-agro',
+            '.btn-danger-agro',
+            '.btn-disabled',
+        ):
             self.assertIn(name, css)
 
 
@@ -3054,14 +3617,27 @@ class VisualVarietyTests(TestCase):
         self.client.force_login(self.user)
         self.today = timezone.localdate()
         self.crop = Cultivo.objects.create(nombre='Papa visual')
-        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo visual', ubicacion='Chocalán', superficie_ha=Decimal('10'))
-        self.planned = Potrero.objects.create(predio=self.farm, nombre='Potrero planificado', superficie_ha=Decimal('2'), cultivo=self.crop,
-                                              fecha_siembra=self.today + timedelta(days=20), fecha_cosecha=self.today + timedelta(days=140))
+        self.farm = Predio.objects.create(
+            propietario=self.user, nombre='Fundo visual', ubicacion='Chocalán', superficie_ha=Decimal('10')
+        )
+        self.planned = Potrero.objects.create(
+            predio=self.farm,
+            nombre='Potrero planificado',
+            superficie_ha=Decimal('2'),
+            cultivo=self.crop,
+            fecha_siembra=self.today + timedelta(days=20),
+            fecha_cosecha=self.today + timedelta(days=140),
+        )
         self.bare = Potrero.objects.create(predio=self.farm, nombre='Potrero pelado', superficie_ha=Decimal('1'))
 
     def labor(self, plot, days, tipo=ActividadAgricola.Tipo.RIEGO, user=None):
-        return ActividadAgricola.objects.create(usuario=user or self.user, potrero=plot, nombre=f'Labor {days}', tipo=tipo,
-                                                fecha_programada=self.today + timedelta(days=days))
+        return ActividadAgricola.objects.create(
+            usuario=user or self.user,
+            potrero=plot,
+            nombre=f'Labor {days}',
+            tipo=tipo,
+            fecha_programada=self.today + timedelta(days=days),
+        )
 
     def html(self, url):
         return re.sub(r'<script.*?</script>', '', self.client.get(url).content.decode(), flags=re.S)
@@ -3069,8 +3645,18 @@ class VisualVarietyTests(TestCase):
     def test_farm_and_plot_cards_have_context_menus_without_delete(self):
         html = self.html('/predios/')
         self.assertGreaterEqual(html.count('class="row-menu-trigger"'), 3)  # predio + 2 potreros
-        for text in ('Ver predio', 'Editar información', 'Ver en mapa', 'Agregar potrero', 'Ver historial', 'Ver planificación',
-                     'Generar reporte', 'Programar labor', 'Ver ficha e historial', 'Editar potrero'):
+        for text in (
+            'Ver predio',
+            'Editar información',
+            'Ver en mapa',
+            'Agregar potrero',
+            'Ver historial',
+            'Ver planificación',
+            'Generar reporte',
+            'Programar labor',
+            'Ver ficha e historial',
+            'Editar potrero',
+        ):
             self.assertIn(text, html)
         self.assertIn(f'/reportes/?predio={self.farm.pk}', html)
         self.assertNotIn('Eliminar predio', html)  # no existe aún un flujo de borrado con confirmación
@@ -3083,7 +3669,14 @@ class VisualVarietyTests(TestCase):
         self.labor(self.planned, 3)
         self.labor(self.planned, -2, ActividadAgricola.Tipo.MONITOREO)
         html = self.html('/predios/')
-        for text in ('Con cultivo', 'Sin cultivo', 'Sin planificar', 'Planificación completa', 'Labores vencidas · 1', 'Próxima labor'):
+        for text in (
+            'Con cultivo',
+            'Sin cultivo',
+            'Sin planificar',
+            'Planificación completa',
+            'Labores vencidas · 1',
+            'Próxima labor',
+        ):
             self.assertIn(text, html)
         self.assertIn('Planificación <strong>3 de 3</strong>', html)
         self.assertRegex(html, rf'data-plot-plan="{self.bare.pk}"\s+hidden')  # sin cultivo no se inventa un avance
@@ -3094,8 +3687,15 @@ class VisualVarietyTests(TestCase):
     def test_payload_exposes_task_and_plan_data_for_the_side_panel(self):
         self.labor(self.planned, 3)
         self.labor(self.planned, -2, ActividadAgricola.Tipo.MONITOREO)
-        self.labor(Potrero.objects.create(predio=Predio.objects.create(propietario=self.other, nombre='Ajeno', superficie_ha=1),
-                                          nombre='Lote ajeno', superficie_ha=1), 1, user=self.other)
+        self.labor(
+            Potrero.objects.create(
+                predio=Predio.objects.create(propietario=self.other, nombre='Ajeno', superficie_ha=1),
+                nombre='Lote ajeno',
+                superficie_ha=1,
+            ),
+            1,
+            user=self.other,
+        )
         data = self.client.get('/predios/').context['farm_data']
         farm = data['predios'][0]
         self.assertEqual((farm['pendingTasks'], farm['overdueTasks'], farm['cropCount']), (2, 1, 1))
@@ -3109,6 +3709,7 @@ class VisualVarietyTests(TestCase):
 
     def test_next_step_is_a_single_suggestion_with_five_states(self):
         from ..views import _farm_next_step
+
         farm = Predio.objects.create(propietario=self.user, nombre='Estados', superficie_ha=1)
         self.assertEqual(_farm_next_step(farm, [])['key'], 'potrero')
         plot = Potrero.objects.create(predio=farm, nombre='A', superficie_ha=1)
@@ -3123,23 +3724,35 @@ class VisualVarietyTests(TestCase):
 
     def test_view_switch_is_front_end_only_and_remembered_in_local_storage(self):
         html = self.html('/predios/')
-        for marker in ('data-view-mode="list"', 'data-view-mode="cards"', 'data-view-focus="map"', 'id="farm-picker-list"'):
+        for marker in (
+            'data-view-mode="list"',
+            'data-view-mode="cards"',
+            'data-view-focus="map"',
+            'id="farm-picker-list"',
+        ):
             self.assertIn(marker, html)
         from pathlib import Path
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-view.js').read_text(encoding='utf-8')
+
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-view.js').read_text(
+            encoding='utf-8'
+        )
         self.assertIn('localStorage', source)
         self.assertNotIn('fetch(', source)
         self.assertNotIn('XMLHttpRequest', source)
 
     def test_context_menu_script_handles_keyboard_and_aria(self):
         from pathlib import Path
+
         source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'row-menu.js').read_text(encoding='utf-8')
         for marker in ("'Escape'", "'ArrowDown'", 'aria-expanded', 'closest'):
             self.assertIn(marker, source)
 
     def test_selected_panel_script_shows_summary_and_single_next_action(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(
+            encoding='utf-8'
+        )
         for marker in ("'Próxima acción'", "'Abrir predio'", "'Labores pendientes'", "'Potreros'", 'farm.nextStep'):
             self.assertIn(marker, source)
 
@@ -3150,7 +3763,10 @@ class VisualVarietyTests(TestCase):
         self.assertIn('Programar labor', html)
         self.assertNotIn('Nuevo predio', html)
         from pathlib import Path
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'siembra-registro.js').read_text(encoding='utf-8')
+
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'siembra-registro.js').read_text(
+            encoding='utf-8'
+        )
         self.assertIn('renderMonths', source)
         self.assertIn('if (!holder || (!sow && !harvest)) return;', source)  # sin fechas no se dibuja nada
 
@@ -3169,11 +3785,11 @@ class VisualVarietyTests(TestCase):
 
     def test_decision_center_tools_are_differentiated_cards(self):
         html = self.html('/decisiones/')
-        for tag in ('Calculadora', 'Cobertura', 'Rendimiento', 'Catálogo'):
+        for tag in ('Calculadora', 'Cobertura'):
             self.assertIn(f'<span class="tool-card-tag">{tag}</span>', html)
-        for label in ('Cuánto llevar', '¿Me alcanza?', 'Cosecha', 'Ficha de insumo'):
+        for label in ('Cuánto llevar', '¿Me alcanza?'):
             self.assertIn(f'<strong>{label}</strong>', html)
-        self.assertEqual(html.count('class="tool-ico tone-'), 4)
+        self.assertEqual(html.count('class="tool-ico tone-'), 2)
 
     def test_ficha_predio_shows_summary_chips_and_plot_menus(self):
         self.labor(self.planned, -1)
@@ -3187,7 +3803,7 @@ class VisualVarietyTests(TestCase):
 
 
 class CropPickerTests(TestCase):
-    """Selector visual de cultivos: usa solo cultivos y datos reales, sin listas fijas ni cifras inventadas."""
+    """Elegir cultivo: solo cultivos y datos reales, sin listas fijas ni cifras inventadas."""
 
     def setUp(self):
         self.user = User.objects.create_user('selector', email='selector@example.com', password=PASSWORD)
@@ -3199,11 +3815,17 @@ class CropPickerTests(TestCase):
         self.lechuga = Cultivo.objects.create(nombre='Lechuga')
         self.raro = Cultivo.objects.create(nombre='Cultivo exótico del catálogo')
         self.inactivo = Cultivo.objects.create(nombre='Cultivo retirado', activo=False)
-        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo selector', ubicacion='Chocalán', superficie_ha=Decimal('20'), zona=self.zone)
+        self.farm = Predio.objects.create(
+            propietario=self.user,
+            nombre='Fundo selector',
+            ubicacion='Chocalán',
+            superficie_ha=Decimal('20'),
+            zona=self.zone,
+        )
         self.plot = Potrero.objects.create(predio=self.farm, nombre='Potrero Norte', superficie_ha=Decimal('4.8'))
         self.today = timezone.localdate()
 
-    def picker(self, url='/predios/'):
+    def picker(self, url='/decisiones/'):
         html = self.client.get(url).content.decode()
         match = re.search(r'<script id="agro-crop-picker" type="application/json">(.*?)</script>', html, re.S)
         self.assertIsNotNone(match, 'La página debe incluir los datos del selector de cultivos.')
@@ -3212,22 +3834,10 @@ class CropPickerTests(TestCase):
     def season(self, plot, crop):
         return TemporadaCultivo.objects.create(potrero=plot, cultivo=crop, temporada_agricola='2026-2027')
 
-    def reference(self, **extra):
-        data = dict(cultivo=self.papa, zona=self.zone, tipo_cultivo='Tubérculo', siembra_inicio_mes=9, siembra_fin_mes=11,
-                    cosecha_inicio_mes=1, cosecha_fin_mes=3, duracion_ciclo_dias=120, institucion_fuente='INIA',
-                    documento_fuente='Manual de papa', url_fuente='https://example.org/papa', fecha_consulta_fuente=self.today,
-                    estado=ReferenciaAgronomica.Estado.VERIFICADA)
-        data.update(extra)
-        return ReferenciaAgronomica.objects.create(**data)
-
-    def test_assets_and_data_only_load_on_pages_that_choose_crops(self):
-        _data, html = self.picker('/predios/')
-        self.assertIn('js/crop-picker.js', html)
-        self.assertIn('css/crop-picker.css', html)
-        self.assertIn('id="crop-picker"', html)
-        other = self.client.get('/dashboard/' if self.client.get('/dashboard/').status_code == 200 else '/actividades/').content.decode()
-        self.assertNotIn('crop-picker.js', other)
-        self.assertNotIn('agro-crop-picker', other)
+    def test_crop_data_only_loads_on_the_decision_center(self):
+        self.picker()
+        for url in ('/predios/', '/actividades/'):
+            self.assertNotIn('agro-crop-picker', self.client.get(url).content.decode(), url)
 
     def test_without_history_only_catalog_crops_are_suggested_and_no_statistics_are_sent(self):
         data, _html = self.picker()
@@ -3251,19 +3861,6 @@ class CropPickerTests(TestCase):
         self.assertEqual(data['frequent'], [str(self.papa.pk), str(self.maiz.pk)])
         self.assertNotIn(str(self.lechuga.pk), data['frequent'])
 
-    def test_crop_details_only_from_verified_references_with_complete_source(self):
-        self.reference()
-        self.reference(cultivo=self.maiz, estado=ReferenciaAgronomica.Estado.BORRADOR)  # borrador: no se muestra
-        self.reference(cultivo=self.lechuga, url_fuente='')  # verificada pero sin URL de fuente: no se muestra
-        data, _html = self.picker()
-        self.assertEqual(list(data['details']), [str(self.papa.pk)])
-        window = data['details'][str(self.papa.pk)]['windows'][0]
-        self.assertEqual(window['sowing'], 'sep–nov')
-        self.assertEqual(window['harvest'], 'ene–mar')
-        self.assertEqual(window['cycleDays'], 120)
-        self.assertEqual(window['zone'], 'Zona Central')
-        self.assertEqual(data['details'][str(self.papa.pk)]['type'], 'Tubérculo')
-
     def test_groups_use_catalog_constants_and_short_filter_names(self):
         data, _html = self.picker()
         shorts = [group['short'] for group in data['groups']]
@@ -3271,53 +3868,48 @@ class CropPickerTests(TestCase):
             self.assertIn(name, shorts)
         self.assertEqual(data['groups'][-1]['name'], 'Otros cultivos')
 
-    def test_dialog_has_two_steps_and_no_hardcoded_crop_names(self):
-        _data, html = self.picker()
+    def test_crop_dialog_has_dates_and_no_hardcoded_crop_names(self):
+        html = self.client.get('/predios/').content.decode()
         html = re.sub(r'<script.*?</script>', '', html, flags=re.S)
-        dialog = html[html.index('id="crop-dialog"'):html.index('</dialog>')]
-        for text in ('id="crop-picker"', 'id="crop-select"', 'data-crop-step="2"', '¿Cuándo quieres sembrar?', 'id="crop-sowing"',
-                     'id="crop-harvest"', 'Más opciones de la temporada', 'Guardar cultivo'):
+        dialog = html[html.index('id="crop-dialog"') : html.index('</dialog>')]
+        for text in (
+            'id="crop-select"',
+            '¿Cuándo quieres sembrar?',
+            'id="crop-sowing"',
+            'id="crop-harvest"',
+            'Más opciones de la temporada',
+            'Guardar cultivo',
+        ):
             self.assertIn(text, dialog)
         for name in ('Maíz', 'Papa', 'Lechuga', 'Trigo', 'Tomate'):
             self.assertNotIn(name, dialog)  # los cultivos salen de la base de datos, no de la plantilla
-        self.assertRegex(dialog, r'data-crop-fallback')
 
-    def test_forms_keep_the_real_select_and_load_the_picker(self):
-        for url in (f'/predios/{self.farm.pk}/potreros/nuevo/', f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/'):
-            _data, html = self.picker(url)
+    def test_forms_use_a_simple_select_with_active_crops(self):
+        for url in (
+            f'/predios/{self.farm.pk}/potreros/nuevo/',
+            f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/',
+        ):
+            html = self.client.get(url).content.decode()
             self.assertIn('name="cultivo"', html)
             for crop in (self.maiz, self.papa, self.lechuga):
                 self.assertIn(f'<option value="{crop.pk}">{crop.nombre}</option>', html)
             self.assertNotIn(f'<option value="{self.inactivo.pk}">', html)
-            self.assertIn('js/crop-picker.js', html)
-        _data, html = self.picker(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/')
-        self.assertIn('data-crop-plot="Potrero Norte"', html)
-        self.assertIn('data-crop-area="4,80 ha"', html)
 
-    def test_saving_through_the_form_still_works_with_the_hidden_select(self):
-        response = self.client.post(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/', {
-            'cultivo': self.maiz.pk, 'variedad': '', 'temporada_agricola': '2026-2027', 'estado': 'planned',
-            'fecha_siembra': '', 'fecha_cosecha': '', 'observaciones': '',
-        })
+    def test_saving_through_the_form_still_works(self):
+        response = self.client.post(
+            f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/temporadas/nueva/',
+            {
+                'cultivo': self.maiz.pk,
+                'variedad': '',
+                'temporada_agricola': '2026-2027',
+                'estado': 'planned',
+                'fecha_siembra': '',
+                'fecha_cosecha': '',
+                'observaciones': '',
+            },
+        )
         self.assertEqual(response.status_code, 302)
         self.assertTrue(TemporadaCultivo.objects.filter(potrero=self.plot, cultivo=self.maiz).exists())
-
-    def test_picker_script_contract_accessibility_and_future_facts(self):
-        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'crop-picker.js').read_text(encoding='utf-8')
-        for marker in ('role: \'radiogroup\'', "role: 'radio'", "'aria-checked'", "'aria-pressed'", "'aria-live'", 'Continuar planificación',
-                       'Cambiar cultivo', 'Buscar cultivo...', 'Cultivos frecuentes', 'Cultivos sugeridos', 'Limpiar filtros',
-                       '¿Cuándo quieres sembrar?', 'FACT_FIELDS', 'ArrowRight', 'cropsFromSelect(select)'):
-            self.assertIn(marker, source)
-        for forbidden in ('fetch(', 'XMLHttpRequest', 'Math.random', 'localStorage'):
-            self.assertNotIn(forbidden, source)  # solo presentación: no consulta la red ni inventa datos
-
-    def test_picker_styles_cover_mobile_grid_and_reduced_motion(self):
-        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'crop-picker.css').read_text(encoding='utf-8')
-        mobile = css[css.index('@media (max-width: 640px)'):]
-        self.assertIn('.crop-grid { grid-template-columns: repeat(2, minmax(0, 1fr))', mobile)
-        self.assertIn('overflow-x: auto', css)  # categorías desplazables horizontalmente
-        self.assertIn('prefers-reduced-motion', css)
-        self.assertIn('aria-checked="true"', css)
 
 
 class PrediosSideLayoutTests(TestCase):
@@ -3326,7 +3918,9 @@ class PrediosSideLayoutTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user('lateral', email='lateral@example.com', password=PASSWORD)
         self.client.force_login(self.user)
-        self.farm = Predio.objects.create(propietario=self.user, nombre='Fundo lateral', ubicacion='Chocalán', superficie_ha=Decimal('30'))
+        self.farm = Predio.objects.create(
+            propietario=self.user, nombre='Fundo lateral', ubicacion='Chocalán', superficie_ha=Decimal('30')
+        )
         self.north = Potrero.objects.create(predio=self.farm, nombre='Potrero Norte', superficie_ha=Decimal('4.8'))
         self.south = Potrero.objects.create(predio=self.farm, nombre='Potrero Sur', superficie_ha=Decimal('2'))
 
@@ -3341,15 +3935,30 @@ class PrediosSideLayoutTests(TestCase):
         selected = html.index('id="selected-terrain"')
         history = html.index('id="potrero-history"')
         dialog = html.index('id="crop-dialog"')
-        self.assertTrue(workspace < map_card < side < selected < history < dialog)  # mapa primero; historial dentro del lateral
+        self.assertTrue(
+            workspace < map_card < side < selected < history < dialog
+        )  # mapa primero; historial dentro del lateral
         self.assertEqual(html.count('class="card potrero-history"'), 1)
         self.assertEqual(html.count('HISTORIAL DE POTREROS'), 1)
 
     def test_history_keeps_search_filters_order_pagination_and_actions(self):
         html = self.page()
-        section = html[html.index('id="potrero-history"'):html.index('id="crop-dialog"')]
-        for text in ('name="q"', 'name="filtro_predio"', 'name="cultivo"', 'name="orden"', 'Filtrar', 'Ver en mapa', 'Ficha e historial', 'Editar',
-                     'Potrero Norte', 'Potrero Sur', 'Paginación del historial de potreros', 'Página 1 de 1', '2 registrados'):
+        section = html[html.index('id="potrero-history"') : html.index('id="crop-dialog"')]
+        for text in (
+            'name="q"',
+            'name="filtro_predio"',
+            'name="cultivo"',
+            'name="orden"',
+            'Filtrar',
+            'Ver en mapa',
+            'Ficha e historial',
+            'Editar',
+            'Potrero Norte',
+            'Potrero Sur',
+            'Paginación del historial de potreros',
+            'Página 1 de 1',
+            '2 registrados',
+        ):
             self.assertIn(text, section)
         # Las acciones pasaron a un menú ⋯ (una por potrero) y ya no son botones permanentes del listado.
         self.assertEqual(section.count('class="row-menu-trigger"'), 2)
@@ -3357,11 +3966,14 @@ class PrediosSideLayoutTests(TestCase):
         self.assertIn(f'data-select-plot="{self.north.pk}"', section)
         self.assertIn(f'/predios/{self.farm.pk}/potreros/{self.north.pk}/editar/', section)
         # Fechas completas, una por línea para que no se corten en el ancho lateral.
-        self.assertRegex(section, r'<small>Creado \d\d/\d\d/\d{4} \d\d:\d\d</small>\s*<small>Actualizado \d\d/\d\d/\d{4} \d\d:\d\d</small>')
+        self.assertRegex(
+            section,
+            r'<small>Creado \d\d/\d\d/\d{4} \d\d:\d\d</small>\s*<small>Actualizado \d\d/\d\d/\d{4} \d\d:\d\d</small>',
+        )
 
     def test_filters_still_work_in_the_side_panel(self):
         html = self.page('/predios/?q=Sur')
-        section = html[html.index('id="potrero-history"'):html.index('id="crop-dialog"')]
+        section = html[html.index('id="potrero-history"') : html.index('id="crop-dialog"')]
         self.assertIn('Potrero Sur', section)
         self.assertNotIn('Potrero Norte', section)
         self.assertIn('value="Sur"', section)
@@ -3370,13 +3982,16 @@ class PrediosSideLayoutTests(TestCase):
 
     def test_layout_styles_two_columns_internal_scroll_and_responsive_stack(self):
         css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'predios.css').read_text(encoding='utf-8')
-        block = css[css.index('/* ---------- /predios/: mapa a la izquierda'):]
+        # Sin depender del formato: se comparan las reglas con los espacios y saltos de línea unificados.
+        block = re.sub(r'\s+', ' ', css[css.index('/* ---------- /predios/: mapa a la izquierda') :])
         self.assertIn('.terrain-workspace { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);', block)
         self.assertIn('.terrain-side .potrero-history-list { max-height:', block)
         self.assertIn('overflow-y: auto', block)
         self.assertIn('@media (max-width: 1100px)', block)
         self.assertIn('.terrain-workspace .map-card { order: -1; }', block)  # móvil/tablet: el mapa primero
-        self.assertIn('@media (min-width: 760px) and (max-width: 1100px)', block)  # tablet ancha: info e historial lado a lado
+        self.assertIn(
+            '@media (min-width: 760px) and (max-width: 1100px)', block
+        )  # tablet ancha: info e historial lado a lado
         self.assertNotIn('overflow-x: scroll', block)
 
 
@@ -3392,21 +4007,46 @@ class CalculatorGuidedFlowTests(IntegrationBase):
             self.assertIn(f'data-step="{step}"', html)
         llevar_panel = html.split('id="tool-llevar"', 1)[1].split('id="tool-alcanza"', 1)[0]
         self.assertEqual(llevar_panel.count('class="calc-step"'), 6)
-        for marker in ('id="calc-status"', 'id="calc-stats"', 'class="info-strip calc-strip"', 'id="calc-summary"',
-                       'id="calc-plot-picker"', 'id="calc-crop-picker"', 'id="calc-area-tools"', 'id="calc-submit-hint"',
-                       'Opciones avanzadas', 'Cálculo avanzado de semillas', 'calc-flow.js', 'calc-flow.css'):
+        for marker in (
+            'id="calc-status"',
+            'id="calc-stats"',
+            'class="info-strip calc-strip"',
+            'id="calc-summary"',
+            'id="calc-plot-picker"',
+            'id="calc-crop-picker"',
+            'id="calc-area-tools"',
+            'id="calc-submit-hint"',
+            'Opciones avanzadas',
+            'Cálculo avanzado de semillas',
+            'calc-flow.js',
+            'decisiones.css',
+        ):
             self.assertIn(marker, html)
         # Prioridad: «Calcular ahora» es el botón principal; PDF, Reportes y «¿Me alcanza?» son secundarios.
-        self.assertRegex(html, r'<button class="btn-primary-agro calc-submit" type="submit" id="calc-submit">')
-        self.assertRegex(html, r'<button class="btn-secondary-agro btn-sm" type="button" id="calc-pdf">')
+        compact = re.sub(r'\s+', ' ', html)  # sin depender de cómo se formatearon los atributos
+        self.assertRegex(compact, r'<button class="btn-primary-agro calc-submit" type="submit" id="calc-submit">')
+        self.assertRegex(compact, r'<button class="btn-secondary-agro btn-sm" type="button" id="calc-pdf">')
         self.assertIn('Ver en Reportes', html)
         self.assertIn('id="calc-go-cover"', html)
         self.assertIn('Ir a «¿Me alcanza?»', html)
 
     def test_native_form_controls_remain_the_source_of_truth(self):
         html = self.page()
-        for field in ('calc-plot', 'calc-crop', 'calc-product', 'calc-target', 'calc-area', 'calc-dose', 'calc-unit',
-                      'calc-error', 'calc-result', 'calc-notes', 'adv-seed', 'adv-nutrient', 'calc-advanced'):
+        for field in (
+            'calc-plot',
+            'calc-crop',
+            'calc-product',
+            'calc-target',
+            'calc-area',
+            'calc-dose',
+            'calc-unit',
+            'calc-error',
+            'calc-result',
+            'calc-notes',
+            'adv-seed',
+            'adv-nutrient',
+            'calc-advanced',
+        ):
             self.assertIn(f'id="{field}"', html)
         self.assertIn('data-mode="semillas"', html)
         self.assertIn('data-mode="insumos"', html)
@@ -3417,7 +4057,6 @@ class CalculatorGuidedFlowTests(IntegrationBase):
         self.assertIn('groups', response.context['crop_picker'])
         html = response.content.decode()
         self.assertIn('id="agro-crop-picker"', html)
-        self.assertIn('js/crop-picker.js', html)
 
     def test_incomplete_catalog_notice_is_actionable_without_invented_routes(self):
         html = self.page()
@@ -3462,14 +4101,14 @@ class CalculatorGuidedFlowTests(IntegrationBase):
         # El cálculo sigue validándose en el servidor.
         self.assertIn("operation: 'dose'", panel)
         self.assertIn('calculateUrl', panel)
-        for name in ('calc-flow.js', 'calc-flow.css', 'calc-panel.js', 'calc-panel.css'):
+        for name in ('calc-flow.js', 'calc-panel.js', 'decisiones.css'):
             self.assertTrue((base / ('js' if name.endswith('.js') else 'css') / name).exists(), name)
 
-    def test_tool_selector_keeps_four_tools_and_catalog_strip_stays(self):
+    def test_tool_selector_keeps_two_tools_and_catalog_strip_stays(self):
         html = self.page()
-        for tool in ('llevar', 'alcanza', 'cosecha', 'ficha'):
+        for tool in ('llevar', 'alcanza'):
             self.assertIn(f'data-tool="{tool}"', html)
-        self.assertEqual(html.count('class="tool-ico tone-'), 4)
+        self.assertEqual(html.count('class="tool-ico tone-'), 2)
         # La tira muestra solo lo que tiene datos: con cultivos pero sin insumos no aparecen métricas en cero.
         self.assertIn('Cultivos del catálogo', html)
         for label in ('Semillas registradas', 'Fertilizantes en catálogo', 'Otros insumos registrados'):
@@ -3479,9 +4118,8 @@ class CalculatorGuidedFlowTests(IntegrationBase):
         self.assertIn('Fertilizantes en catálogo', self.page())
 
 
-
 class ToolFlowDesignTests(IntegrationBase):
-    """«¿Me alcanza?», «Cosecha» y «Ficha de insumo» usan el mismo diseño guiado que «Cuánto llevar» (solo presentación)."""
+    """«¿Me alcanza?» usa el mismo diseño guiado que «Cuánto llevar» (solo presentación)."""
 
     def page(self, tool):
         return self.client.get(f'/decisiones/?herramienta={tool}').content.decode()
@@ -3489,49 +4127,54 @@ class ToolFlowDesignTests(IntegrationBase):
     def static_source(self, kind, name):
         return (Path(__file__).resolve().parent.parent / 'static' / kind / name).read_text(encoding='utf-8')
 
-    def test_cover_and_yield_have_guided_steps_and_flow_hooks(self):
+    def test_cover_has_guided_steps_and_flow_hooks(self):
         html = self.page('alcanza')
-        for marker in ('id="cover-form"', 'data-flow="cover"', 'data-picker="plot"', 'data-picker="crop"',
-                       'data-flow-status', 'data-flow-strip', 'data-flow-summary', 'data-flow-summary-body',
-                       'data-flow-hint', 'data-flow-submit', 'data-flow-area-tools',
-                       'tool-flow.js', 'tool-flow.css', 'Comprobar disponibilidad'):
+        for marker in (
+            'id="cover-form"',
+            'data-flow="cover"',
+            'data-picker="plot"',
+            'data-picker="crop"',
+            'data-flow-status',
+            'data-flow-strip',
+            'data-flow-summary',
+            'data-flow-summary-body',
+            'data-flow-hint',
+            'data-flow-submit',
+            'data-flow-area-tools',
+            'tool-flow.js',
+            'decisiones.css',
+            'Comprobar disponibilidad',
+        ):
             self.assertIn(marker, html)
-        self.assertIn('data-flow="yield"', html)
-        self.assertIn('id="yield-form"', html)
-        self.assertIn('Estimar cosecha', html)
         self.assertIn('data-result-for="cover-form"', html)
-        self.assertIn('data-result-for="yield-form"', html)
 
     def test_native_controls_and_field_names_are_preserved(self):
         html = self.page('alcanza')
-        for name in ('plot', 'crop', 'product', 'stock', 'unit', 'dose', 'area', 'rate', 'source', 'variety'):
+        for name in ('plot', 'crop', 'product', 'stock', 'unit', 'dose', 'area'):
             self.assertRegex(html, rf'name="{name}"')
-
-    def test_ficha_keeps_its_containers_for_the_rail(self):
-        html = self.page('ficha')
-        for marker in ('id="ficha-steps"', 'id="ficha-context"', 'id="ficha-sheet"', 'id="ficha-status"', 'id="ficha-hint"',
-                       'Paso 1 de 4'):
-            self.assertIn(marker, html)
 
     def test_flow_layer_is_presentation_only(self):
         js = self.static_source('js', 'tool-flow.js')
         self.assertNotIn('fetch(', js)
         self.assertNotIn('XMLHttpRequest', js)
-        self.assertIn('AgroToolFlow', js)
-        css = self.static_source('css', 'tool-flow.css')
+        css = self.static_source('css', 'decisiones.css')
         self.assertTrue(css.strip())
 
-    def test_all_four_tools_still_render_for_user_without_plots(self):
+    def test_both_tools_still_render_for_user_without_plots(self):
         empty = get_user_model().objects.create_user('sin_potreros', 'sp@example.com', 'Clave12345!')
         client = Client()
         client.force_login(empty)
-        for tool in ('llevar', 'alcanza', 'cosecha', 'ficha'):
+        for tool in ('llevar', 'alcanza'):
             response = client.get(f'/decisiones/?herramienta={tool}')
             self.assertEqual(response.status_code, 200, tool)
             self.assertIn('data-tool="alcanza"', response.content.decode())
 
     def test_deep_link_parameters_still_accepted(self):
-        for query in ('herramienta=alcanza&plot=1&crop=1&insumo=1', 'herramienta=ficha&crop=1&insumo=1', 'herramienta=cosecha&plot=1'):
+        for query in (
+            'herramienta=alcanza&plot=1&crop=1&insumo=1',
+            'herramienta=ficha&crop=1&insumo=1',
+            'herramienta=cosecha&plot=1',
+        ):
             self.assertEqual(self.client.get('/decisiones/?' + query).status_code, 200, query)
 
 
@@ -3550,7 +4193,9 @@ class GuidedJourneyTests(IntegrationBase):
         newcomer = User.objects.create_user('nuevo', email='nuevo@example.com', password=PASSWORD)
         self.client.force_login(newcomer)
         journey = self.journey()
-        self.assertEqual([step['state'] for step in journey['steps']], ['current', 'todo', 'todo', 'todo', 'todo', 'todo'])
+        self.assertEqual(
+            [step['state'] for step in journey['steps']], ['current', 'todo', 'todo', 'todo', 'todo', 'todo']
+        )
         self.assertEqual(journey['next']['cta'], 'Registrar predio')
         self.assertEqual(journey['next']['url'], '/predios/nuevo/')
 
@@ -3574,20 +4219,32 @@ class GuidedJourneyTests(IntegrationBase):
         journey = self.journey()
         self.assertEqual(journey['steps'][4]['state'], 'current')
         self.assertEqual(journey['next']['status'], 'Ya puedes utilizar las herramientas agrícolas')
-        self.assertEqual([item['label'] for item in journey['next']['actions']], ['Calcular semillas', 'Calcular insumos', 'Ver si me alcanza', 'Consultar ficha de producto'])
+        self.assertEqual(
+            [item['label'] for item in journey['next']['actions']],
+            ['Calcular semillas', 'Calcular insumos', 'Ver si me alcanza', 'Consultar ficha de producto'],
+        )
         self.assertEqual(journey['next']['url'], f'/decisiones/?tipo=semillas&potrero={self.plot.pk}')
         self.assertEqual(journey['next']['actions'][1]['url'], f'/decisiones/?tipo=insumos&potrero={self.plot.pk}')
-        self.assertEqual(journey['next']['actions'][2]['url'], f'/decisiones/?herramienta=alcanza&potrero={self.plot.pk}')
+        self.assertEqual(
+            journey['next']['actions'][2]['url'], f'/decisiones/?herramienta=alcanza&potrero={self.plot.pk}'
+        )
         # Con un cálculo guardado → seguimiento y reportes.
-        CalculoAgricola.objects.create(usuario=self.user, potrero=self.plot, operacion='dose',
-                                       entrada={'area_ha': 4, 'crop': 'Maíz prueba'}, resultado={'amount': 100, 'unit': 'kg', 'dose': 25, 'dose_unit': 'kg/ha'})
+        CalculoAgricola.objects.create(
+            usuario=self.user,
+            potrero=self.plot,
+            operacion='dose',
+            entrada={'area_ha': 4, 'crop': 'Maíz prueba'},
+            resultado={'amount': 100, 'unit': 'kg', 'dose': 25, 'dose_unit': 'kg/ha'},
+        )
         journey = self.journey()
         self.assertEqual(journey['steps'][4]['state'], 'done')
         self.assertEqual(journey['steps'][5]['state'], 'current')
         self.assertEqual(journey['next']['url'], '/reportes/')
 
     def test_farm_without_plots_asks_to_create_one(self):
-        empty_farm = Predio.objects.create(propietario=self.user, nombre='Parcela vacía', ubicacion='Z', superficie_ha=2)
+        empty_farm = Predio.objects.create(
+            propietario=self.user, nombre='Parcela vacía', ubicacion='Z', superficie_ha=2
+        )
         journey = self.journey()
         self.assertEqual(journey['steps'][1]['state'], 'current')
         self.assertEqual(journey['next']['title'], '¿Cómo quieres trabajar este terreno?')
@@ -3600,19 +4257,26 @@ class GuidedJourneyTests(IntegrationBase):
             html = self.client.get(url).content.decode()
             self.assertIn('class="journey no-print"', html, url)
             self.assertIn('Siguiente paso', html, url)
-            self.assertIn('css/journey.css', html, url)
         for url in (f'/predios/{self.farm.pk}/', '/predios/nuevo/', f'/predios/{self.farm.pk}/potreros/nuevo/'):
             self.assertNotIn('class="journey no-print"', self.client.get(url).content.decode(), url)
 
     def test_each_section_explains_what_comes_next(self):
-        self.assertIn('Para calcular necesitas: potrero + cultivo + superficie + dosis', self.client.get('/decisiones/').content.decode())
+        self.assertIn(
+            'Para calcular necesitas: potrero + cultivo + superficie + dosis',
+            self.client.get('/decisiones/').content.decode(),
+        )
         self.assertIn('completa la fecha de siembra', self.client.get('/calendario/').content.decode())
         self.assertIn('quedan guardados y aparecen aquí', self.client.get('/reportes/').content.decode())
 
     def test_dashboard_lists_saved_calculations_instead_of_claiming_there_are_none(self):
         self.assertIn('Aún no has guardado cálculos', self.client.get('/').content.decode())
-        CalculoAgricola.objects.create(usuario=self.user, potrero=self.plot, operacion='yield',
-                                       entrada={'area_ha': 4, 'crop': 'Maíz prueba'}, resultado={'production': 120, 'rate': 30, 'source': 'Registro propio'})
+        CalculoAgricola.objects.create(
+            usuario=self.user,
+            potrero=self.plot,
+            operacion='yield',
+            entrada={'area_ha': 4, 'crop': 'Maíz prueba'},
+            resultado={'production': 120, 'rate': 30, 'source': 'Registro propio'},
+        )
         html = self.client.get('/').content.decode()
         self.assertNotIn('Aún no hay historial persistente', html)
         self.assertIn('120 ton', html)
@@ -3620,14 +4284,20 @@ class GuidedJourneyTests(IntegrationBase):
         self.assertIn('/reportes/?tipo=calculos', html)
 
     def test_dashboard_calculations_belong_to_the_current_user_only(self):
-        CalculoAgricola.objects.create(usuario=self.other, potrero=self.other_plot, operacion='yield',
-                                       entrada={'area_ha': 1}, resultado={'production': 999, 'rate': 1})
+        CalculoAgricola.objects.create(
+            usuario=self.other,
+            potrero=self.other_plot,
+            operacion='yield',
+            entrada={'area_ha': 1},
+            resultado={'production': 999, 'rate': 1},
+        )
         self.assertNotIn('999 ton', self.client.get('/').content.decode())
 
 
 class MelipillaDefaultZoneTests(IntegrationBase):
     def test_default_zone_helpers_are_idempotent_and_carry_no_agronomic_data(self):
         from ..catalog import default_zone, ensure_default_zone
+
         self.assertIsNone(default_zone())
         zone, created = ensure_default_zone()
         self.assertTrue(created)
@@ -3638,12 +4308,14 @@ class MelipillaDefaultZoneTests(IntegrationBase):
 
     def test_deactivated_melipilla_is_respected(self):
         from ..catalog import ensure_default_zone
+
         Zona.objects.create(nombre='Melipilla', activo=False)
         self.assertEqual(ensure_default_zone(), (None, False))
         self.assertEqual(Zona.objects.filter(nombre__iexact='Melipilla').count(), 1)
 
     def test_new_farm_form_lists_melipilla_first_and_preselected(self):
         from ..forms import PredioForm
+
         melipilla = Zona.objects.create(nombre='Melipilla')
         form = PredioForm()
         self.assertEqual(form['zona'].value(), melipilla.pk)
@@ -3655,6 +4327,7 @@ class MelipillaDefaultZoneTests(IntegrationBase):
 
     def test_editing_a_farm_keeps_its_own_zone(self):
         from ..forms import PredioForm
+
         Zona.objects.create(nombre='Melipilla')
         self.assertEqual(PredioForm(instance=self.farm)['zona'].value(), self.zone.pk)
 
@@ -3662,10 +4335,22 @@ class MelipillaDefaultZoneTests(IntegrationBase):
         Predio.objects.update(zona=None)
         Zona.objects.all().delete()
         boundary = [[-71.216, -33.687], [-71.213, -33.687], [-71.213, -33.684], [-71.216, -33.684]]
-        feature = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]}}
-        response = self.client.post('/predios/nuevo/', {
-            'nombre': 'Predio local', 'ubicacion': 'Melipilla', 'geojson': json.dumps(feature),
-            'perimetro_aceptado': 'on', 'latitud': '-33.687', 'longitud': '-71.216'})
+        feature = {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {'type': 'Polygon', 'coordinates': [boundary + [boundary[0]]]},
+        }
+        response = self.client.post(
+            '/predios/nuevo/',
+            {
+                'nombre': 'Predio local',
+                'ubicacion': 'Melipilla',
+                'geojson': json.dumps(feature),
+                'perimetro_aceptado': 'on',
+                'latitud': '-33.687',
+                'longitud': '-71.216',
+            },
+        )
         farm = Predio.objects.get(nombre='Predio local')
         self.assertRedirects(response, f'/predios/{farm.pk}/?nuevo=1')
         self.assertIsNone(farm.zona_id)
@@ -3681,6 +4366,7 @@ class MelipillaDefaultZoneTests(IntegrationBase):
     def test_base_loader_command_creates_zone_and_crops_without_agronomic_data(self):
         from django.core.management import call_command
         from io import StringIO
+
         Predio.objects.update(zona=None)
         Zona.objects.all().delete()
         out = StringIO()
@@ -3725,7 +4411,14 @@ class DecisionsContinuityStaticTests(TestCase):
 class FlowStatesTests(IntegrationBase):
     """Estados del recorrido (sin predio, sin potrero, sin cultivo, planificado) y enlaces directos entre secciones."""
 
-    FEATURE = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [[[-71.2, -33.7], [-71.2, -33.69], [-71.19, -33.69], [-71.19, -33.7], [-71.2, -33.7]]]}}
+    FEATURE = {
+        'type': 'Feature',
+        'properties': {},
+        'geometry': {
+            'type': 'Polygon',
+            'coordinates': [[[-71.2, -33.7], [-71.2, -33.69], [-71.19, -33.69], [-71.19, -33.7], [-71.2, -33.7]]],
+        },
+    }
 
     def source(self, kind, name):
         return (Path(__file__).resolve().parent.parent / 'static' / kind / name).read_text(encoding='utf-8')
@@ -3753,7 +4446,10 @@ class FlowStatesTests(IntegrationBase):
         Predio.objects.filter(pk=self.farm.pk).update(geojson=self.FEATURE)
         journey = self.client.get('/').context['journey']
         self.assertEqual(journey['next']['status'], 'Tu predio ya está registrado')
-        self.assertEqual([(item['label'], item['post']) for item in journey['next']['actions']], [('Utilizar todo el predio', True), ('Dividir en potreros', False)])
+        self.assertEqual(
+            [(item['label'], item['post']) for item in journey['next']['actions']],
+            [('Utilizar todo el predio', True), ('Dividir en potreros', False)],
+        )
         html = self.client.get('/').content.decode()
         self.assertIn(f'action="/predios/{self.farm.pk}/usar-completo/"', html)
         self.assertIn('Utilizar todo el predio', html)
@@ -3816,7 +4512,9 @@ class FlowStatesTests(IntegrationBase):
     def test_breadcrumbs_tell_where_the_user_is(self):
         detail = self.client.get(f'/predios/{self.farm.pk}/?potrero={self.plot.pk}').content.decode()
         self.assertIn('class="crumbs"', detail)
-        self.assertRegex(detail, r'Mis predios</a><span aria-hidden="true">›</span><a href="/predios/\d+/">Campo</a>.*Lote A')
+        self.assertRegex(
+            detail, r'Mis predios</a><span aria-hidden="true">›</span><a href="/predios/\d+/">Campo</a>.*Lote A'
+        )
         form = self.client.get(f'/predios/{self.farm.pk}/potreros/{self.plot.pk}/editar/').content.decode()
         self.assertIn('class="crumbs"', form)
         self.assertIn('Editar potrero', form)
@@ -3830,12 +4528,18 @@ class FlowStatesTests(IntegrationBase):
         for name in ('calc-panel.js', 'decisiones.js'):
             self.assertIn("params.set('plot', params.get('potrero'))", self.source('js', name), name)
         panel = self.source('js', 'calc-panel.js')
-        for text in ('Dato documentado del catálogo', 'Ajustado manualmente', 'Valor ingresado manualmente. Este cálculo corresponde a una simulación.', 'No puede superar las '):
+        for text in (
+            'Dato documentado del catálogo',
+            'Ajustado manualmente',
+            'Valor ingresado manualmente. Este cálculo corresponde a una simulación.',
+            'No puede superar las ',
+        ):
             self.assertIn(text, panel)
         self.assertIn('ctx-line', self.source('js', 'decisiones.js'))
 
     def test_base_catalog_has_the_extra_central_chile_crops_by_name_only(self):
         from ..catalog import ensure_base_crops
+
         ensure_base_crops()
         for name in ('Alcachofa', 'Durazno', 'Frutilla'):
             crop = Cultivo.objects.get(nombre=name)

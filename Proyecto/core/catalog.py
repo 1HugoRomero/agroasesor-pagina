@@ -1,9 +1,15 @@
 import unicodedata
 
 from .models import (
-    Cultivo, Insumo, TipoInsumo, Zona, ReferenciaAgronomica, ProblemaAgricola, Potrero, TemporadaCultivo,
+    Cultivo,
+    Insumo,
+    TipoInsumo,
+    Zona,
+    ReferenciaAgronomica,
+    ProblemaAgricola,
+    Potrero,
+    TemporadaCultivo,
 )
-
 
 # Cultivos de referencia para la agricultura de la zona central de Chile, agrupados para que el
 # selector sea fácil de recorrer. Son solo nombres: no incluyen rendimientos, densidades ni dosis,
@@ -11,10 +17,52 @@ from .models import (
 CROP_GROUPS = [
     ('Cereales y granos', ['Maíz', 'Trigo', 'Avena', 'Cebada', 'Arroz']),
     ('Leguminosas', ['Poroto', 'Lenteja', 'Garbanzo', 'Arveja', 'Haba']),
-    ('Hortalizas', ['Tomate', 'Cebolla', 'Lechuga', 'Zapallo', 'Zanahoria', 'Ajo', 'Pimentón', 'Repollo', 'Sandía', 'Melón', 'Alcachofa', 'Acelga', 'Espinaca', 'Brócoli', 'Coliflor', 'Cilantro', 'Pepino', 'Zapallo italiano']),
+    (
+        'Hortalizas',
+        [
+            'Tomate',
+            'Cebolla',
+            'Lechuga',
+            'Zapallo',
+            'Zanahoria',
+            'Ajo',
+            'Pimentón',
+            'Repollo',
+            'Sandía',
+            'Melón',
+            'Alcachofa',
+            'Acelga',
+            'Espinaca',
+            'Brócoli',
+            'Coliflor',
+            'Cilantro',
+            'Pepino',
+            'Zapallo italiano',
+        ],
+    ),
     ('Tubérculos y raíces', ['Papa', 'Remolacha']),
     ('Forrajes y praderas', ['Alfalfa', 'Trébol', 'Ballica']),
-    ('Frutales', ['Vid', 'Palto', 'Cerezo', 'Manzano', 'Nogal', 'Arándano', 'Olivo', 'Limonero', 'Naranjo', 'Kiwi', 'Durazno', 'Ciruelo', 'Damasco', 'Almendro', 'Mandarino', 'Frutilla']),
+    (
+        'Frutales',
+        [
+            'Vid',
+            'Palto',
+            'Cerezo',
+            'Manzano',
+            'Nogal',
+            'Arándano',
+            'Olivo',
+            'Limonero',
+            'Naranjo',
+            'Kiwi',
+            'Durazno',
+            'Ciruelo',
+            'Damasco',
+            'Almendro',
+            'Mandarino',
+            'Frutilla',
+        ],
+    ),
     ('Cultivos industriales', ['Raps', 'Maravilla']),
 ]
 OTHER_CROPS_GROUP = 'Otros cultivos'
@@ -32,7 +80,6 @@ CROP_GROUP_META = {
 }
 # Orden en que se sugieren cultivos cuando la persona aún no tiene historial. Solo se usan los que existen en el catálogo.
 SUGGESTED_CROPS = ['Maíz', 'Trigo', 'Papa', 'Poroto', 'Tomate']
-MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
 
 def _plain(text):
@@ -63,21 +110,11 @@ def grouped_crop_choices(crops, empty_label):
     return choices
 
 
-def _month_window(start_month, end_month):
-    def name(month):
-        return MESES_CORTOS[month - 1] if month and 1 <= month <= 12 else ''
-    start, end = name(start_month), name(end_month)
-    if not start:
-        return ''
-    return start if not end or end == start else f'{start}–{end}'
-
-
 def crop_picker_data(user):
-    """Datos de apoyo del selector visual de cultivos (solo lectura, sin cifras inventadas).
+    """Cultivos frecuentes y categorías para elegir cultivo en el Centro de decisiones (sin cifras inventadas).
 
     - frequent: cultivos que la persona ya usó en sus potreros; si aún no hay historial, algunos
       cultivos del catálogo marcados como «sugeridos» (frequentBasis lo distingue).
-    - details: ventanas de siembra/cosecha y ciclo SOLO desde referencias verificadas con fuente.
     - groups: clave y nombre corto de cada categoría para los filtros.
     """
     crops = list(Cultivo.objects.filter(activo=True))
@@ -85,12 +122,15 @@ def crop_picker_data(user):
 
     usage = {}
     for crop_id, created in TemporadaCultivo.objects.filter(
-        potrero__predio__propietario=user, cultivo__activo=True,
+        potrero__predio__propietario=user,
+        cultivo__activo=True,
     ).values_list('cultivo_id', 'creado'):
         count, last = usage.get(crop_id, (0, 0))
         usage[crop_id] = (count + 1, max(last, created.timestamp()))
     for crop_id in Potrero.objects.filter(
-        predio__propietario=user, cultivo__isnull=False, cultivo__activo=True,
+        predio__propietario=user,
+        cultivo__isnull=False,
+        cultivo__activo=True,
     ).values_list('cultivo_id', flat=True):
         usage.setdefault(crop_id, (1, 0))
     names = {crop.pk: crop.nombre for crop in crops}
@@ -101,29 +141,6 @@ def crop_picker_data(user):
         frequent = [str(by_plain[_plain(name)]) for name in SUGGESTED_CROPS if _plain(name) in by_plain]
         basis = 'suggested' if frequent else ''
 
-    details = {}
-    references = ReferenciaAgronomica.objects.filter(
-        estado=ReferenciaAgronomica.Estado.VERIFICADA, cultivo__activo=True, zona__activo=True,
-    ).select_related('zona').order_by('cultivo__nombre', 'zona__nombre', 'variedad')
-    for reference in references:
-        if not reference.tiene_fuente_verificada:
-            continue
-        item = details.setdefault(str(reference.cultivo_id), {'type': '', 'family': '', 'scientific': '', 'windows': []})
-        item['type'] = item['type'] or reference.tipo_cultivo
-        item['family'] = item['family'] or reference.familia_botanica
-        item['scientific'] = item['scientific'] or reference.nombre_cientifico
-        sowing = _month_window(reference.siembra_inicio_mes, reference.siembra_fin_mes)
-        harvest = _month_window(reference.cosecha_inicio_mes, reference.cosecha_fin_mes)
-        if (sowing or harvest or reference.duracion_ciclo_dias) and len(item['windows']) < 3:
-            item['windows'].append({
-                'zone': reference.zona.nombre,
-                'variety': reference.variedad,
-                'sowing': sowing,
-                'harvest': harvest,
-                'cycleDays': reference.duracion_ciclo_dias,
-                'source': reference.institucion_fuente,
-            })
-
     return {
         'frequent': frequent,
         'frequentBasis': basis,
@@ -131,7 +148,6 @@ def crop_picker_data(user):
             {'name': name, 'key': CROP_GROUP_META[name][0], 'short': CROP_GROUP_META[name][1]}
             for name in [group for group, _ in CROP_GROUPS] + [OTHER_CROPS_GROUP]
         ],
-        'details': details,
     }
 
 
@@ -192,13 +208,21 @@ def _product_problems(insumo):
 
 
 CATEGORY_KEYS = {
-    'semilla': 'seed', 'semillas': 'seed',
-    'fertilizante': 'fertilizer', 'fertilizantes': 'fertilizer', 'fertilizer': 'fertilizer',
-    'enmienda': 'fertilizer', 'bioestimulante': 'other',
-    'herbicida': 'herbicide', 'herbicidas': 'herbicide',
-    'fungicida': 'fungicide', 'fungicidas': 'fungicide',
-    'insecticida': 'insecticide', 'insecticidas': 'insecticide',
-    'acaricida': 'insecticide', 'plaguicida': 'insecticide',
+    'semilla': 'seed',
+    'semillas': 'seed',
+    'fertilizante': 'fertilizer',
+    'fertilizantes': 'fertilizer',
+    'fertilizer': 'fertilizer',
+    'enmienda': 'fertilizer',
+    'bioestimulante': 'other',
+    'herbicida': 'herbicide',
+    'herbicidas': 'herbicide',
+    'fungicida': 'fungicide',
+    'fungicidas': 'fungicide',
+    'insecticida': 'insecticide',
+    'insecticidas': 'insecticide',
+    'acaricida': 'insecticide',
+    'plaguicida': 'insecticide',
 }
 CATEGORY_LABELS = {
     'seed': 'Semillas',
@@ -216,13 +240,21 @@ def category_key(type_name):
 
 def crop_varieties():
     varieties = {}
-    for crop_id, variety in ReferenciaAgronomica.objects.exclude(
-        estado=ReferenciaAgronomica.Estado.RETIRADA,
-    ).exclude(variedad='').values_list('cultivo_id', 'variedad'):
+    for crop_id, variety in (
+        ReferenciaAgronomica.objects.exclude(
+            estado=ReferenciaAgronomica.Estado.RETIRADA,
+        )
+        .exclude(variedad='')
+        .values_list('cultivo_id', 'variedad')
+    ):
         varieties.setdefault(str(crop_id), set()).add(variety)
-    for crop_id, variety in Insumo.objects.exclude(cultivo=None).exclude(
-        variedad_semilla='',
-    ).values_list('cultivo_id', 'variedad_semilla'):
+    for crop_id, variety in (
+        Insumo.objects.exclude(cultivo=None)
+        .exclude(
+            variedad_semilla='',
+        )
+        .values_list('cultivo_id', 'variedad_semilla')
+    ):
         varieties.setdefault(str(crop_id), set()).add(variety)
     return {key: sorted(values, key=str.casefold) for key, values in varieties.items()}
 
@@ -242,8 +274,12 @@ def catalog_payload():
             estado=ReferenciaAgronomica.Estado.VERIFICADA,
             cultivo__activo=True,
             zona__activo=True,
-        ).select_related('cultivo', 'zona').order_by(
-            'cultivo__nombre', 'zona__nombre', 'variedad',
+        )
+        .select_related('cultivo', 'zona')
+        .order_by(
+            'cultivo__nombre',
+            'zona__nombre',
+            'variedad',
         )
         if reference.tiene_fuente_verificada and reference.rendimiento_ton_ha is not None
     ]
@@ -255,7 +291,9 @@ def catalog_payload():
             'crops': sum(1 for cultivo in cultivos if cultivo.activo),
             'zones': sum(1 for zona in zonas if zona.activo),
             'seeds': categories.count('seed'),
-            'cropsWithDensity': sum(1 for cultivo in cultivos if cultivo.activo and cultivo.densidad_siembra is not None),
+            'cropsWithDensity': sum(
+                1 for cultivo in cultivos if cultivo.activo and cultivo.densidad_siembra is not None
+            ),
             'fertilizers': categories.count('fertilizer'),
             'otherInputs': len(categories) - categories.count('seed') - categories.count('fertilizer'),
             'products': len(insumos),
@@ -307,8 +345,8 @@ def catalog_payload():
                 'maxDoseUnit': insumo.unidad_dosis_maxima,
                 'validFrom': insumo.vigencia_desde.isoformat() if insumo.vigencia_desde else '',
                 'validUntil': insumo.vigencia_hasta.isoformat() if insumo.vigencia_hasta else '',
-                'problems':_product_problems(insumo),
-                'problem':next(iter(_product_problems(insumo)), ''),
+                'problems': _product_problems(insumo),
+                'problem': next(iter(_product_problems(insumo)), ''),
                 'zone': insumo.zona.nombre if insumo.zona else '',
                 'description': insumo.descripcion,
                 'manufacturer': insumo.fabricante,
@@ -369,40 +407,40 @@ def catalog_payload():
         },
         'yieldReferences': {
             cultivo.nombre: {
-                'rate':_num(cultivo.rendimiento_ton_ha),
-                'source':cultivo.rendimiento_fuente,
-                'url':cultivo.rendimiento_url,
-                'verifiedAt':cultivo.rendimiento_verificado.isoformat() if cultivo.rendimiento_verificado else '',
+                'rate': _num(cultivo.rendimiento_ton_ha),
+                'source': cultivo.rendimiento_fuente,
+                'url': cultivo.rendimiento_url,
+                'verifiedAt': cultivo.rendimiento_verificado.isoformat() if cultivo.rendimiento_verificado else '',
             }
             for cultivo in cultivos
             if cultivo.rendimiento_ton_ha is not None
         },
         'regionalYieldReferences': [
             {
-                'cropId':str(reference.cultivo_id),
-                'crop':reference.cultivo.nombre,
-                'zoneId':str(reference.zona_id),
-                'zone':reference.zona.nombre,
-                'variety':reference.variedad,
-                'rate':_num(reference.rendimiento_ton_ha),
-                'source':reference.institucion_fuente,
-                'document':reference.documento_fuente,
-                'url':reference.url_fuente,
-                'verifiedAt':reference.fecha_consulta_fuente.isoformat(),
+                'cropId': str(reference.cultivo_id),
+                'crop': reference.cultivo.nombre,
+                'zoneId': str(reference.zona_id),
+                'zone': reference.zona.nombre,
+                'variety': reference.variedad,
+                'rate': _num(reference.rendimiento_ton_ha),
+                'source': reference.institucion_fuente,
+                'document': reference.documento_fuente,
+                'url': reference.url_fuente,
+                'verifiedAt': reference.fecha_consulta_fuente.isoformat(),
             }
             for reference in regional_yields
         ],
-        'problemas':[
+        'problemas': [
             {
-                'id':str(problem.pk),
-                'name':problem.nombre,
-                'type':problem.tipo,
-                'typeLabel':problem.get_tipo_display(),
-                'symptoms':problem.sintomas,
-                'sourceName':problem.fuente_nombre,
-                'sourceUrl':problem.fuente_url,
-                'description':problem.descripcion,
-                'cropIds':[str(crop.pk) for crop in problem.cultivos.all()],
+                'id': str(problem.pk),
+                'name': problem.nombre,
+                'type': problem.tipo,
+                'typeLabel': problem.get_tipo_display(),
+                'symptoms': problem.sintomas,
+                'sourceName': problem.fuente_nombre,
+                'sourceUrl': problem.fuente_url,
+                'description': problem.descripcion,
+                'cropIds': [str(crop.pk) for crop in problem.cultivos.all()],
             }
             for problem in problems
         ],
@@ -415,6 +453,7 @@ CATEGORIAS_INSUMO = ['Fertilizante', 'Herbicida', 'Fungicida', 'Insecticida', 'A
 def ensure_insumo_categories():
     """Carga las categorías base de insumo (tabla maestra TipoInsumo). Se puede repetir sin duplicar."""
     from .models import TipoInsumo
+
     created = 0
     for name in CATEGORIAS_INSUMO:
         _obj, was_created = TipoInsumo.objects.update_or_create(nombre=name)

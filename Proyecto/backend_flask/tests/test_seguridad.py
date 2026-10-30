@@ -17,6 +17,7 @@ def test_sin_clave_interna_falla_cerrada(client):
 
 def test_clave_corta_no_se_acepta(bd_path):
     from app import create_app
+
     app = create_app({"TESTING": True, "AGROASESOR_DB_PATH": bd_path, "AGROASESOR_INTERNAL_SECRET": "corta"})
     r = app.test_client().get("/api/v1/predios", headers=cabeceras(1, destino="/api/v1/predios", secreto="corta"))
     assert r.status_code == 503
@@ -69,5 +70,8 @@ def test_usuario_inactivo_no_tiene_perfil(client_bd):
 def test_vector_fijo_coincide_con_django(client=None):
     # Mismo vector que core/tests/test_api.py (FirmaTests): ambas definiciones de la firma deben coincidir.
     from app.security.gateway import firmar
-    assert firmar("k" * 32, 7, True, 1700000000, "POST", "/api/v1/calculos?a=1", b'{"x":1}') == \
-        "25fc674706efda37f322e158b72366bc89da033988c045eca837b9d52143febc"
+
+    assert (
+        firmar("k" * 32, 7, True, 1700000000, "POST", "/api/v1/calculos?a=1", b'{"x":1}')
+        == "25fc674706efda37f322e158b72366bc89da033988c045eca837b9d52143febc"
+    )

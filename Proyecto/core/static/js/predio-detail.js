@@ -11,15 +11,15 @@
   const normalTiles = L.tileLayer(config.tile_url, {
     attribution: config.attribution,
     maxZoom: 19,
-    crossOrigin: true
+    crossOrigin: true,
   });
   const satelliteTiles = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     {
       attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community',
       maxZoom: 19,
-      crossOrigin: true
-    }
+      crossOrigin: true,
+    },
   );
   let activeTiles = normalTiles;
   const status = document.getElementById('predio-map-status');
@@ -53,36 +53,35 @@
     });
   });
   const polygon = L.geoJSON(geometry, {
-    style: { color: '#255b37', weight: 3, fillColor: '#74a567', fillOpacity: 0.3 }
+    style: { color: '#255b37', weight: 3, fillColor: '#74a567', fillOpacity: 0.3 },
   }).addTo(map);
   if (polygon.getBounds().isValid()) map.fitBounds(polygon.getBounds(), { padding: [24, 24] });
 
   const rawGeometry = geometry.type === 'Feature' ? geometry.geometry : geometry;
   const ring = rawGeometry.coordinates[0] || [];
-  const vertices = ring.length > 1 && JSON.stringify(ring[0]) === JSON.stringify(ring[ring.length - 1])
-    ? ring.slice(0, -1)
-    : ring;
+  const vertices =
+    ring.length > 1 && JSON.stringify(ring[0]) === JSON.stringify(ring[ring.length - 1]) ? ring.slice(0, -1) : ring;
   vertices.forEach(([longitude, latitude]) => {
     L.circleMarker([latitude, longitude], {
       radius: 4,
       color: '#1e3d28',
       fillColor: '#fff',
       fillOpacity: 1,
-      weight: 2
+      weight: 2,
     }).addTo(map);
   });
   const vertexList = document.getElementById('predio-vertices');
   if (vertexList) {
     vertices.forEach(([longitude, latitude], index) => {
       const item = document.createElement('li');
-      item.textContent = (index + 1) + '. ' + latitude.toFixed(6) + ', ' + longitude.toFixed(6);
+      item.textContent = index + 1 + '. ' + latitude.toFixed(6) + ', ' + longitude.toFixed(6);
       vertexList.appendChild(item);
     });
   }
 
   const tabs = [
     [document.getElementById('tab-information'), document.getElementById('predio-information')],
-    [document.getElementById('tab-history'), document.getElementById('predio-history')]
+    [document.getElementById('tab-history'), document.getElementById('predio-history')],
   ];
   const activateTab = (button) => {
     tabs.forEach(([otherButton, otherPanel]) => {

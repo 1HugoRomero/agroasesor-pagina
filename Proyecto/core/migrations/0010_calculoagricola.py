@@ -17,12 +17,36 @@ class Migration(migrations.Migration):
             name='CalculoAgricola',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('operacion', models.CharField(choices=[('dose', 'Dosis'), ('coverage', 'Cobertura'), ('seed_population', 'Población de semillas'), ('fertilizer_nutrition', 'Nutrición'), ('yield', 'Rendimiento')], max_length=24)),
+                (
+                    'operacion',
+                    models.CharField(
+                        choices=[
+                            ('dose', 'Dosis'),
+                            ('coverage', 'Cobertura'),
+                            ('seed_population', 'Población de semillas'),
+                            ('fertilizer_nutrition', 'Nutrición'),
+                            ('yield', 'Rendimiento'),
+                        ],
+                        max_length=24,
+                    ),
+                ),
                 ('entrada', models.JSONField(default=dict)),
                 ('resultado', models.JSONField(default=dict)),
                 ('creado', models.DateTimeField(auto_now_add=True)),
-                ('potrero', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='calculos', to='core.potrero')),
-                ('usuario', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='calculos_agricolas', to=settings.AUTH_USER_MODEL)),
+                (
+                    'potrero',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='calculos', to='core.potrero'
+                    ),
+                ),
+                (
+                    'usuario',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='calculos_agricolas',
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
                 'ordering': ['-creado', '-pk'],

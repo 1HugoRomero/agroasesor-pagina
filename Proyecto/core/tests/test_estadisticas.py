@@ -1,4 +1,5 @@
 """RF-26: estadísticas del panel de administración, con datos reales y sin confundir cálculos con consultas."""
+
 from datetime import date
 
 from django.contrib.auth import get_user_model
@@ -12,18 +13,26 @@ User = get_user_model()
 
 class EstadisticasAdminTests(TestCase):
     def setUp(self):
-        self.admin = User.objects.create_user('admin1', 'admin1@example.com', 'Clave-segura-123', is_staff=True, is_superuser=True)
+        self.admin = User.objects.create_user(
+            'admin1', 'admin1@example.com', 'Clave-segura-123', is_staff=True, is_superuser=True
+        )
         self.agri = User.objects.create_user('agri1', 'agri1@example.com', 'Clave-segura-123')
         self.agri2 = User.objects.create_user('agri2', 'agri2@example.com', 'Clave-segura-123')
         self.trigo = Cultivo.objects.create(nombre='Trigo')
         self.papa = Cultivo.objects.create(nombre='Papa')
-        self.predio = Predio.objects.create(propietario=self.agri, nombre='Campo', ubicacion='Melipilla', superficie_ha=10)
+        self.predio = Predio.objects.create(
+            propietario=self.agri, nombre='Campo', ubicacion='Melipilla', superficie_ha=10
+        )
         self.potrero = Potrero.objects.create(predio=self.predio, nombre='Lote 1', superficie_ha=2, cultivo=self.trigo)
         Potrero.objects.create(predio=self.predio, nombre='Lote 2', superficie_ha=1)
 
     def _calculo(self, operacion, entrada=None, resultado=None):
         return CalculoAgricola.objects.create(
-            usuario=self.agri, potrero=self.potrero, operacion=operacion, entrada=entrada or {}, resultado=resultado or {},
+            usuario=self.agri,
+            potrero=self.potrero,
+            operacion=operacion,
+            entrada=entrada or {},
+            resultado=resultado or {},
         )
 
     def test_conteos_basicos_sin_contar_administradores_como_agricultores(self):
@@ -67,8 +76,12 @@ class EstadisticasAdminTests(TestCase):
     def test_actividades_por_estado(self):
         for estado in ('pendiente', 'pendiente', 'completada'):
             ActividadAgricola.objects.create(
-                usuario=self.agri, potrero=self.potrero, nombre='Tarea', tipo='riego',
-                fecha_programada=date(2026, 10, 1), estado=estado,
+                usuario=self.agri,
+                potrero=self.potrero,
+                nombre='Tarea',
+                tipo='riego',
+                fecha_programada=date(2026, 10, 1),
+                estado=estado,
             )
         datos = resumen_administrador()
         self.assertEqual(datos['actividades'], 3)
@@ -88,4 +101,5 @@ class EstadisticasAdminTests(TestCase):
 
     def _tipo(self):
         from core.models import TipoInsumo
+
         return TipoInsumo.objects.get_or_create(nombre='Fertilizante')[0]

@@ -2,6 +2,7 @@
 
 Única fuente de la conversión ha ↔ m² para la API: los demás módulos (calculadora, potreros) la reutilizan.
 """
+
 from decimal import Decimal, InvalidOperation
 
 M2_POR_HA = Decimal("10000")

@@ -1,15 +1,18 @@
 {% extends "body.html" %}
 {% load static %}
 {% block title %}Eliminar actividad · AgroAsesor{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">{% endblock %}
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/activities.css' %}?v=5">
+{% endblock %}
 {% block content %}
-<section class="card delete-confirm">
-    <h1 class="page-title">Eliminar actividad</h1>
-    <p>¿Confirmas que quieres eliminar <strong>{{ activity.nombre }}</strong> del potrero {{ activity.potrero.nombre }}? Esta acción no se puede deshacer.</p>
-    <form method="post" class="toolbar">
-        {% csrf_token %}
-        <button class="button danger" type="submit">Sí, eliminar</button>
-        <a class="button secondary" href="{% url 'actividad_detail' activity.pk %}">Cancelar</a>
-    </form>
-</section>
+    <section class="card delete-confirm">
+        <h1 class="page-title">Eliminar actividad</h1>
+        <p>¿Confirmas que quieres eliminar <strong>{{ activity.nombre }}</strong> del potrero {{ activity.potrero.nombre }}? Esta acción no se puede deshacer.</p>
+        <form method="post" class="toolbar">
+            {% csrf_token %}
+            <button class="button danger" type="submit">Sí, eliminar</button>
+            <a class="button secondary"
+               href="{% url 'actividad_detail' activity.pk %}">Cancelar</a>
+        </form>
+    </section>
 {% endblock %}

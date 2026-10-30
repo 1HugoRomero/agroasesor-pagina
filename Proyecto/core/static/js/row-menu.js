@@ -4,7 +4,9 @@
   var openMenu = null;
 
   function items(menu) {
-    return Array.prototype.slice.call(menu.querySelectorAll('.row-menu-item')).filter(function (item) { return !item.hidden; });
+    return Array.prototype.slice.call(menu.querySelectorAll('.row-menu-item')).filter(function (item) {
+      return !item.hidden;
+    });
   }
 
   function place(menu) {
@@ -46,16 +48,24 @@
     if (trigger) {
       event.preventDefault();
       var menu = trigger.closest('.row-menu');
-      if (menu === openMenu) close(false); else open(menu);
+      if (menu === openMenu) close(false);
+      else open(menu);
       return;
     }
-    if (openMenu && !event.target.closest('.row-menu-list')) { close(false); return; }
+    if (openMenu && !event.target.closest('.row-menu-list')) {
+      close(false);
+      return;
+    }
     if (openMenu && event.target.closest('.row-menu-item')) close(false);
   });
 
   document.addEventListener('keydown', function (event) {
     if (!openMenu) return;
-    if (event.key === 'Escape') { event.preventDefault(); close(true); return; }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close(true);
+      return;
+    }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     var list = items(openMenu);
     if (!list.length) return;
@@ -66,6 +76,14 @@
     list[index].focus();
   });
 
-  window.addEventListener('resize', function () { close(false); });
-  window.addEventListener('scroll', function () { close(false); }, true);
+  window.addEventListener('resize', function () {
+    close(false);
+  });
+  window.addEventListener(
+    'scroll',
+    function () {
+      close(false);
+    },
+    true,
+  );
 })();

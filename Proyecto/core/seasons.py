@@ -6,6 +6,7 @@ El potrero conserva en sus campos ``cultivo``, ``variedad``, ``fecha_siembra`` y
 queda en ``TemporadaCultivo``: cada cambio de cultivo crea una temporada nueva y
 las anteriores nunca se borran ni se sobrescriben.
 """
+
 from datetime import date
 
 from django.core.exceptions import ValidationError
@@ -24,12 +25,7 @@ def agricultural_season_for(day):
 
 def current_season(plot):
     """Temporada más reciente del potrero, aunque esté cerrada."""
-    return (
-        TemporadaCultivo.objects.filter(potrero=plot)
-        .select_related('cultivo')
-        .order_by('-creado', '-pk')
-        .first()
-    )
+    return TemporadaCultivo.objects.filter(potrero=plot).select_related('cultivo').order_by('-creado', '-pk').first()
 
 
 def season_payload(season):
@@ -65,8 +61,7 @@ def _preserve_legacy_crop(plot, user):
             else TemporadaCultivo.Estado.PLANIFICADA
         ),
         observaciones=(
-            'Registro conservado automáticamente desde los datos del potrero '
-            'antes de asignar otro cultivo.'
+            'Registro conservado automáticamente desde los datos del potrero ' 'antes de asignar otro cultivo.'
         ),
     )
     # Se omite la validación de cultivo activo: es un dato histórico existente.
@@ -75,9 +70,19 @@ def _preserve_legacy_crop(plot, user):
 
 
 @transaction.atomic
-def assign_crop(plot, user, *, crop, variety='', season_label='', sowing_date=None,
-                harvest_date=None, status=TemporadaCultivo.Estado.PLANIFICADA,
-                notes='', close_previous=True):
+def assign_crop(
+    plot,
+    user,
+    *,
+    crop,
+    variety='',
+    season_label='',
+    sowing_date=None,
+    harvest_date=None,
+    status=TemporadaCultivo.Estado.PLANIFICADA,
+    notes='',
+    close_previous=True,
+):
     """Crea una temporada nueva para ``plot`` y actualiza la instantánea del potrero.
 
     Lanza ``ValidationError`` con mensajes en español cuando los datos no son
@@ -96,9 +101,7 @@ def assign_crop(plot, user, *, crop, variety='', season_label='', sowing_date=No
     previous_crop = plot.cultivo.nombre if plot.cultivo_id else 'Sin cultivo'
     _preserve_legacy_crop(plot, user)
     previous_open = list(
-        plot.temporadas.exclude(
-            estado__in=[TemporadaCultivo.Estado.CERRADA, TemporadaCultivo.Estado.COSECHADA]
-        )
+        plot.temporadas.exclude(estado__in=[TemporadaCultivo.Estado.CERRADA, TemporadaCultivo.Estado.COSECHADA])
     )
 
     season = TemporadaCultivo(

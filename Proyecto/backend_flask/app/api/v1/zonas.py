@@ -1,4 +1,5 @@
 """Zonas agrícolas (lectura)."""
+
 from flask import Blueprint, jsonify
 
 from app.security.gateway import requiere_usuario
