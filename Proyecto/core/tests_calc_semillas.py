@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import CalculoAgricola, Cultivo, Potrero, Predio
-from .referencias import referencias_siembra
+from .agronomy import referencias_siembra
 
 
 class CalculadoraSemillasTests(TestCase):

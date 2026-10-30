@@ -20,11 +20,10 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
-from .calc_semillas import semillas_payload
-from .sesion import MENSAJE_VENCIDA
+from .auth import MENSAJE_VENCIDA
 from .catalog import CATEGORY_LABELS, catalog_payload, category_key, default_zone, ensure_base_crops, CROP_GROUPS, crop_picker_data
 from .seasons import assign_crop, current_season, season_payload, update_current_dates, agricultural_season_for, record_form_crop_change
-from .agronomy import evaluate_harvest_date, evaluate_sowing_date, find_reference
+from .agronomy import evaluate_harvest_date, evaluate_sowing_date, find_reference, semillas_payload
 from .geometry import coordinates_from_geojson
 from .forms import UNIDADES_DOSIS, ActividadAgricolaForm, PerfilForm, RegistroForm, PredioForm, PotreroForm, TemporadaCultivoForm
 from .models import AceptacionPoliticas, ActividadAgricola, Agricultor, CalculoAgricola, ConfiguracionAgronomica, Predio, PredioHistorial, Potrero, Cultivo, Insumo, Zona, ReferenciaAgronomica, TemporadaCultivo, ProblemaAgricola

@@ -45,7 +45,7 @@ MAP_TILE_ATTRIBUTION = os.getenv(
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
 ).strip()
 LOGIN_URL = 'login'
-CSRF_FAILURE_VIEW = 'core.sesion.fallo_csrf'
+CSRF_FAILURE_VIEW = 'core.auth.fallo_csrf'
 LOGIN_REDIRECT_URL = 'dashboard'
 AUTHENTICATION_BACKENDS = ['core.auth.EmailBackend']
 SESSION_COOKIE_HTTPONLY = True
@@ -73,7 +73,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'core.sesion.SesionVencidaMiddleware',
+    'core.auth.SesionVencidaMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
