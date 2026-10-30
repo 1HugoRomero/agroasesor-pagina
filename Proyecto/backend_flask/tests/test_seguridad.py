@@ -67,7 +67,7 @@ def test_usuario_inactivo_no_tiene_perfil(client_bd):
 
 
 def test_vector_fijo_coincide_con_django(client=None):
-    # Mismo vector que core/tests_api.py (FirmaTests): ambas definiciones de la firma deben coincidir.
+    # Mismo vector que core/tests/test_api.py (FirmaTests): ambas definiciones de la firma deben coincidir.
     from app.security.gateway import firmar
     assert firmar("k" * 32, 7, True, 1700000000, "POST", "/api/v1/calculos?a=1", b'{"x":1}') == \
         "25fc674706efda37f322e158b72366bc89da033988c045eca837b9d52143febc"

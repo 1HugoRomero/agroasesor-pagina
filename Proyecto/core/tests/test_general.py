@@ -10,8 +10,8 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase, override_settings, Client
 from django.utils import timezone
-from .geometry import polygon_area, polygon_perimeter
-from .models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, TipoInsumo, Zona, ProblemaAgricola
+from ..geometry import polygon_area, polygon_perimeter
+from ..models import AceptacionPoliticas, ActividadAgricola, CalculoAgricola, ConfiguracionAgronomica, Cultivo, Insumo, Predio, PredioHistorial, Potrero, ReferenciaAgronomica, TemporadaCultivo, TipoInsumo, Zona, ProblemaAgricola
 
 User = get_user_model()
 PASSWORD = 'Campo-Seguro-2026!'
@@ -319,7 +319,7 @@ class TerrainTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_crop_selector_is_grouped_and_base_crops_load_safely(self):
-        from .catalog import crop_group_name, ensure_base_crops, CROP_GROUPS
+        from ..catalog import crop_group_name, ensure_base_crops, CROP_GROUPS
         self.assertEqual(crop_group_name('Maíz'), 'Cereales y granos')
         self.assertEqual(crop_group_name('maiz grano'), 'Cereales y granos')
         self.assertEqual(crop_group_name('Palto Hass'), 'Frutales')
@@ -415,7 +415,7 @@ class TerrainTests(TestCase):
             self.assertEqual(html.count(f'id="{element_id}"'), 1)
 
     def test_zone_is_required_only_when_zones_exist_and_notes_are_unified(self):
-        from .forms import PredioForm
+        from ..forms import PredioForm
         Zona.objects.all().delete()
         self.assertFalse(PredioForm().fields['zona'].required)
         zone = Zona.objects.create(nombre='Zona obligatoria')
@@ -435,7 +435,7 @@ class TerrainTests(TestCase):
         self.assertEqual(farm.latitud, -33.687)
 
     def test_edit_shows_old_description_and_observations_inside_notes(self):
-        from .forms import PredioForm
+        from ..forms import PredioForm
         farm = Predio.objects.create(propietario=self.user, nombre='Con notas', ubicacion='X', superficie_ha=Decimal('1'),
                                      descripcion='Descripción vieja', observaciones='Observación vieja')
         notes = PredioForm(instance=farm).initial['notas']
@@ -2278,7 +2278,7 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         self.assertTrue(manual['simulation'])
 
     def test_changing_a_catalog_dose_marks_the_result_as_adjusted_manually(self):
-        from .views import describe_calculation
+        from ..views import describe_calculation
         same = self.calc(operation='dose', calculation_type='semillas', area='3', dose='22', unit='kg/ha', product_id=self.seed.pk).json()
         self.assertTrue(same['verified'])
         self.assertFalse(same['adjusted'])
@@ -2297,7 +2297,7 @@ class DecisionCenterIntegrationTests(IntegrationBase):
         self.assertEqual((same['origin'], changed['origin'], manual['origin']), ('documented', 'adjusted', 'simulation'))
 
     def test_catalog_value_without_full_support_is_labelled_catalog_not_documented(self):
-        from .views import describe_calculation
+        from ..views import describe_calculation
         kind = TipoInsumo.objects.create(nombre='Otros')
         loose = Insumo.objects.create(tipo=kind, nombre='Producto de catálogo sin fuente', dosis_hectarea=Decimal('4'), unidad_dosis='kg/ha')
         data = self.calc(operation='dose', calculation_type='insumos', area='2', dose='4', unit='kg/ha', product_id=loose.pk).json()
@@ -2521,7 +2521,7 @@ class CatalogCsvAndUsoTests(TestCase):
         self.run_import(folder, '--aplicar')
         self.run_import(folder, '--aplicar')
         self.run_import(folder, '--aplicar', '--actualizar')
-        from .models import UsoInsumoCultivo
+        from ..models import UsoInsumoCultivo
         crop = Cultivo.objects.get(nombre='Cultivo TEST')
         self.assertEqual(crop.densidad_siembra, Decimal('1.5'))
         self.assertEqual(ReferenciaAgronomica.objects.count(), 1)
@@ -2556,7 +2556,7 @@ class CatalogCsvAndUsoTests(TestCase):
     def test_uso_requires_source_and_stops_being_recommended_when_inactive(self):
         from datetime import date
         from django.core.exceptions import ValidationError
-        from .models import UsoInsumoCultivo
+        from ..models import UsoInsumoCultivo
         self.run_import('--categorias')
         self.run_import(self.folder(self.files()), '--aplicar')
         uso = UsoInsumoCultivo.objects.get()
@@ -2712,7 +2712,7 @@ class PredioPotreroFlowAndPrivacyTests(TestCase):
 
     def test_map_script_resets_state_uses_overview_zoom_and_fits_new_polygon(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
         self.assertIn('NEW_PREDIO_ZOOM = 12', source)
         self.assertIn('MY_LOCATION_ZOOM = 16', source)
         self.assertIn('resetNewPredioState', source)
@@ -2828,12 +2828,12 @@ class DemoCatalogEndToEndTests(TestCase):
         from pathlib import Path
         out = StringIO()
         call_command('importar_catalogo', '--categorias', stdout=out)
-        cls.demo_dir = Path(__file__).resolve().parent.parent / 'data_demo'
+        cls.demo_dir = Path(__file__).resolve().parent.parent.parent / 'data_demo'
         call_command('importar_catalogo', str(cls.demo_dir), '--aplicar', stdout=out)
         cls.import_output = out.getvalue()
 
     def setUp(self):
-        from .models import Zona
+        from ..models import Zona
         self.user = User.objects.create_user('demo-user', email='demo@example.com', password=PASSWORD)
         self.client.force_login(self.user)
         self.papa = Cultivo.objects.get(nombre='PAPA DEMO')
@@ -2847,7 +2847,7 @@ class DemoCatalogEndToEndTests(TestCase):
             {'plot_id': self.potrero.pk, 'crop': 'PAPA DEMO', 'area': '2', **payload}), content_type='application/json')
 
     def test_import_counts_and_demo_labels(self):
-        from .models import ProblemaAgricola, UsoInsumoCultivo, Zona
+        from ..models import ProblemaAgricola, UsoInsumoCultivo, Zona
         self.assertEqual(Zona.objects.filter(activo=True).count(), 2)
         self.assertEqual(Cultivo.objects.count(), 3)
         self.assertEqual(ProblemaAgricola.objects.count(), 3)
@@ -2869,7 +2869,7 @@ class DemoCatalogEndToEndTests(TestCase):
         self.assertEqual(ReferenciaAgronomica.objects.count(), 3)
 
     def test_catalog_counters_are_no_longer_zero(self):
-        from .catalog import catalog_payload
+        from ..catalog import catalog_payload
         stats = catalog_payload()['stats']
         self.assertEqual((stats['crops'], stats['zones'], stats['seeds'], stats['cropsWithDensity']), (3, 2, 1, 3))
         self.assertEqual((stats['fertilizers'], stats['otherInputs'], stats['products'], stats['problems']), (1, 2, 4, 3))
@@ -2916,7 +2916,7 @@ class DemoCatalogEndToEndTests(TestCase):
         self.assertIn('FUENTE DEMO AGROASESOR', data['source'])
 
     def test_ficha_lists_insecticide_for_papa_and_pest(self):
-        from .catalog import catalog_payload
+        from ..catalog import catalog_payload
         catalog = catalog_payload()
         problem = next(item for item in catalog['problemas'] if item['name'] == 'PLAGA DEMO A')
         matches = [item['name'] for item in catalog['insumos']
@@ -3033,14 +3033,14 @@ class ButtonHierarchyAndNextStepTests(TestCase):
 
     def test_selected_panel_is_informative_and_script_has_no_duplicate_actions(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
         for old_label in ("'Registrar potrero'", "'Registrar primer potrero'", "'Ficha e historial del predio'", "'Editar predio'"):
             self.assertNotIn(old_label, source)
         self.assertIn('createPlotLink.hidden = farmPlots.length === 0', source)
 
     def test_button_system_classes_exist_in_css(self):
         from pathlib import Path
-        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'body.css').read_text(encoding='utf-8')
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'body.css').read_text(encoding='utf-8')
         for name in ('.btn-primary-agro', '.btn-secondary-agro', '.btn-ghost-agro', '.btn-danger-agro', '.btn-disabled'):
             self.assertIn(name, css)
 
@@ -3108,7 +3108,7 @@ class VisualVarietyTests(TestCase):
         self.assertNotIn('Lote ajeno', json.dumps(data))
 
     def test_next_step_is_a_single_suggestion_with_five_states(self):
-        from .views import _farm_next_step
+        from ..views import _farm_next_step
         farm = Predio.objects.create(propietario=self.user, nombre='Estados', superficie_ha=1)
         self.assertEqual(_farm_next_step(farm, [])['key'], 'potrero')
         plot = Potrero.objects.create(predio=farm, nombre='A', superficie_ha=1)
@@ -3126,20 +3126,20 @@ class VisualVarietyTests(TestCase):
         for marker in ('data-view-mode="list"', 'data-view-mode="cards"', 'data-view-focus="map"', 'id="farm-picker-list"'):
             self.assertIn(marker, html)
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-view.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-view.js').read_text(encoding='utf-8')
         self.assertIn('localStorage', source)
         self.assertNotIn('fetch(', source)
         self.assertNotIn('XMLHttpRequest', source)
 
     def test_context_menu_script_handles_keyboard_and_aria(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'row-menu.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'row-menu.js').read_text(encoding='utf-8')
         for marker in ("'Escape'", "'ArrowDown'", 'aria-expanded', 'closest'):
             self.assertIn(marker, source)
 
     def test_selected_panel_script_shows_summary_and_single_next_action(self):
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'predios-map.js').read_text(encoding='utf-8')
         for marker in ("'Próxima acción'", "'Abrir predio'", "'Labores pendientes'", "'Potreros'", 'farm.nextStep'):
             self.assertIn(marker, source)
 
@@ -3150,7 +3150,7 @@ class VisualVarietyTests(TestCase):
         self.assertIn('Programar labor', html)
         self.assertNotIn('Nuevo predio', html)
         from pathlib import Path
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'siembra-registro.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'siembra-registro.js').read_text(encoding='utf-8')
         self.assertIn('renderMonths', source)
         self.assertIn('if (!holder || (!sow && !harvest)) return;', source)  # sin fechas no se dibuja nada
 
@@ -3303,7 +3303,7 @@ class CropPickerTests(TestCase):
         self.assertTrue(TemporadaCultivo.objects.filter(potrero=self.plot, cultivo=self.maiz).exists())
 
     def test_picker_script_contract_accessibility_and_future_facts(self):
-        source = (Path(__file__).resolve().parent / 'static' / 'js' / 'crop-picker.js').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent / 'static' / 'js' / 'crop-picker.js').read_text(encoding='utf-8')
         for marker in ('role: \'radiogroup\'', "role: 'radio'", "'aria-checked'", "'aria-pressed'", "'aria-live'", 'Continuar planificación',
                        'Cambiar cultivo', 'Buscar cultivo...', 'Cultivos frecuentes', 'Cultivos sugeridos', 'Limpiar filtros',
                        '¿Cuándo quieres sembrar?', 'FACT_FIELDS', 'ArrowRight', 'cropsFromSelect(select)'):
@@ -3312,7 +3312,7 @@ class CropPickerTests(TestCase):
             self.assertNotIn(forbidden, source)  # solo presentación: no consulta la red ni inventa datos
 
     def test_picker_styles_cover_mobile_grid_and_reduced_motion(self):
-        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'crop-picker.css').read_text(encoding='utf-8')
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'crop-picker.css').read_text(encoding='utf-8')
         mobile = css[css.index('@media (max-width: 640px)'):]
         self.assertIn('.crop-grid { grid-template-columns: repeat(2, minmax(0, 1fr))', mobile)
         self.assertIn('overflow-x: auto', css)  # categorías desplazables horizontalmente
@@ -3369,7 +3369,7 @@ class PrediosSideLayoutTests(TestCase):
         self.assertIn('No hay potreros que coincidan con esos filtros.', empty)
 
     def test_layout_styles_two_columns_internal_scroll_and_responsive_stack(self):
-        css = (Path(__file__).resolve().parent / 'static' / 'css' / 'predios.css').read_text(encoding='utf-8')
+        css = (Path(__file__).resolve().parent.parent / 'static' / 'css' / 'predios.css').read_text(encoding='utf-8')
         block = css[css.index('/* ---------- /predios/: mapa a la izquierda'):]
         self.assertIn('.terrain-workspace { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);', block)
         self.assertIn('.terrain-side .potrero-history-list { max-height:', block)
@@ -3451,7 +3451,7 @@ class CalculatorGuidedFlowTests(IntegrationBase):
         self.assertIn('id="calc-plot-picker"', html)
 
     def test_presentation_layer_does_not_calculate_or_call_the_server(self):
-        base = Path(__file__).resolve().parent / 'static'
+        base = Path(__file__).resolve().parent.parent / 'static'
         flow = (base / 'js' / 'calc-flow.js').read_text(encoding='utf-8')
         panel = (base / 'js' / 'calc-panel.js').read_text(encoding='utf-8')
         self.assertNotIn('fetch(', flow)
@@ -3487,7 +3487,7 @@ class ToolFlowDesignTests(IntegrationBase):
         return self.client.get(f'/decisiones/?herramienta={tool}').content.decode()
 
     def static_source(self, kind, name):
-        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+        return (Path(__file__).resolve().parent.parent / 'static' / kind / name).read_text(encoding='utf-8')
 
     def test_cover_and_yield_have_guided_steps_and_flow_hooks(self):
         html = self.page('alcanza')
@@ -3627,7 +3627,7 @@ class GuidedJourneyTests(IntegrationBase):
 
 class MelipillaDefaultZoneTests(IntegrationBase):
     def test_default_zone_helpers_are_idempotent_and_carry_no_agronomic_data(self):
-        from .catalog import default_zone, ensure_default_zone
+        from ..catalog import default_zone, ensure_default_zone
         self.assertIsNone(default_zone())
         zone, created = ensure_default_zone()
         self.assertTrue(created)
@@ -3637,13 +3637,13 @@ class MelipillaDefaultZoneTests(IntegrationBase):
         self.assertFalse(ReferenciaAgronomica.objects.exists())
 
     def test_deactivated_melipilla_is_respected(self):
-        from .catalog import ensure_default_zone
+        from ..catalog import ensure_default_zone
         Zona.objects.create(nombre='Melipilla', activo=False)
         self.assertEqual(ensure_default_zone(), (None, False))
         self.assertEqual(Zona.objects.filter(nombre__iexact='Melipilla').count(), 1)
 
     def test_new_farm_form_lists_melipilla_first_and_preselected(self):
-        from .forms import PredioForm
+        from ..forms import PredioForm
         melipilla = Zona.objects.create(nombre='Melipilla')
         form = PredioForm()
         self.assertEqual(form['zona'].value(), melipilla.pk)
@@ -3654,7 +3654,7 @@ class MelipillaDefaultZoneTests(IntegrationBase):
         self.assertRegex(html, rf'<option value="{melipilla.pk}" selected>Melipilla</option>')
 
     def test_editing_a_farm_keeps_its_own_zone(self):
-        from .forms import PredioForm
+        from ..forms import PredioForm
         Zona.objects.create(nombre='Melipilla')
         self.assertEqual(PredioForm(instance=self.farm)['zona'].value(), self.zone.pk)
 
@@ -3692,7 +3692,7 @@ class MelipillaDefaultZoneTests(IntegrationBase):
         self.assertFalse(ReferenciaAgronomica.objects.exists())
 
     def test_entrypoint_loads_base_crops_and_zone_on_start(self):
-        source = (Path(__file__).resolve().parent.parent / 'docker-entrypoint.sh').read_text(encoding='utf-8')
+        source = (Path(__file__).resolve().parent.parent.parent / 'docker-entrypoint.sh').read_text(encoding='utf-8')
         self.assertIn('python manage.py importar_catalogo data --aplicar', source)
         self.assertLess(source.index('migrate'), source.index('importar_catalogo data --aplicar'))
         self.assertNotIn('\r', source)  # el script debe tener saltos de línea LF para ejecutarse en Linux
@@ -3702,7 +3702,7 @@ class DecisionsContinuityStaticTests(TestCase):
     """Presentación del Centro de decisiones y de Buscar: sin cultivo heredado de otro potrero y con siguiente paso."""
 
     def source(self, kind, name):
-        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+        return (Path(__file__).resolve().parent.parent / 'static' / kind / name).read_text(encoding='utf-8')
 
     def test_plot_without_crop_does_not_inherit_the_previous_crop(self):
         self.assertIn("else if (!plot.cropId) ui.crop.value = '';", self.source('js', 'calc-panel.js'))
@@ -3728,7 +3728,7 @@ class FlowStatesTests(IntegrationBase):
     FEATURE = {'type': 'Feature', 'properties': {}, 'geometry': {'type': 'Polygon', 'coordinates': [[[-71.2, -33.7], [-71.2, -33.69], [-71.19, -33.69], [-71.19, -33.7], [-71.2, -33.7]]]}}
 
     def source(self, kind, name):
-        return (Path(__file__).resolve().parent / 'static' / kind / name).read_text(encoding='utf-8')
+        return (Path(__file__).resolve().parent.parent / 'static' / kind / name).read_text(encoding='utf-8')
 
     def plan(self):
         self.plot.cultivo = self.maize
@@ -3835,7 +3835,7 @@ class FlowStatesTests(IntegrationBase):
         self.assertIn('ctx-line', self.source('js', 'decisiones.js'))
 
     def test_base_catalog_has_the_extra_central_chile_crops_by_name_only(self):
-        from .catalog import ensure_base_crops
+        from ..catalog import ensure_base_crops
         ensure_base_crops()
         for name in ('Alcachofa', 'Durazno', 'Frutilla'):
             crop = Cultivo.objects.get(nombre=name)

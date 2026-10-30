@@ -81,7 +81,7 @@ esquema usando el `User` de Django y relaciones nuevas, sin reemplazar auth tabl
 | `templates/dashboard.html`, `static/js/dashboard.js` | Terrenos reales, escape HTML y eliminación del crecimiento ficticio de superficie. |
 | `static/js/calculadora.js`, `cobertura.js`, `busqueda.js` | Escape de nombres reales; eliminación de dosis automática de 25 cuando no hay dato. |
 | `core/admin.py`, `templates/admin.html` | Registro de modelos nuevos y panel con conteos reales y enlaces al CRUD existente. |
-| `core/tests.py` | Pruebas de seguridad y flujo completo; conserva regresión del contrato de catálogo. |
+| `core/tests/` | Pruebas de seguridad y flujo completo; conserva regresión del contrato de catálogo. |
 
 ## Resultado de Fase A
 

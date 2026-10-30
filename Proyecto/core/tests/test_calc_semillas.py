@@ -6,8 +6,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import CalculoAgricola, Cultivo, Potrero, Predio
-from .agronomy import referencias_siembra
+from ..models import CalculoAgricola, Cultivo, Potrero, Predio
+from ..agronomy import referencias_siembra
 
 
 class CalculadoraSemillasTests(TestCase):

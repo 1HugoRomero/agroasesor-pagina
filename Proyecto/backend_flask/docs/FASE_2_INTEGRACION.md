@@ -16,7 +16,7 @@ Navegador ──sesión Django──▶ Django  /api/v1/…  ──HTTP interno 
 
 ## Cómo probar
 * Flask: `cd backend_flask && pip install -r requirements.txt && pytest`
-* Django (incluye integración real con Flask): `docker compose exec agroasesor python manage.py test core.tests_api`
+* Django (incluye integración real con Flask): `docker compose exec agroasesor python manage.py test core.tests.test_api`
 * Docker opcional: ver `docker-compose.api.yml`.
 
 ## Límites conocidos
