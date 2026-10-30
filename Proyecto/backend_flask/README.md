@@ -58,7 +58,6 @@ Ejemplo: 270 kg de semilla y 11 sacos hipotéticos de 25 kg. Opcionalmente, pued
 - `docs/catalogo_fuentes_oficiales.md`: fuentes, criterios y pasos para catálogo comercial real.
 - `openapi.yaml`: contrato actualizado de endpoints.
 - `data/catalogo_agricola.yaml`: información y procedencia; modificar solo tras validación editorial.
-- `PROMPT_PARA_CLAUDE.md`: integración segura con tu repositorio real.
 
 ## Docker separado
 
