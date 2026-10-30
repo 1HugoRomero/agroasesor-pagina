@@ -18,7 +18,7 @@ La aplicación está en `Proyecto/`: configuración en `AgroAsesor/`, lógica en
 plantillas en `core/templates/` y recursos en `core/static/`. Las URLs originales
 siguen disponibles: `/`, `/login/`, `/logout/`, `/predios/`, `/calculadora/`,
 `/cobertura/`, `/asesor/`, `/predictor/`, `/calendario/`, `/busqueda/`, `/reportes/`,
-`/panel-admin/`, `/admin/` y `/hola-django/`.
+`/panel-admin/` y `/admin/`.
 
 ## Estado previo por requisito
 

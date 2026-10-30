@@ -438,10 +438,6 @@ def _page(request, template, current, extra=None):
     return response
 
 
-def index(request):
-    return render(request, 'index.html')
-
-
 def politica_privacidad(request):
     return render(request, 'politica_privacidad.html', {
         'policy_version':AceptacionPoliticas.VERSION_ACTUAL,

@@ -7,7 +7,6 @@ from core.api_gateway import api_v1
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/<path:ruta>', api_v1, name='api_v1'),
-    path('hola-django/', views.index, name='pagina_inicial'),
     path('login/', views.login_view, name='login'),
     path('politicas/privacidad-y-cookies/', views.politica_privacidad, name='politica_privacidad'),
     path('logout/', views.logout_view, name='logout'),
