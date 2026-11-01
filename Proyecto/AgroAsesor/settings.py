@@ -157,17 +157,22 @@ STATICFILES_DIRS = []
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
+# Las opciones del servidor (host, clave, etc.) solo sirven para SMTP; el backend de consola no las acepta.
+CORREO_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+CORREO_OPCIONES = {}
+if CORREO_BACKEND.endswith('smtp.EmailBackend'):
+    CORREO_OPCIONES = {
+        'host': os.getenv('EMAIL_HOST', ''),
+        'port': int(os.getenv('EMAIL_PORT', '587')),
+        'use_tls': os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true',
+        'username': os.getenv('EMAIL_HOST_USER', ''),
+        'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
+        'timeout': 15,
+    }
 MAILERS = {
     'default': {
-        'BACKEND': os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'),
-        'OPTIONS': {
-            'host': os.getenv('EMAIL_HOST', ''),
-            'port': int(os.getenv('EMAIL_PORT', '587')),
-            'use_tls': os.getenv('EMAIL_USE_TLS', 'True').lower() == 'true',
-            'username': os.getenv('EMAIL_HOST_USER', ''),
-            'password': os.getenv('EMAIL_HOST_PASSWORD', ''),
-            'timeout': 15,
-        },
+        'BACKEND': CORREO_BACKEND,
+        'OPTIONS': CORREO_OPCIONES,
     },
 }
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'AgroAsesor <noreply@localhost>')
